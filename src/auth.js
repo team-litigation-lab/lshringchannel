@@ -19,7 +19,7 @@ export function safeEqual(a, b) {
 
 export async function makeToken(env, role, subject, hours) {
   const exp = Date.now() + hours * 3600 * 1000;
-  const body = `${role}.${encodeURIComponent(subject)}.${exp}`;
+  const body = `${role}.${encodeURIComponent(subject).replace(/\./g, '%2E')}.${exp}`;   // a "." in a name would split the token
   return `${body}.${await hmac(secretOf(env), body)}`;
 }
 
@@ -40,8 +40,20 @@ export async function readToken(env, request) {
   return readTokenString(env, h.startsWith('Bearer ') ? h.slice(7) : '');
 }
 
+// A trainee's PIN, stored only as a salted PBKDF2 hash ("<salt>.<hash>").
+export async function hashPin(pin, salt) {
+  salt = salt || btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(12))));
+  const key = await crypto.subtle.importKey('raw', enc.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(salt), iterations: 100000 }, key, 256);
+  return salt + '.' + btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+export async function checkPin(pin, stored) {
+  const salt = String(stored || '').split('.')[0];
+  return !!salt && safeEqual(await hashPin(pin, salt), stored);
+}
+
 export function slugPart(t) {
-  return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
 export function traineeId(name, batch) {
   let slug = slugPart(name).slice(0, 40);

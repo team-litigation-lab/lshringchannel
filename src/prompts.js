@@ -127,7 +127,8 @@ export function cleanGrade(s, g) {
   const criteria = t.rubric.map((r, i) => {
     const list = Array.isArray(g.criteria) ? g.criteria : [];
     const x = list.find((c) => c && String(c.name || '').toLowerCase().startsWith(r.name.toLowerCase().slice(0, 12))) || list[i] || {};
-    const score = Math.max(1, Math.min(5, Math.round(Number(x.score) || 0))) || null;
+    const n = Math.round(Number(x.score));
+    const score = n >= 1 && n <= 5 ? n : null;
     return { name: r.name, score, evaluation: str(x.evaluation, 900) };
   });
   const goals = (s.goals || []).map((goal, i) => {

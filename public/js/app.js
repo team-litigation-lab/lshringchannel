@@ -20,6 +20,9 @@
   App.trainer = () => !!(App.me && App.me.role === 'a');
 
   App.register = (name, view) => { App.views[name] = view; };
+  // The live call this tab is on, kept per tab: after a reload the tab picks its own call back up,
+  // while a second tab only offers to move the call to itself.
+  App.ownCall = (id) => { try { if (id === undefined) return sessionStorage.getItem('mcv_call'); if (id) sessionStorage.setItem('mcv_call', id); else sessionStorage.removeItem('mcv_call'); } catch (e) { return null; } };
 
   App.boot = async function () {
     window.addEventListener('hashchange', () => App.go());
@@ -60,6 +63,8 @@
     App.route = { name, arg: arg ? decodeURIComponent(arg) : '' };
     App.header();
     App.onCallBar();
+    const main = document.getElementById('app');
+    main.onclick = main.onchange = main.oninput = null;
     window.scrollTo(0, 0);
     App.views[name].render(App.route.arg);
   };
@@ -86,9 +91,10 @@
       <div class="grid2">
         <form class="card" id="fTrainee" autocomplete="on">
           <h2>🎧 Trainee</h2>
-          <p class="muted small">Use the same full name and batch as on your LSH training platform.</p>
+          <p class="muted small">Use the same full name and batch as on your LSH training platform. The first time, choose a PIN: it keeps your calls and scores yours.</p>
           <div class="field"><label class="f" for="tn">Full name</label><input class="input" id="tn" name="name" autocomplete="name" required></div>
           <div class="field"><label class="f" for="tb">Batch</label><input class="input" id="tb" name="batch" placeholder="e.g. B082826" required></div>
+          <div class="field"><label class="f" for="tp">PIN <span class="muted" style="font-weight:400">(first time? choose 4 to 8 digits)</span></label><input class="input" id="tp" name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" autocomplete="current-password" required></div>
           ${st.traineeCode ? `<div class="field"><label class="f" for="tc">Access code (from your trainer)</label><input class="input" id="tc" name="code" autocomplete="off" required></div>` : ''}
           <button class="btn btn-orange btn-lg" style="width:100%">Sign in to my phone</button>
           <div class="err-box hidden" id="tErr" style="margin-top:10px"></div>
@@ -108,7 +114,7 @@
     document.getElementById('fTrainee').onsubmit = async (ev) => {
       ev.preventDefault();
       try {
-        const res = await API.post('/api/auth/trainee', { name: U.$('#tn').value, batch: U.$('#tb').value, code: U.$('#tc') ? U.$('#tc').value : '' });
+        const res = await API.post('/api/auth/trainee', { name: U.$('#tn').value, batch: U.$('#tb').value, pin: U.$('#tp').value, code: U.$('#tc') ? U.$('#tc').value : '' });
         API.signIn(res); location.hash = '#/phone'; location.reload();
       } catch (e) { fail('tErr', e); }
     };
@@ -132,6 +138,7 @@
       else { App.trainersOnline = m.trainers || 0; Trainee.onPresence(); }
     });
     b.on('error', (m) => U.toast(m.msg, 'error'));
+    b.on('trouble', () => { API.post('/api/me').catch(() => {}); });
     b.on('*', (m) => { if (!['hello', 'presence', 'error'].includes(m.t)) (App.trainer() ? Console : Trainee).onBoard(m); });
     b.connect();
   };
@@ -215,11 +222,11 @@
     if (status === 'ringing') return `<div class="dev-keys"><button class="key answer pulse wide" data-act="answer"><span class="ic">📞</span>Answer</button><button class="key hang wide" data-act="decline"><span class="ic">✖</span>Decline</button></div>`;
     if (status === 'connecting' || status === 'live') {
       const dis = status !== 'live' ? 'disabled' : '';
-      const xfer = p.transfer && p.transfer.state === 'ringing';
+      const xfer = p.transfer && p.transfer.state === 'ringing' && p.mode === 'ai';
       return `<div class="dev-keys">
         <button class="key mute ${p.muted ? 'on' : ''}" data-act="mute" ${dis}><span class="ic">${p.muted ? '🔇' : '🎙'}</span>${p.muted ? 'Unmute' : 'Mute'}</button>
         <button class="key ${p.held ? 'on' : ''}" data-act="hold" ${dis || (xfer ? 'disabled' : '')}><span class="ic">⏸</span>${p.held ? 'Resume' : 'Hold'}</button>
-        <button class="key" data-act="transfer" ${dis || (xfer ? 'disabled' : '')}><span class="ic">↪</span>Transfer</button>
+        <button class="key" data-act="transfer" ${dis || (xfer || (p.transfer && p.transfer.state === 'ringing') ? 'disabled' : '')}><span class="ic">↪</span>Transfer</button>
         <button class="key hang wide" data-act="hangup"><span class="ic">☎</span>Hang up</button></div>`;
     }
     return idleKeys || '';

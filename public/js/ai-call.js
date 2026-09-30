@@ -170,7 +170,7 @@
     if (text) { call.heard = true; call.line = null; addText(call, 'trainee', text); call.line = null; }
     call.busy = true; call.opts.onBusy && call.opts.onBusy(true);
     try {
-      const r = await API.post('/api/ai/text', { callId: call.opts.callId, turns: call.transcript.map((x) => ({ who: x.who, text: x.text })) });
+      const r = await API.post('/api/ai/text', { callId: call.opts.callId, text: text || '' });
       if (C !== call || call.ended) return;
       if (r.text) { call.line = null; addText(call, 'caller', r.text); call.line = null; speak(call, r.text); }
     } catch (e) { call.opts.onError && call.opts.onError(e.message); }

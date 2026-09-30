@@ -31,8 +31,10 @@
     }
     if (a && a.status === 'ringing' && !(p && active(p))) incoming(a);
     else if (a && a.status === 'live' && !(p && active(p))) {
-      // This page was reloaded during a call: offer to reconnect it.
-      App.p = Object.assign(fromBrief(a), { status: 'live', answeredAt: a.answeredAt || Date.now(), needRejoin: true, note: a.note || {} });
+      // A call is on the line: this tab reloaded during it (reconnect), or another tab has it (move it here).
+      const lv = a.live || {};
+      App.p = Object.assign(fromBrief(a), { status: 'live', answeredAt: a.answeredAt || Date.now(), needRejoin: true, elsewhere: App.ownCall() !== a.callId, note: a.note || {},
+        held: !!lv.held, holdAt: lv.holdAt || 0, coaching: !!lv.coaching, transfer: lv.transfer ? { to: lv.transfer.to, ext: lv.transfer.ext, state: 'ringing' } : null });
       if (App.route.name !== 'phone') App.nav('#/phone'); else renderAll();
     }
   };
@@ -50,9 +52,12 @@
     switch (m.t) {
       case 'incoming': return incoming(m);
       case 'taken': if (mine && p.status === 'ringing') { stopAlerts(); App.p = null; U.toast('Answered on another tab.'); renderAll(); } return;
+      case 'moved': if (mine) { stopAlerts(); cleanupLive(p); App.p = null; App.ownCall(null); U.toast('The call moved to your other tab.'); renderAll(); App.onCallBar(); } return;
+      case 'transfer-cancel': return;
       case 'gone': if (mine && p.status !== 'ended') { stopAlerts(); cleanupLive(p); App.p = null; U.toast('That call is no longer on the line.'); renderAll(); } return;
       case 'connected':
         if (!mine) return;
+        App.ownCall(p.callId);
         p.answeredAt = Date.now();
         if (!p.note.when) p.note.when = U.stamp();
         renderAll();
@@ -81,7 +86,11 @@
     hideCases: m.hideCases || [], rec: !!m.recording, trainer: m.trainer, note: {}, muted: false, held: false });
 
   function incoming(m) {
-    if (App.p && active(App.p)) return;
+    if (App.p && active(App.p)) {
+      // On a practice call: the trainer is told the trainee is busy, and the trainee sees who tried.
+      if (App.p.mode === 'ai') { App.board.send({ t: 'decline', callId: m.callId, busy: true }); U.toast(`Your trainer tried to ring you (${m.lineLabel}). Hang up the practice call to take live calls.`, 'error'); }
+      return;
+    }
     App.p = Object.assign(fromBrief(m), { status: 'ringing', ringAt: Date.now() });
     App.hand = false;
     Sounds.ring();
@@ -105,6 +114,7 @@
       },
       onQuality: (q) => { if (App.p === p) { p.quality = q; renderBadges(); } }
     });
+    if (p.held && p.music) p.rtc.setOutgoing(p.music.track);   // a new connection while the caller is on hold keeps the music
   }
 
   async function answer() {
@@ -129,9 +139,12 @@
     let stream;
     try { stream = await VoIP.Mic.open(); } catch (e) { return U.toast(e.message, 'error'); }
     const servers = await VoIP.ice();
-    p.needRejoin = false;
+    p.needRejoin = false; p.elsewhere = false;
+    App.ownCall(p.callId);
+    if (p.held && !p.music) { p.music = Sounds.holdStream(); remote().muted = true; }
     makeRtc(p, stream, servers, -1);
     App.board.send({ t: 'resume', callId: p.callId });
+    App.board.send({ t: 'mute', callId: p.callId, on: false });
     App.board.send({ t: 'signal', callId: p.callId, data: { rejoin: true, gen: -1 } });
     renderAll();
   }
@@ -167,8 +180,10 @@
     } else {
       if (on) { p.music = Sounds.holdStream(); await p.rtc.setOutgoing(p.music.track); remote().muted = true; }
       else { await p.rtc.setOutgoing(VoIP.Mic.track()); if (p.music) p.music.stop(); p.music = null; remote().muted = false; }
+      // Taking the caller back while the extension still rings cancels the transfer.
+      if (!on && p.transfer && p.transfer.state === 'ringing') App.board.send({ t: 'transfer-cancel', callId: p.callId });
       App.board.send({ t: 'hold', callId: p.callId, on });
-      if (!on && p.transfer && p.transfer.state !== 'ringing') p.transfer = null;
+      if (!on && p.transfer) p.transfer = null;
     }
     renderDevice();
   }
@@ -210,6 +225,7 @@
 
   function cleanupLive(p) {
     clearTimeout(p.slowTimer);
+    if (App.ownCall() === p.callId) App.ownCall(null);
     if (p.rtc) { p.rtc.close(); p.rtc = null; }
     if (p.music) { p.music.stop(); p.music = null; }
     const a = remote(); a.srcObject = null; a.muted = false;
@@ -302,6 +318,7 @@
     stopAlerts();
     const wasRinging = p.status === 'ringing' || p.status === 'waiting';
     const res = await AiCall.stop(true);
+    VoIP.Mic.close();
     p.status = 'ended'; p.endedAt = Date.now();
     if (!p.answeredAt || wasRinging) p.answeredAt = p.endedAt;
     const hs = p.metrics.holds; if (hs.length && !hs[hs.length - 1].end) hs[hs.length - 1].end = p.endedAt;
@@ -370,11 +387,12 @@
          <div class="dev-status"><button class="${App.status === 'available' ? 'on' : ''}" data-act="available">● Available</button><button class="${App.status === 'away' ? 'on away' : ''}" data-act="away">◌ Away</button></div>`
       : `<div class="dev-keys"><button class="key" data-act="miccheck"><span class="ic">🎙</span>Mic check</button></div>`;
     let msg = '';
-    if (p && p.needRejoin) msg = `<div class="dev-msg lost">This page reloaded during your call. <button class="btn btn-sm btn-green" data-act="rejoin" style="margin-top:6px">🔊 Reconnect the call</button></div>`;
+    if (p && p.needRejoin) msg = p.elsewhere ? `<div class="dev-msg lost">You're on this call in another tab or window. <button class="btn btn-sm btn-green" data-act="rejoin" style="margin-top:6px">📞 Move the call here</button></div>`
+      : `<div class="dev-msg lost">This page reloaded during your call. <button class="btn btn-sm btn-green" data-act="rejoin" style="margin-top:6px">🔊 Reconnect the call</button></div>`;
     else if (p && p.coaching) msg = `<div class="dev-msg coach">⏸ <b>Coaching time-out.</b> Your trainer paused the role-play to talk with you as your trainer.${p.coachMsg ? ' ' + esc(p.coachMsg) : ''}</div>`;
     else if (p && p.transfer && p.status === 'live') {
       const tx = p.transfer;
-      msg = tx.state === 'ringing' ? `<div class="dev-msg transfer">↪ Transferring to <b>${esc(tx.to)}</b> (ext ${esc(tx.ext)})… The caller hears hold music.</div>`
+      msg = tx.state === 'ringing' ? `<div class="dev-msg transfer">↪ Transferring to <b>${esc(tx.to)}</b> (ext ${esc(tx.ext)})… The caller hears hold music.${p.mode === 'live' ? ' <b>Resume</b> takes the caller back.' : ''}</div>`
         : tx.state === 'voicemail' ? `<div class="dev-msg transfer">📨 Ext ${esc(tx.ext)} (${esc(tx.to)}) went to voicemail. Press <b>Resume</b> to go back to the caller: offer voicemail or take a message.</div>`
         : `<div class="dev-msg transfer">📵 No answer at ext ${esc(tx.ext)} (${esc(tx.to)}). ${p.mode === 'ai' ? 'You are back with the caller.' : 'Press <b>Resume</b> to go back to the caller.'}</div>`;
     } else if (p && p.peerLost) msg = `<div class="dev-msg lost">The caller's connection dropped. Waiting for them to come back…</div>`;

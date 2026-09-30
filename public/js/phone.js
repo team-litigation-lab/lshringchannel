@@ -16,22 +16,23 @@
   'use strict';
 
   class Board {
-    constructor() { this.ws = null; this.handlers = {}; this.queue = []; this.stopped = true; this.backoff = 1000; this.up = false; this.cid = null; }
+    constructor() { this.ws = null; this.handlers = {}; this.queue = []; this.stopped = true; this.backoff = 1000; this.up = false; this.cid = null; this.fails = 0; }
     on(t, fn) { (this.handlers[t] = this.handlers[t] || []).push(fn); return this; }
     emit(t, m) { (this.handlers[t] || []).forEach((fn) => { try { fn(m); } catch (e) { console.error(e); } }); (this.handlers['*'] || []).forEach((fn) => { try { fn(m); } catch (e) {} }); }
     connect() {
       this.stopped = false;
       if (this.ws && this.ws.readyState <= 1) return;
-      const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?token=${encodeURIComponent(API.token || '')}`;
+      // The sign-in token travels as a subprotocol, not in the URL.
+      const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
       let ws;
-      try { ws = new WebSocket(url); } catch (e) { return this.retry(); }
+      try { ws = new WebSocket(url, ['mcv', API.token || '']); } catch (e) { return this.retry(); }
       this.ws = ws;
       ws.onopen = () => { this.backoff = 1000; clearInterval(this.ping); this.ping = setInterval(() => { if (ws.readyState === 1) ws.send('ping'); }, 20000); };
       ws.onmessage = (ev) => {
         if (ev.data === 'pong') return;
         let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
         if (m.t === 'hello') {
-          this.up = true; this.cid = m.cid;
+          this.up = true; this.cid = m.cid; this.fails = 0;
           this.emit('up', m);
           const q = this.queue; this.queue = [];
           q.forEach((x) => this.send(x));
@@ -50,6 +51,8 @@
     }
     retry() {
       if (this.stopped) return;
+      // Several failures in a row: maybe the sign-in expired (a refused WebSocket can't say why).
+      if (++this.fails >= 3) { this.fails = 0; this.emit('trouble', {}); }
       clearTimeout(this.rt);
       this.rt = setTimeout(() => this.connect(), this.backoff);
       this.backoff = Math.min(this.backoff * 1.7, 10000);

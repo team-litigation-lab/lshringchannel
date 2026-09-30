@@ -17,7 +17,7 @@ Everything runs in the browser; there are no phone numbers and no phone bills. I
 ## How a live mock call works
 
 **Trainee** (📞 My phone)
-1. Signs in with their full name and batch (the same as on the LSH training platform) and keeps **My phone** open with a headset on. **🎙 Mic check** tests the headset.
+1. Signs in with their full name and batch (the same as on the LSH training platform) and their **PIN**. The first sign-in sets the PIN (4 to 8 digits), so nobody else can sign in as them. Five wrong PINs lock the account for 15 minutes; a trainer can **🔑 Reset PIN** in 👥 Trainees. They keep **My phone** open with a headset on. **🎙 Mic check** tests the headset.
 2. Sets **● Available** (or **◌ Away**). **✋ Ask for a call** raises a hand on the trainer's switchboard.
 3. When the phone rings, it shows the line (Main Line or Intake Line) and the caller ID. The trainee answers within 3 rings.
 4. During the call, beside the phone:
@@ -52,7 +52,12 @@ Everything runs in the browser; there are no phone numbers and no phone bills. I
 
 **Timings the phone measures for the scorecard:** rings before the answer (the standard is 3), call length, each hold and its length, and each transfer and how it ended.
 
-**If a connection drops:** a phone that loses its connection has 30 seconds to come back before the call ends, and the call audio usually keeps going meanwhile. Reloading either page during a call reconnects it: the trainee clicks **🔊 Reconnect the call**, and the trainer's console picks the call back up on its own. An unanswered call rings out after 45 seconds and shows as *Missed*.
+**If a connection drops:** a phone that loses its connection has 30 seconds to come back before the call ends, and the call audio usually keeps going meanwhile.
+
+- **Reloading either page during a call reconnects it.** The trainee clicks **🔊 Reconnect the call**; the trainer's console picks the call back up on its own. Hold (with its music), a transfer waiting for an answer, mute and a coaching time-out come back as they were.
+- **A call belongs to the browser tab that took it.** Another tab (or a second window) shows "You're on a call in another tab" and only takes the call if you click **Take the call here** / **Move the call here**.
+- **An unanswered call** rings out after 45 seconds and shows as *Missed*.
+- **A trainee on a practice call** can't take a live call. Their trainer is told they're busy, and the trainee sees that the trainer rang.
 
 ## The calls
 
@@ -89,7 +94,10 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
   - Keys from different Google Cloud projects add capacity; keys from the same project share one allowance.
   - The key never reaches the browser: live voice uses a single-use token with the caller's script locked in.
   - Without keys, live calls work as normal; Practice and AI drafts are off.
-- **Limits:** each practice call runs at most `AI_MAX_MINUTES` (default 8). Each trainee gets 30 practice calls and 40 scorings an hour.
+- **Limits (enforced by the server):**
+  - each practice call runs at most `AI_MAX_MINUTES` (default 8); the Switchboard closes it even if the tab was closed;
+  - each trainee gets 30 practice calls, 60 live-voice connections and 40 scorings an hour.
+- **Practice scores are self-practice.** The trainee's browser runs the call, so **👥 Trainees** shows the practice average apart from the live average (reviewed live calls only). A typed practice call's conversation is kept on the server.
 
 ## Deploy (Cloudflare)
 
@@ -102,7 +110,7 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
    |---|---|
    | `ADMIN_PASSPHRASE` | **Required.** The trainer sign-in. Nobody can sign in until it's set. |
    | `SESSION_SECRET` | Optional. Signs sign-in tokens (defaults to `ADMIN_PASSPHRASE`; changing it signs everyone out). |
-   | `TRAINEE_CODE` | Optional. A code trainees must enter to sign in. Without it, anyone with the link can sign in as a trainee. |
+   | `TRAINEE_CODE` | Optional. A code trainees must enter to sign in. Without it, anyone with the link can create a trainee account (their own PIN still protects everyone else's). |
    | `TURN_KEY_ID`, `TURN_KEY_API_TOKEN` | **Recommended.** Cloudflare's TURN relay (step 3). |
    | `GEMINI_API_KEY5` … `GEMINI_API_KEY9` | Optional. AI practice callers and AI scoring. |
 
@@ -134,10 +142,14 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 
 - `e2e-live.js`: the trainer rings, the trainee answers, and audio flows both ways. Then it runs:
   - the ✋ request, the live note, hold with hold music, a transfer answered "no answer", a coaching time-out;
+  - signing in as another trainee with a wrong PIN, or none, is refused;
+  - a second trainer tab opened mid-call leaves the call alone;
   - a reload of the trainee's page and of the trainer's console mid-call (both reconnect);
-  - hang up, the recording saved and played, the note submitted, the scorecard sent and read (the caller's script never reaches the trainee);
+  - hang up, the recording saved and played, the note submitted, the scorecard sent;
+  - "Save draft" after sending keeps the edits from the trainee;
+  - the trainee reads the scorecard (the caller's script and unsent drafts never reach the trainee);
   - a declined call.
-- `e2e-ai.js`: a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, AI scoring, a typed practice call, and the trainer's AI draft from a live recording.
+- `e2e-ai.js`: a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, AI scoring, a typed practice call, the trainer's AI draft from a live recording, and a live-only call that can't be practiced.
 
 ## Files
 
@@ -148,8 +160,9 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `src/scenarios.js` | The firm (directory, rules), the case files, the note forms, the rubrics, and the 24 calls. |
 | `src/prompts.js` | The AI caller's instructions and the scorer's (the facilitator's voice). |
 | `src/gemini.js` | The Gemini key pool, text and audio scoring, and Gemini Live tokens. |
-| `src/auth.js` | Sign-in tokens and trainee ids (the same shapes as the other LSH platforms). |
+| `src/auth.js` | Sign-in tokens, trainee ids (the same shapes as the other LSH platforms) and PIN hashing. |
 | `public/index.html`, `public/css/app.css` | The app shell and its look (LSH navy and orange, IBM Plex). |
+| `public/_headers` | Response headers for the app's files (microphone allowed on this site only, no caching of the page). |
 | `public/js/phone.js` | The VOIP engine: the Switchboard connection, the WebRTC call (with ICE restart), the call recorder, the mic. |
 | `public/js/sounds.js` | Ringing, ringback, the hang-up tone and hold music, all synthesized. |
 | `public/js/ai-call.js` | The AI practice caller (Gemini Live voice, or typed). |
@@ -160,7 +173,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `tests/` | The end-to-end tests. |
 
 **Data:**
-- Durable Object SQLite: trainees, calls (timings, the note, the transcript, the reviews), written scenarios, and usage counts for the AI limits.
+- Durable Object SQLite: trainees (with a salted hash of each PIN), calls (timings, the note, the transcript, the reviews), written scenarios, and usage counts for the AI and sign-in limits.
 - KV (`LSH_KV`, prefix `voip:`): recordings only.
 
 Trainee ids match the other LSH platforms (`name--batch`). Trainers can archive trainees in **👥 Trainees**.

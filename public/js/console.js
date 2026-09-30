@@ -24,12 +24,24 @@
       else if (!a || a.callId !== t.callId) endCall({ by: 'system', reason: 'disconnected', status: t.status === 'ringing' ? 'cancelled' : 'ended' });
       return;
     }
-    // The console was reloaded during a call: pick it back up.
+    // A call is on the line: this tab reloaded during it (pick it back up), or another tab has it (offer to move it here).
     if (a && a.status === 'live') {
-      App.t = Object.assign(fromBrief(a), { status: 'connecting', answeredAt: a.answeredAt || Date.now(), resuming: true });
-      App.board.send({ t: 'resume', callId: a.callId });
-      render();
+      App.t = Object.assign(fromBrief(a), { answeredAt: a.answeredAt || Date.now() }, liveState(a.live));
+      if (App.ownCall() === a.callId) takeHere(); else { App.t.status = 'elsewhere'; render(); }
     }
+  };
+  function takeHere() {
+    const t = App.t; if (!t) return;
+    t.status = 'connecting'; t.resuming = true;
+    App.ownCall(t.callId);
+    App.board.send({ t: 'resume', callId: t.callId });
+    render();
+  }
+  // What was happening on the line (hold, mute, coaching, a transfer waiting for an answer).
+  const liveState = (lv) => {
+    lv = lv || {};
+    return { traineeHeld: !!lv.held, holdAt: lv.holdAt || 0, traineeMuted: !!lv.traineeMuted, coaching: !!lv.coaching,
+      transfer: lv.transfer ? Object.assign({ at: Date.now() }, lv.transfer) : null };
   };
   C.onPresence = function () { if (App.route.name === 'console') { renderRoster(); if (!active(App.t) && !(App.t && App.t.status === 'ended')) renderPickerTrainee(); } };
 
@@ -47,15 +59,30 @@
         return;
       case 'ring-failed': U.toast(m.reason, 'error'); VoIP.Mic.close(); render(); return;
       case 'accepted':
-        if (!mine) return;
+        // Answered just as this console cancelled: end it on the line too.
+        if (!mine) { App.board.send({ t: 'hangup', callId: m.callId }); return; }
+        App.ownCall(t.callId);
         Sounds.stop();
         t.status = 'connecting'; t.answeredAt = Date.now(); t.ringMs = m.ringMs;
         connect(t, Date.now());
         render();
         return;
+      case 'moved':
+        if (!mine) return;
+        Sounds.stop();
+        if (t.rtc) { t.rtc.close(); t.rtc = null; }
+        if (t.rec) { t.rec.stop(); t.rec = null; }   // the tab that has the call now records the rest of it
+        remote().srcObject = null; VoIP.Mic.close();
+        App.t = null; App.ownCall(null);
+        U.toast('The call moved to your other tab.');
+        render(); App.onCallBar();
+        return;
+      case 'transfer-cancel':
+        if (mine && t.transfer) { t.transfer = null; renderTransfer(); U.toast('The trainee took the caller back.'); }
+        return;
       case 'resumed':
         if (!mine) return;
-        Object.assign(t, { scenario: m.scenario, trainee: m.trainee, note: m.note || t.note, ticks: m.ticks || t.ticks, metrics: m.metrics || t.metrics });
+        Object.assign(t, { scenario: m.scenario, trainee: m.trainee, note: m.note || t.note, ticks: m.ticks || t.ticks, metrics: m.metrics || t.metrics }, liveState(m.live));
         if (t.resuming || !t.rtc) { t.resuming = false; connect(t, Date.now()); }
         render();
         return;
@@ -85,7 +112,11 @@
         return;
       case 'peer-lost': if (mine) { t.peerLost = true; renderCallbar(); } return;
       case 'peer-back': if (mine) { t.peerLost = false; renderCallbar(); } return;
-      case 'ended': if (mine) endCall(m); return;
+      case 'ended':
+        if (!mine) return;
+        if (t.status === 'elsewhere') { App.t = null; render(); return; }
+        endCall(m);
+        return;
       case 'gone': if (mine) endCall({ by: 'system', reason: 'gone', status: m.status }); return;
     }
   };
@@ -137,12 +168,13 @@
     const t = App.t; if (!t || t.status === 'ended') return;
     Sounds.stop();
     clearTimeout(t.slowTimer);
+    if (App.ownCall() === t.callId) App.ownCall(null);
     const answered = t.status !== 'ringing' && t.answeredAt;
     if (t.rtc) { t.rtc.close(); t.rtc = null; }
     remote().srcObject = null;
     VoIP.Mic.close();
     if (!answered) {
-      U.toast(m.status === 'declined' || m.reason === 'declined' ? `${t.trainee.name} declined the call.` : m.reason === 'no-answer' ? `${t.trainee.name} didn't answer (missed call).` : 'Call cancelled.', m.reason === 'cancelled' ? '' : 'error');
+      U.toast(m.reason === 'busy' ? `${t.trainee.name} is on a practice call with the AI caller; they were told you rang.` : m.status === 'declined' || m.reason === 'declined' ? `${t.trainee.name} declined the call.` : m.reason === 'no-answer' ? `${t.trainee.name} didn't answer (missed call).` : 'Call cancelled.', m.reason === 'cancelled' ? '' : 'error');
       App.t = null; render(); App.onCallBar();
       return;
     }
@@ -220,6 +252,11 @@
     const t = App.t;
     if (!t) return renderPicker(el);
     if (t.status === 'ended') return renderEndedStage(el);
+    if (t.status === 'elsewhere') {
+      el.innerHTML = `<div class="card warn-box"><h3>📞 You're on a call in another tab</h3><p>With <b>${esc(t.trainee.name)}</b>: ${esc(t.scenario.title)}. Keep using that tab, or move the call here.</p>
+        <button class="btn btn-green" data-act="takehere">📞 Take the call here</button></div>`;
+      return;
+    }
     const s = t.scenario;
     el.innerHTML = `<div class="callbar" id="callbar"></div>
       <div id="xfer"></div>
@@ -377,6 +414,7 @@
     else if (act === 'coach') toggleCoach();
     else if (act === 'miccheck') App.micCheck();
     else if (act === 'newcall') { App.t = null; render(); }
+    else if (act === 'takehere') takeHere();
   }
   function onChange(e) {
     if (e.target.id === 'batchSel') { pick.batch = e.target.value; renderRoster(); }

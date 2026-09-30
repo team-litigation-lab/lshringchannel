@@ -20,10 +20,12 @@
    ========================================================= */
 import { DurableObject } from 'cloudflare:workers';
 import { SCENARIOS, cleanScenario, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM } from './scenarios.js';
+import { hashPin, checkPin } from './auth.js';
 
 const RING_MS = 45000;     // an unanswered call rings out after 45 seconds
 const GRACE_MS = 30000;    // a dropped phone has 30 seconds to reconnect before its call ends
 const MAX_CALL_MS = 2 * 3600 * 1000;
+const PIN_TRIES = 5;       // wrong PINs allowed per trainee in 15 minutes
 const OPEN = 1;
 
 const now = () => Date.now();
@@ -47,6 +49,8 @@ export class Switchboard extends DurableObject {
     this.sql.exec(`CREATE INDEX IF NOT EXISTS calls_by_time ON calls (created_at)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS scenarios (id TEXT PRIMARY KEY, data TEXT, updated_at INTEGER, deleted INTEGER DEFAULT 0)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS usage (id INTEGER PRIMARY KEY AUTOINCREMENT, who TEXT, kind TEXT, at INTEGER)`);
+    // Each trainee's PIN (a salted hash), set at their first sign-in.
+    if (!this.sql.exec(`SELECT name FROM pragma_table_info('trainees') WHERE name = 'pin'`).toArray().length) this.sql.exec('ALTER TABLE trainees ADD COLUMN pin TEXT');
     // Phones ping every 20 seconds; this answers without waking the object.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
@@ -95,7 +99,9 @@ export class Switchboard extends DurableObject {
     const active = this.sql.exec(`SELECT id FROM calls WHERE status IN ('ringing', 'live') AND ${who.role === 't' ? 'trainee_id' : 'trainer'} = ? AND mode = 'live' ORDER BY created_at DESC LIMIT 1`, who.id).toArray()[0];
     this.send(server, { t: 'hello', cid, me, active: active ? this.brief(this.row(active.id), who.role) : null, firm: FIRM.name });
     this.presence();
-    return new Response(null, { status: 101, webSocket: client });
+    // The phone sends its token as a WebSocket subprotocol ("mcv", <token>), so it stays out of URLs and logs.
+    const proto = /(^|,\s*)mcv(\s*,|$)/.test(request.headers.get('Sec-WebSocket-Protocol') || '') ? { 'Sec-WebSocket-Protocol': 'mcv' } : {};
+    return new Response(null, { status: 101, webSocket: client, headers: proto });
   }
 
   // What each side is told about a call.
@@ -104,7 +110,7 @@ export class Switchboard extends DurableObject {
     const line = lineOf(s.track);
     const b = { callId: r.id, status: r.status, line, lineLabel: LINES[line].label, lineNumber: LINES[line].number, track: s.track,
       callerId: r.data.withheld ? { name: 'PRIVATE CALLER', number: 'Unknown' } : { name: s.caller.idName, number: s.caller.number },
-      createdAt: r.created_at, answeredAt: r.answered_at || null, recording: !!r.data.record, trainer: r.trainer };
+      createdAt: r.created_at, answeredAt: r.answered_at || null, recording: !!r.data.record, trainer: r.trainer, live: r.data.live || {} };
     if (role === 'a') Object.assign(b, { scenario: s, trainee: { id: r.trainee_id, name: r.trainee_name, batch: r.batch }, note: r.data.note || {}, ticks: r.data.ticks || [], metrics: r.data.metrics || {}, traineeCid: r.data.traineeCid || null });
     else Object.assign(b, { trainerCid: r.data.trainerCid || null, note: r.data.note || {}, hideCases: s.hideCases || [], caseId: null });
     return b;
@@ -150,32 +156,51 @@ export class Switchboard extends DurableObject {
       if (h && !h.end) h.end = t;
     }
     r.ended_at = t; m.endedBy = by; m.endReason = reason || '';
-    delete r.data.lost;
+    delete r.data.lost; delete r.data.live;
     (r.data.events = r.data.events || []).push({ t: 'end', by, reason, at: t });
     this.save(r);
+    // Every phone of both people hears it (a tab that reloaded mid-call isn't tied to the call yet).
     const msg = { t: 'ended', callId: r.id, by, reason, status: r.status };
-    for (const w of this.ctx.getWebSockets()) { const a = this.att(w); if (a.call === r.id || (a.role === 't' && a.id === r.trainee_id && r.status !== 'ended') || (a.role === 'a' && a.cid === r.data.trainerCid)) this.send(w, msg); }
+    for (const w of this.ctx.getWebSockets()) {
+      const a = this.att(w);
+      if (a.call === r.id || (a.role === 't' && a.id === r.trainee_id) || (a.role === 'a' && (a.cid === r.data.trainerCid || a.id === r.trainer))) this.send(w, msg);
+    }
     this.clearCallOn(r.id);
     this.presence();
   }
+
+  // What's happening on the line now (so a phone that reloads can show it again).
+  setLive(r, patch) { r.data.live = Object.assign({}, r.data.live || {}, patch); }
 
   async armAlarm(at) {
     const cur = await this.ctx.storage.getAlarm();
     if (!cur || cur > at) await this.ctx.storage.setAlarm(at);
   }
 
+  // Rings out unanswered calls, ends calls whose phone didn't come back, and ends calls that ran too long
+  // (live calls after 2 hours; practice calls a little after their time limit, even if the tab was closed).
   async alarm() {
     const t = now();
+    const aiMs = (Math.min(15, Math.max(2, Number(this.env.AI_MAX_MINUTES) || 8)) + 2) * 60000;
     let next = 0;
-    for (const x of this.sql.exec(`SELECT id FROM calls WHERE status IN ('ringing', 'live') AND mode = 'live'`).toArray()) {
+    const want = (at) => { next = next ? Math.min(next, at) : at; };
+    for (const x of this.sql.exec(`SELECT id FROM calls WHERE status IN ('ringing', 'live')`).toArray()) {
       const r = this.row(x.id);
+      if (r.mode === 'ai') {
+        if (t - r.created_at >= aiMs) { r.status = 'ended'; r.ended_at = t; r.data.metrics = Object.assign({ endedBy: 'caller', endReason: 'time-limit' }, r.data.metrics || {}); this.save(r); }
+        else want(r.created_at + aiMs);
+        continue;
+      }
       if (r.status === 'ringing') {
-        if (t - r.created_at >= RING_MS) this.endCall(r, 'system', 'no-answer');
-        else next = next ? Math.min(next, r.created_at + RING_MS) : r.created_at + RING_MS;
-      } else if (r.data.lost) {
-        if (t - r.data.lost.at >= GRACE_MS) this.endCall(r, r.data.lost.role === 'a' ? 'trainer' : 'trainee', 'disconnected');
-        else next = next ? Math.min(next, r.data.lost.at + GRACE_MS) : r.data.lost.at + GRACE_MS;
-      } else if (t - (r.answered_at || r.created_at) > MAX_CALL_MS) this.endCall(r, 'system', 'time-limit');
+        if (t - r.created_at >= RING_MS) this.endCall(r, 'system', 'no-answer'); else want(r.created_at + RING_MS);
+        continue;
+      }
+      const lost = r.data.lost || {};
+      const gone = ['a', 't'].find((role) => lost[role] && t - lost[role] >= GRACE_MS);
+      if (gone) { this.endCall(r, gone === 'a' ? 'trainer' : 'trainee', 'disconnected'); continue; }
+      ['a', 't'].forEach((role) => { if (lost[role]) want(lost[role] + GRACE_MS); });
+      const end = (r.answered_at || r.created_at) + MAX_CALL_MS;
+      if (t >= end) this.endCall(r, 'system', 'time-limit'); else want(end);
     }
     if (next) await this.ctx.storage.setAlarm(next + 250);
   }
@@ -218,7 +243,8 @@ export class Switchboard extends DurableObject {
         return;
       }
       case 'cancel':
-        if (party && me.role === 'a' && r.status === 'ringing') this.endCall(r, 'trainer', m.reason === 'no-answer' ? 'no-answer' : 'cancelled');
+        // A cancel that crosses the trainee's answer still ends the call.
+        if (party && me.role === 'a') this.endCall(r, 'trainer', r.status === 'live' ? 'hangup' : m.reason === 'no-answer' ? 'no-answer' : 'cancelled');
         return;
 
       /* ----- the trainee answers or declines ----- */
@@ -235,12 +261,13 @@ export class Switchboard extends DurableObject {
         const trainer = this.byCid(r.data.trainerCid);
         this.send(trainer, { t: 'accepted', callId: r.id, traineeCid: me.cid, ringMs: r.data.metrics.ringMs });
         this.send(ws, Object.assign({ t: 'connected' }, this.brief(r, 't')));
-        if (!trainer) { r.data.lost = { role: 'a', at: t }; this.save(r); await this.armAlarm(t + GRACE_MS); }
+        if (!trainer) { r.data.lost = { a: t }; this.save(r); await this.armAlarm(t + GRACE_MS); }
+        await this.armAlarm(t + MAX_CALL_MS);
         this.presence();
         return;
       }
-      case 'decline':
-        if (party && me.role === 't' && r.status === 'ringing') this.endCall(r, 'trainee', 'declined');
+      case 'decline':   // busy: the trainee is on a practice call
+        if (party && me.role === 't' && r.status === 'ringing') this.endCall(r, 'trainee', m.busy ? 'busy' : 'declined');
         return;
 
       /* ----- WebRTC signaling: passed straight to the other phone ----- */
@@ -257,20 +284,39 @@ export class Switchboard extends DurableObject {
         const last = holds[holds.length - 1];
         if (m.on && !(last && !last.end)) holds.push({ start: t });
         if (!m.on && last && !last.end) last.end = t;
+        const open = holds[holds.length - 1];
+        this.setLive(r, { held: !!(open && !open.end), holdAt: open && !open.end ? open.start : 0 });
         this.save(r);
         this.send(this.peerOf(r, 't'), { t: 'hold', callId: r.id, on: !!m.on, at: t });
         return;
       }
       case 'mute':
-        if (party && r.status === 'live') this.send(this.peerOf(r, me.role), { t: 'mute', callId: r.id, on: !!m.on });
+        if (!party || r.status !== 'live') return;
+        this.setLive(r, me.role === 't' ? { traineeMuted: !!m.on } : { trainerMuted: !!m.on }); this.save(r);
+        this.send(this.peerOf(r, me.role), { t: 'mute', callId: r.id, on: !!m.on });
         return;
       case 'transfer': {
         if (!party || r.status !== 'live' || me.role !== 't') return;
         const d = FIRM.directory.find((x) => x.ext === String(m.ext));
         if (!d) return;
-        (r.data.metrics.transfers = r.data.metrics.transfers || []).push({ to: d.name, ext: d.ext, at: t, result: null });
+        const txs = r.data.metrics.transfers = r.data.metrics.transfers || [];
+        const pending = txs[txs.length - 1];
+        if (pending && !pending.result) pending.result = 'cancelled';
+        const x = { to: d.name, ext: d.ext, role: d.role, unavailable: (r.data.scenario.unavailable || []).includes(d.ext) };
+        txs.push({ to: d.name, ext: d.ext, at: t, result: null });
+        this.setLive(r, { transfer: x });
         this.save(r);
-        this.send(this.peerOf(r, 't'), { t: 'transfer', callId: r.id, to: d.name, ext: d.ext, role: d.role, unavailable: (r.data.scenario.unavailable || []).includes(d.ext) });
+        this.send(this.peerOf(r, 't'), Object.assign({ t: 'transfer', callId: r.id }, x));
+        return;
+      }
+      case 'transfer-cancel': {   // the trainee took the caller back before the extension answered
+        if (!party || r.status !== 'live' || me.role !== 't') return;
+        const tx = (r.data.metrics.transfers || []).slice(-1)[0];
+        if (!tx || tx.result) return;
+        tx.result = 'cancelled'; tx.done = t;
+        this.setLive(r, { transfer: null });
+        this.save(r);
+        this.send(this.peerOf(r, 't'), { t: 'transfer-cancel', callId: r.id });
         return;
       }
       case 'transfer-result': {
@@ -279,6 +325,7 @@ export class Switchboard extends DurableObject {
         if (!tx || tx.result) return;
         const result = ['connected', 'no-answer', 'voicemail'].includes(m.result) ? m.result : 'no-answer';
         tx.result = result; tx.done = t;
+        this.setLive(r, { transfer: null, lastTransfer: { to: tx.to, ext: tx.ext, result } });
         this.save(r);
         this.send(this.peerOf(r, 'a'), { t: 'transfer-result', callId: r.id, result, to: tx.to, ext: tx.ext });
         if (result === 'connected') this.endCall(r, 'trainee', 'transferred');
@@ -286,7 +333,9 @@ export class Switchboard extends DurableObject {
       }
       case 'timeout':   // the trainer pauses the role-play to coach, then resumes it
         if (!party || r.status !== 'live' || me.role !== 'a') return;
-        r.data.events.push({ t: m.on ? 'coach' : 'resume', at: t }); this.save(r);
+        r.data.events.push({ t: m.on ? 'coach' : 'resume', at: t });
+        this.setLive(r, { coaching: !!m.on });
+        this.save(r);
         this.send(this.peerOf(r, 'a'), { t: 'timeout', callId: r.id, on: !!m.on, msg: String(m.msg || '').slice(0, 300) });
         return;
       case 'note': {
@@ -309,8 +358,12 @@ export class Switchboard extends DurableObject {
       /* ----- a phone that reconnected mid-call picks the call back up ----- */
       case 'resume': {
         if (!r || r.status !== 'live' || !((me.role === 'a' && r.trainer === me.name) || (me.role === 't' && r.trainee_id === me.id))) return this.send(ws, { t: 'gone', callId: m.callId, status: r ? r.status : 'unknown' });
+        // The call moves to this phone; a tab that still held it is told, so it stops.
+        const oldCid = me.role === 'a' ? r.data.trainerCid : r.data.traineeCid;
+        const old = oldCid && oldCid !== me.cid ? this.byCid(oldCid) : null;
+        if (old) { this.setAtt(old, { call: null }); this.send(old, { t: 'moved', callId: r.id }); }
         if (me.role === 'a') r.data.trainerCid = me.cid; else r.data.traineeCid = me.cid;
-        if (r.data.lost && r.data.lost.role === me.role) delete r.data.lost;
+        if (r.data.lost) { delete r.data.lost[me.role]; if (!Object.keys(r.data.lost).length) delete r.data.lost; }
         this.save(r);
         this.setAtt(ws, { call: r.id });
         this.send(ws, Object.assign({ t: 'resumed' }, this.brief(r, me.role)));
@@ -333,7 +386,7 @@ export class Switchboard extends DurableObject {
       } else if (r && r.status === 'live') {
         const mine = me.role === 'a' ? r.data.trainerCid === me.cid : r.data.traineeCid === me.cid;
         if (mine) {
-          r.data.lost = { role: me.role, at: now() };
+          r.data.lost = Object.assign({}, r.data.lost, { [me.role]: now() });
           this.save(r);
           this.send(this.peerOf(r, me.role), { t: 'peer-lost', callId: r.id });
           await this.armAlarm(now() + GRACE_MS);
@@ -346,18 +399,35 @@ export class Switchboard extends DurableObject {
   /* =========================================================
      Called by the Worker (RPC). Identity is already checked there.
      ========================================================= */
-  upsertTrainee(id, name, batch) {
+  /* A trainee signs in with their name, batch and PIN. The first sign-in sets the PIN; a trainer can
+     reset it (the next sign-in sets a new one). Five wrong PINs in 15 minutes lock the account for a while. */
+  async traineeSignIn(id, name, batch, pin) {
     const cur = this.trainee(id);
-    if (cur) this.sql.exec('UPDATE trainees SET name = ?, batch = ?, last_seen = ? WHERE id = ?', name, batch, now(), id);
-    else this.sql.exec('INSERT INTO trainees (id, name, batch, created_at, last_seen) VALUES (?, ?, ?, ?, ?)', id, name, batch, now(), now());
-    return this.trainee(id);
+    if (cur && cur.archived) return { error: 'This account is archived. Ask your trainer to restore it.', status: 403 };
+    if (!/^\d{4,8}$/.test(String(pin || ''))) return { error: cur && cur.pin ? 'Enter your PIN (4 to 8 digits).' : 'Choose a PIN of 4 to 8 digits. You\'ll use it every time you sign in.', status: 400, needPin: true, firstTime: !(cur && cur.pin) };
+    if (cur && cur.pin) {
+      if (this.countUsage(id, 'pinfail', 15 * 60000) >= PIN_TRIES) return { error: 'Too many wrong PINs. Wait 15 minutes, or ask your trainer to reset your PIN.', status: 429 };
+      if (!(await checkPin(pin, cur.pin))) { this.logUsage(id, 'pinfail'); return { error: 'That PIN isn\'t right. Forgot it? Ask your trainer to reset it.', status: 401, needPin: true }; }
+      this.sql.exec('UPDATE trainees SET last_seen = ? WHERE id = ?', now(), id);
+    } else if (cur) {
+      this.sql.exec('UPDATE trainees SET pin = ?, last_seen = ? WHERE id = ?', await hashPin(pin), now(), id);
+    } else {
+      this.sql.exec('INSERT INTO trainees (id, name, batch, created_at, last_seen, pin) VALUES (?, ?, ?, ?, ?, ?)', id, name, batch, now(), now(), await hashPin(pin));
+    }
+    const t = this.trainee(id);
+    return { trainee: { id: t.id, name: t.name, batch: t.batch } };
   }
-  getTrainee(id) { return this.trainee(id); }
+  resetPin(id) { this.sql.exec('UPDATE trainees SET pin = NULL WHERE id = ?', id); return true; }
+  getTrainee(id) { const t = this.trainee(id); if (t) delete t.pin; return t; }
   listTrainees() {
-    return this.sql.exec(`SELECT t.*, (SELECT COUNT(*) FROM calls c WHERE c.trainee_id = t.id AND c.status = 'ended') AS calls,
-      (SELECT AVG(score) FROM calls c WHERE c.trainee_id = t.id AND c.score IS NOT NULL) AS avg FROM trainees t ORDER BY batch, name`).toArray();
+    return this.sql.exec(`SELECT t.id, t.name, t.batch, t.created_at, t.last_seen, t.archived, (t.pin IS NOT NULL) AS hasPin,
+      (SELECT COUNT(*) FROM calls c WHERE c.trainee_id = t.id AND c.status = 'ended' AND c.mode = 'live') AS calls,
+      (SELECT COUNT(*) FROM calls c WHERE c.trainee_id = t.id AND c.status = 'ended' AND c.mode = 'ai') AS practice,
+      (SELECT AVG(score) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'live' AND c.reviewed = 1 AND c.score IS NOT NULL) AS avg,
+      (SELECT AVG(score) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'ai' AND c.score IS NOT NULL) AS practiceAvg
+      FROM trainees t ORDER BY batch, name`).toArray();
   }
-  setArchived(id, archived) { this.sql.exec('UPDATE trainees SET archived = ? WHERE id = ?', archived ? 1 : 0, id); return this.trainee(id); }
+  setArchived(id, archived) { this.sql.exec('UPDATE trainees SET archived = ? WHERE id = ?', archived ? 1 : 0, id); return this.getTrainee(id); }
 
   listScenarios() {
     const custom = this.sql.exec('SELECT data FROM scenarios WHERE deleted = 0 ORDER BY updated_at').toArray().map((x) => JSON.parse(x.data));
@@ -380,11 +450,11 @@ export class Switchboard extends DurableObject {
     if (f.before) { where.push('created_at < ?'); args.push(Number(f.before)); }
     if (f.done) where.push(`status = 'ended'`);
     if (f.needsReview) where.push(`status = 'ended' AND reviewed = 0`);
-    const rows = this.sql.exec(`SELECT * FROM calls ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC LIMIT ?`, ...args, Math.min(Number(f.limit) || 50, 200)).toArray();
+    const rows = this.sql.exec(`SELECT * FROM calls ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC LIMIT ?`, ...args, Math.max(1, Math.min(Math.floor(Number(f.limit)) || 50, 200))).toArray();
     return rows.map((r) => {
       const d = JSON.parse(r.data || '{}');
       return { id: r.id, mode: r.mode, track: r.track, scenarioId: r.scenario_id, title: r.title, traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, trainer: r.trainer,
-        status: r.status, createdAt: r.created_at, answeredAt: r.answered_at, endedAt: r.ended_at, reviewed: !!r.reviewed, score: r.score,
+        status: r.status, createdAt: r.created_at, answeredAt: r.answered_at, endedAt: r.ended_at, reviewed: !!r.reviewed, score: r.score, draft: !!d.reviewDraft,
         talkMs: d.metrics && d.metrics.talkMs, ringMs: d.metrics && d.metrics.ringMs, recording: !!d.recording, ai: !!d.ai, noteSubmitted: !!d.noteSubmittedAt, reviewSeen: !!(d.review && d.review.seenAt) };
     });
   }
@@ -392,14 +462,26 @@ export class Switchboard extends DurableObject {
   deleteCall(id) { this.sql.exec('DELETE FROM calls WHERE id = ?', id); return true; }
 
   // A practice call with the AI caller (the trainee's browser runs the call).
-  startAiCall(who, scenarioId) {
+  async startAiCall(who, scenarioId) {
     const s = this.scenario(scenarioId);
-    if (!s) return null;
+    if (!s) return { error: 'No such scenario', status: 404 };
+    if (s.ai === false && who.role !== 'a') return { error: 'This call is for live practice with a trainer only.', status: 403 };
     const t = now();
     const r = { id: newId(), mode: 'ai', track: s.track, scenario_id: s.id, title: s.title, trainee_id: who.id, trainee_name: who.name, batch: who.batch || '', trainer: '',
       status: 'live', created_at: t, answered_at: t, data: { scenario: s, metrics: {}, note: {}, transcript: [], events: [] } };
     this.save(r);
+    await this.armAlarm(t + (Math.min(15, Math.max(2, Number(this.env.AI_MAX_MINUTES) || 8)) + 2) * 60000);
     return { id: r.id, scenario: s };
+  }
+
+  // Typed practice calls: the conversation is kept here, so the caller's lines are the AI's, not the page's.
+  appendTyped(id, who, lines) {
+    const r = this.row(id);
+    if (!r || r.mode !== 'ai' || r.trainee_id !== who.id || r.status !== 'live') return null;
+    r.data.typed = true;
+    r.data.transcript = (r.data.transcript || []).concat(lines).slice(-400);
+    this.save(r);
+    return r.data.transcript;
   }
 
   /* What a phone may change on a call record once it's placed.
@@ -414,9 +496,9 @@ export class Switchboard extends DurableObject {
     if (mine) {
       if (p.note && !d.noteSubmittedAt) d.note = cleanNote(r.track, p.note);
       if (p.submit && !d.noteSubmittedAt && r.status !== 'live') d.noteSubmittedAt = now();
-      if (p.seen && d.review && d.review.sentAt && !d.review.seenAt) d.review.seenAt = now();
+      if (p.seen && d.review && !d.review.seenAt) d.review.seenAt = now();
       if (r.mode === 'ai' && r.status === 'live') {
-        if (Array.isArray(p.transcript)) d.transcript = p.transcript.slice(0, 400).map((x) => ({ who: x && x.who === 'caller' ? 'caller' : 'trainee', text: String((x && x.text) || '').slice(0, 1500) })).filter((x) => x.text);
+        if (Array.isArray(p.transcript) && !d.typed) d.transcript = p.transcript.slice(0, 400).map((x) => ({ who: x && x.who === 'caller' ? 'caller' : 'trainee', text: String((x && x.text) || '').slice(0, 1500) })).filter((x) => x.text);
         if (p.metrics && typeof p.metrics === 'object') {
           const m = p.metrics, n = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.round(Number(v))) : undefined);
           d.metrics = { ringMs: n(m.ringMs), talkMs: n(m.talkMs), endedBy: m.endedBy === 'caller' ? 'caller' : 'trainee', endReason: String(m.endReason || '').slice(0, 40),
@@ -427,15 +509,22 @@ export class Switchboard extends DurableObject {
         if (p.end) { r.status = 'ended'; r.ended_at = now(); }
       }
     }
+    // The trainee only ever sees the review that was sent; a saved draft stays with the trainer until sent.
     if (who.role === 'a' && p.review) {
       const v = p.review, str = (x, n) => String(x == null ? '' : x).slice(0, n);
-      const criteria = (Array.isArray(v.criteria) ? v.criteria : []).slice(0, 8).map((c) => ({ name: str(c.name, 80), score: Math.max(1, Math.min(5, Math.round(Number(c.score) || 0))) || null, evaluation: str(c.evaluation, 1500) }));
+      const score5 = (x) => { const n = Math.round(Number(x)); return n >= 1 && n <= 5 ? n : null; };
+      const criteria = (Array.isArray(v.criteria) ? v.criteria : []).slice(0, 8).map((c) => ({ name: str(c.name, 80), score: score5(c.score), evaluation: str(c.evaluation, 1500) }));
       const scores = criteria.map((c) => c.score).filter(Boolean);
-      d.review = { verdict: str(v.verdict, 80), summary: str(v.summary, 3000), criteria,
+      const rev = { verdict: str(v.verdict, 80), summary: str(v.summary, 3000), criteria,
         goals: (Array.isArray(v.goals) ? v.goals : []).slice(0, 20).map((g) => ({ goal: str(g.goal, 300), met: ['yes', 'partly', 'no', 'n/a'].includes(g.met) ? g.met : 'no', evidence: str(g.evidence, 500) })),
         note: str(v.note, 1500), tips: (Array.isArray(v.tips) ? v.tips : []).slice(0, 5).map((x) => str(x, 300)).filter(Boolean),
-        by: who.id, savedAt: now(), sentAt: v.send ? now() : (d.review && d.review.sentAt) || null, seenAt: v.send ? null : (d.review && d.review.seenAt) || null };
-      if (v.send) { r.reviewed = 1; r.score = scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 20) : null; }
+        by: who.id, savedAt: now() };
+      if (v.send) {
+        d.review = Object.assign(rev, { sentAt: now(), seenAt: null });
+        delete d.reviewDraft;
+        r.reviewed = 1;
+        r.score = scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 20) : null;
+      } else d.reviewDraft = rev;
     }
     this.save(r);
     return { ok: true, call: r };

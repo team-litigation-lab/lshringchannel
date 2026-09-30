@@ -16,10 +16,23 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
 
   // Sign in
   await te.goto(B + '/');
-  await te.fill('#tn', 'Jamie Cruz'); await te.fill('#tb', 'B093026');
+  await te.fill('#tn', 'Jamie Cruz'); await te.fill('#tb', 'B093026'); await te.fill('#tp', '4321');
   await te.click('#fTrainee button');
   await te.waitForSelector('#device .lcd');
-  ok('Trainee signed in, phone is showing');
+  ok('Trainee signed in (first time: chose a PIN), phone is showing');
+
+  // Someone else can't sign in as Jamie without the PIN
+  const other = await mk();
+  await other.goto(B + '/');
+  await other.fill('#tn', 'Jamie Cruz'); await other.fill('#tb', 'B093026'); await other.fill('#tp', '0000');
+  await other.click('#fTrainee button');
+  await other.waitForSelector('#tErr:not(.hidden)');
+  const why = await other.textContent('#tErr');
+  if (!/PIN isn't right/.test(why)) throw new Error('Wrong PIN not refused: ' + why);
+  const live = await other.evaluate(async () => { const r = await fetch('/api/auth/trainee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Jamie Cruz', batch: 'B093026' }) }); return r.status; });
+  if (live !== 400) throw new Error('Sign-in without a PIN not refused: ' + live);
+  await other.close();
+  ok('Signing in as another trainee with a wrong PIN (or none) is refused');
   await tr.goto(B + '/');
   await tr.fill('#an', 'Coach Ana'); await tr.fill('#ap', 'test-pass');
   await tr.click('#fTrainer button');
@@ -99,6 +112,18 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.click('#goals input[data-goal="0"]');
   await tr.click('#goals input[data-goal="2"]');
 
+  // A second trainer tab doesn't take the call over by itself
+  const tr2 = await tr.context().newPage();
+  await tr2.goto(B + '/#/console');
+  await tr2.waitForSelector('[data-act="takehere"]', { timeout: 15000 });
+  await sleep(2500);
+  const still = await inb(te, 'p');
+  if (!(still.bytes > a1.bytes)) throw new Error('Audio stopped when a second tab opened');
+  const liveBar = await tr.$('#callbar .t');
+  if (!liveBar) throw new Error('The first tab lost the call');
+  await tr2.close();
+  ok('A second trainer tab shows "on a call in another tab" and leaves the call alone');
+
   // Reload the trainee's page mid-call → reconnect
   await te.reload();
   await te.waitForSelector('[data-act="rejoin"]', { timeout: 15000 });
@@ -152,6 +177,11 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.click('[data-sc="send"]');
   await tr.waitForFunction(() => /Sent/.test(document.querySelector('#scoreForm').textContent));
   ok('Trainer sent the review');
+  // Editing after sending: "Save draft" keeps the changes from the trainee until they're sent
+  await tr.fill('[data-f="summary"]', 'DRAFT CHANGES NOT SENT');
+  await tr.click('[data-sc="save"]');
+  await tr.waitForFunction(() => /Unsent changes/.test(document.querySelector('#scoreForm').textContent));
+  ok('"Save draft" after sending keeps the edits as unsent changes');
   await tr.screenshot({ path: OUT + '/07-trainer-scorecard.png', fullPage: true });
 
   // Trainee reads it
@@ -164,6 +194,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await te.waitForFunction(() => /Your trainer's review/.test(document.body.textContent));
   const hidden = await te.evaluate(() => /Your offer on Robert Chen/.test(document.body.textContent));
   if (hidden) throw new Error('Trainee can see the caller script!');
+  if (await te.evaluate(() => /DRAFT CHANGES NOT SENT/.test(document.body.textContent))) throw new Error('The trainee sees an unsent draft');
   ok('Trainee reads the trainer\'s review; the caller\'s script stays hidden');
   await te.screenshot({ path: OUT + '/08-trainee-review.png', fullPage: true });
 

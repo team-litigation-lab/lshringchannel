@@ -39,14 +39,18 @@ function b64(buf) {
   return btoa(s);
 }
 
-// What a trainee sees of a call record: never the caller's script or the trainer's unsent draft.
+// What a trainee sees of a call record: never the caller's script or the trainer's unsent draft, and
+// nothing about a live call's scenario until they took the call and it ended (a missed call may be rung again).
+const LIVE_TITLE = { ringing: 'Live mock call (ringing)', live: 'Live mock call (in progress)', missed: 'Missed live call', declined: 'Declined live call', cancelled: 'Cancelled live call' };
+function traineeTitle(mode, status, title) { return mode === 'live' && status !== 'ended' ? LIVE_TITLE[status] || 'Live mock call' : title; }
 function forTrainee(r) {
   const d = r.data || {}, s = d.scenario || {};
-  const done = !['ringing', 'live'].includes(r.status);
-  const scen = traineeView(s);
+  const done = r.status === 'ended';
+  const hideAll = r.mode === 'live' && !done;
+  const scen = hideAll ? { track: s.track, line: traineeView(s).line } : traineeView(s);
   if (done) Object.assign(scen, { goals: s.goals || [], caller: { name: s.caller && s.caller.name, role: s.caller && s.caller.role }, reference: s.reference || null, caseId: s.caseId || null });
   return {
-    id: r.id, mode: r.mode, track: r.track, title: r.title, status: r.status, createdAt: r.created_at, answeredAt: r.answered_at, endedAt: r.ended_at,
+    id: r.id, mode: r.mode, track: r.track, title: traineeTitle(r.mode, r.status, r.title), status: r.status, createdAt: r.created_at, answeredAt: r.answered_at, endedAt: r.ended_at,
     traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, trainer: r.trainer, reviewed: !!r.reviewed, score: r.score,
     scenario: scen, metrics: d.metrics || {}, note: d.note || {}, noteSubmittedAt: d.noteSubmittedAt || null, transcript: done ? d.transcript || [] : [],
     recording: d.recording || null, ai: d.ai || null, review: d.review && d.review.sentAt ? d.review : null
@@ -58,7 +62,7 @@ function forTrainer(r) {
     id: r.id, mode: r.mode, track: r.track, title: r.title, status: r.status, createdAt: r.created_at, answeredAt: r.answered_at, endedAt: r.ended_at,
     traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, trainer: r.trainer, reviewed: !!r.reviewed, score: r.score,
     scenario: d.scenario, metrics: d.metrics || {}, note: d.note || {}, noteSubmittedAt: d.noteSubmittedAt || null, transcript: d.transcript || [],
-    recording: d.recording || null, ai: d.ai || null, aiDraft: d.aiDraft || null, review: d.review || null, ticks: d.ticks || [], events: d.events || []
+    recording: d.recording || null, ai: d.ai || null, aiDraft: d.aiDraft || null, review: d.review || null, reviewDraft: d.reviewDraft || null, ticks: d.ticks || [], events: d.events || []
   };
 }
 
@@ -89,24 +93,16 @@ export default {
       /* ---------- a phone's WebSocket to the Switchboard ---------- */
       if (path === '/ws') {
         if (request.headers.get('Upgrade') !== 'websocket') return new Response('Expected a WebSocket', { status: 426 });
-        const tok = await readTokenString(env, url.searchParams.get('token'));
+        const protos = (request.headers.get('Sec-WebSocket-Protocol') || '').split(',').map((x) => x.trim());
+        const tok = await readTokenString(env, protos[0] === 'mcv' && protos[1] ? protos[1] : url.searchParams.get('token'));
         if (!tok) return new Response('Sign-in required', { status: 401 });
         const headers = new Headers(request.headers);
         headers.set('X-Who', JSON.stringify(tok));
         return board(env).fetch(new Request(request.url, { headers }));
       }
 
-      if (!path.startsWith('/api/')) {
-        const res = await env.ASSETS.fetch(request);
-        const type = res.headers.get('Content-Type') || '';
-        if (!type.includes('text/html')) return res;
-        const h = new Headers(res.headers);
-        h.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-        h.set('Permissions-Policy', 'microphone=(self), camera=(), geolocation=()');
-        h.set('X-Content-Type-Options', 'nosniff');
-        h.set('Referrer-Policy', 'same-origin');
-        return new Response(res.body, { status: res.status, headers: h });
-      }
+      // The app's files are served from public/ before the Worker runs (their headers are in public/_headers).
+      if (!path.startsWith('/api/')) return env.ASSETS.fetch(request);
       if (request.method !== 'POST') return json({ error: 'POST only' }, 405);
 
       /* ---------- sign-in ---------- */
@@ -123,7 +119,7 @@ export default {
       }
       if (path === '/api/auth/trainee') {
         if (!env.ADMIN_PASSPHRASE) return json({ error: 'Sign-in isn\'t set up yet: the trainer needs to add the ADMIN_PASSPHRASE secret in Cloudflare.' }, 501);
-        const { name, batch, code } = await request.json().catch(() => ({}));
+        const { name, batch, code, pin } = await request.json().catch(() => ({}));
         const n = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 60), b = String(batch || '').trim().replace(/\s+/g, ' ').slice(0, 30);
         if (!n || !b) return json({ error: 'Enter your full name and your batch.' }, 400);
         if (env.TRAINEE_CODE) {
@@ -131,9 +127,9 @@ export default {
           if (!safeEqual(String(code || '').trim(), String(env.TRAINEE_CODE).trim())) return json({ error: 'That access code isn\'t right. Ask your trainer for it.' }, 401);
         }
         const id = traineeId(n, b);
-        const cur = await board(env).getTrainee(id);
-        if (cur && cur.archived) return json({ error: 'This account is archived. Ask your trainer to restore it.' }, 403);
-        const rec = await board(env).upsertTrainee(id, cur ? cur.name : n, cur ? cur.batch : b);
+        const res = await board(env).traineeSignIn(id, n, b, String(pin || '').trim());
+        if (res.error) return json({ error: res.error, needPin: !!res.needPin, firstTime: !!res.firstTime }, res.status || 400);
+        const rec = res.trainee;
         return json({ token: await makeToken(env, 't', id, 24 * 30), role: 't', id, name: rec.name, batch: rec.batch });
       }
 
@@ -159,12 +155,17 @@ export default {
           features: { ai: hasAI(env), recordings: !!env.LSH_KV, aiMinutes: aiMinutes(env) }
         });
       }
-      if (path === '/api/ice') return json(await iceServers(env));
+      if (path === '/api/ice') {
+        if ((await sb.countUsage(me.id, 'ice', 3600000)) >= 120) return json({ error: 'Too many requests.' }, 429);
+        await sb.logUsage(me.id, 'ice');
+        return json(await iceServers(env));
+      }
 
       /* ---------- trainers: scenarios, trainees, the board ---------- */
       if (path === '/api/scenarios/save') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ scenario: await sb.saveScenario(body.scenario || {}) }); }
       if (path === '/api/scenarios/delete') { if (!admin) return json({ error: 'Not allowed' }, 403); await sb.deleteScenario(String(body.id || '')); return json({ ok: true }); }
       if (path === '/api/trainees') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ trainees: await sb.listTrainees() }); }
+      if (path === '/api/trainees/reset-pin') { if (!admin) return json({ error: 'Not allowed' }, 403); await sb.resetPin(String(body.id || '')); return json({ ok: true }); }
       if (path === '/api/trainees/archive') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ trainee: await sb.setArchived(String(body.id || ''), !!body.archived) }); }
       if (path === '/api/stats') {
         if (!admin) return json({ error: 'Not allowed' }, 403);
@@ -176,7 +177,9 @@ export default {
       if (path === '/api/calls') {
         const f = Object.assign({}, body || {});
         if (!admin) f.traineeId = me.id;
-        return json({ calls: await sb.listCalls(f) });
+        const calls = await sb.listCalls(f);
+        if (!admin) calls.forEach((c) => { c.title = traineeTitle(c.mode, c.status, c.title); c.scenarioId = c.mode === 'live' && c.status !== 'ended' ? '' : c.scenarioId; delete c.draft; });
+        return json({ calls });
       }
       if (path === '/api/call') {
         const r = await sb.getCall(String(body.id || ''));
@@ -228,8 +231,7 @@ export default {
         if (!hasAI(env)) return json({ error: 'AI practice callers aren\'t set up on this site yet.' }, 501);
         if (!admin && (await sb.countUsage(me.id, 'aicall', 3600000)) >= 30) return json({ error: 'That\'s a lot of practice calls this hour. Take a short break and try again.' }, 429);
         const res = await sb.startAiCall(me, String(body.scenarioId || ''));
-        if (!res) return json({ error: 'No such scenario' }, 404);
-        if (res.scenario.ai === false) return json({ error: 'This call is for live practice with a trainer only.' }, 403);
+        if (res.error) return json({ error: res.error }, res.status || 400);
         await sb.logUsage(me.id, 'aicall');
         return json({ callId: res.id, scenario: traineeView(res.scenario), maxSeconds: aiMinutes(env) * 60 });
       }
@@ -237,14 +239,19 @@ export default {
         const r = await sb.getCall(String(body.callId || ''));
         if (!r || r.mode !== 'ai' || r.trainee_id !== me.id || r.status !== 'live') return json({ error: 'This practice call is over.' }, 404);
         const s = r.data.scenario;
+        if (Date.now() - r.created_at > (aiMinutes(env) + 1) * 60000) return json({ error: 'This practice call reached its time limit.' }, 409);
         if (path === '/api/ai/live') {
+          // A call gets a few tries (busy keys, models); every token is one Gemini Live session.
+          if ((await sb.countUsage(me.id, 'live:' + r.id, 3600000)) >= 8 || (await sb.countUsage(me.id, 'live', 3600000)) >= 60) return json({ error: 'Too many voice connections; this call runs as text.', code: 'RATE_LIMIT' }, 429);
+          await sb.logUsage(me.id, 'live:' + r.id); await sb.logUsage(me.id, 'live');
           const t = await liveToken(env, (model) => liveSetup(s, model), aiMinutes(env), Array.isArray(body.skip) ? body.skip.map(String) : []);
           return t.ok ? json({ token: t.token, model: t.model, url: t.url, pair: t.pair, maxSeconds: aiMinutes(env) * 60 }) : json({ error: t.error, code: t.code }, t.code === 'BUSY' ? 429 : 502);
         }
         // Text mode: the same caller, one turn at a time (no microphone, or live voice unavailable).
         if ((await sb.countUsage(me.id, 'aitext', 3600000)) >= 400) return json({ error: 'Too many messages this hour.' }, 429);
         await sb.logUsage(me.id, 'aitext');
-        const turns = (Array.isArray(body.turns) ? body.turns : []).slice(-60);
+        const said = String(body.text || '').trim().slice(0, 1500);
+        const turns = (await sb.appendTyped(r.id, me, said ? [{ who: 'trainee', text: said }] : [])) || [];
         const contents = [];
         for (const x of turns) {
           const role = x && x.who === 'caller' ? 'model' : 'user';
@@ -256,8 +263,10 @@ export default {
         if (!contents.length || contents[0].role !== 'user') contents.unshift({ role: 'user', parts: [{ text: '(The call is answered.)' }] });
         if (contents[contents.length - 1].role !== 'user') contents.push({ role: 'user', parts: [{ text: '(The line is quiet.)' }] });
         try {
-          const g = await generate(env, { system: callerPrompt(s) + '\n\nThis call is typed: reply with only what you say out loud, one or two short sentences.', contents, maxTokens: 200, temperature: 0.8 });
-          return json({ text: g.text.replace(/^\s*(caller|[A-Z][a-z]+ [A-Z][a-z]+)\s*:\s*/i, '').trim() });
+          const g = await generate(env, { system: callerPrompt(s) + '\n\nThis call is typed: reply with only what you say out loud, one or two short sentences.', contents: contents.slice(-60), maxTokens: 200, temperature: 0.8 });
+          const text = g.text.replace(/^\s*(caller|[A-Z][a-z]+ [A-Z][a-z]+)\s*:\s*/i, '').trim();
+          if (text) await sb.appendTyped(r.id, me, [{ who: 'caller', text }]);
+          return json({ text });
         } catch (e) { return json({ error: String(e.message || e) }, 502); }
       }
 
@@ -304,7 +313,8 @@ export default {
 
       return json({ error: 'Unknown endpoint' }, 404);
     } catch (e) {
-      return json({ error: 'Something went wrong on the server.', detail: String((e && e.stack) || e).slice(0, 600) }, 500);
+      console.error(e && e.stack ? e.stack : e);
+      return json({ error: 'Something went wrong on the server.' }, 500);
     }
   }
 };

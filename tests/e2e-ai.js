@@ -14,7 +14,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   const mk = async () => { const c = await browser.newContext({ permissions: ['microphone'], viewport: { width: 1360, height: 900 } }); const p = await c.newPage(); p.on('pageerror', (e) => console.log('PAGE ERROR', e.message)); return p; };
   const te = await mk();
   await te.goto(B + '/');
-  await te.fill('#tn', 'Riley Santos'); await te.fill('#tb', 'B093026');
+  await te.fill('#tn', 'Riley Santos'); await te.fill('#tb', 'B093026'); await te.fill('#tp', '2468');
   await te.click('#fTrainee button');
   await te.waitForSelector('#device .lcd');
 
@@ -84,6 +84,15 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   const hasTr = await tr.$('.transcript');
   ok(`Trainer "Draft with AI" from the recording fills the scorecard${hasTr ? ' and adds a transcript' : ''}`);
   await tr.screenshot({ path: OUT + '/13-trainer-ai-draft.png', fullPage: true });
+
+  // A call the trainer marks "live only" can't be practiced, and leaves no call record behind
+  const sid = await tr.evaluate(async () => (await API.post('/api/scenarios/save', { scenario: { title: 'Live-only test call', track: 'reception', caller: { name: 'Test Caller', role: 'Tester' }, opening: 'Hi there.', hidden: 'Secret script.', goals: ['A goal'], ai: false } })).scenario.id);
+  const count = () => te.evaluate(async () => (await API.post('/api/calls', {})).calls.length);
+  const before = await count();
+  const st = await te.evaluate(async (sid) => { try { await API.post('/api/ai/start', { scenarioId: sid }); return 200; } catch (e) { return e.status; } }, sid);
+  const after = await count();
+  if (st !== 403 || after !== before) throw new Error(`live-only practice: status ${st}, calls ${before} → ${after}`);
+  ok('A live-only call can\'t be practiced and leaves no call record');
   await browser.close();
   console.log('\nALL PASSED');
 })().catch((e) => { console.error('❌ FAILED at step', step + 1, e.message); process.exit(1); });

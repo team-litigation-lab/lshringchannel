@@ -45,12 +45,12 @@
           U.$('#fBatch').innerHTML = `<option value="">All batches</option>` + batches.map((b) => `<option ${b === F.batch ? 'selected' : ''}>${esc(b)}</option>`).join('');
           U.$('#fTrainee').innerHTML = `<option value="">All trainees</option>` + ts.filter((x) => !F.batch || x.batch === F.batch).map((x) => `<option value="${esc(x.id)}" ${x.id === F.traineeId ? 'selected' : ''}>${esc(x.name)} (${esc(x.batch)})</option>`).join('');
         } catch (e) {}
-        app.addEventListener('change', (e) => {
+        app.onchange = (e) => {
           if (e.target.id === 'fBatch') { F.batch = e.target.value; F.traineeId = ''; App.views.calls.render(); }
           if (e.target.id === 'fTrainee') { F.traineeId = e.target.value; load(); }
           if (e.target.id === 'fMode') { F.mode = e.target.value; load(); }
           if (e.target.id === 'fNeeds') { F.needsReview = e.target.checked; load(); }
-        });
+        };
       }
       load();
       async function load() {
@@ -199,7 +199,9 @@
     }
     // Trainer: the scorecard editor.
     const t = App.cfg.tracks[c.track] || App.cfg.tracks.reception;
-    const base = c.review || c.aiDraft || (c.mode === 'ai' ? c.ai : null) || {};
+    // The form starts from: the AI draft when asked for, else the unsent draft, the sent review, the AI's draft or scoring.
+    const base = (c._useAi && (c.aiDraft || c.ai)) || c.reviewDraft || c.review || c.aiDraft || (c.mode === 'ai' ? c.ai : null) || {};
+    c._useAi = false;
     const goals = (c.scenario.goals || []).map((g, i) => {
       const b = (base.goals || []).find((x) => x.goal === g) || (base.goals || [])[i];
       return { goal: g, met: b ? b.met : (c.ticks || []).includes(i) ? 'yes' : 'no', evidence: b ? b.evidence || '' : '' };
@@ -209,8 +211,8 @@
     col.innerHTML = `
       ${c.mode === 'ai' && c.ai && c.review ? scorecardView(c.ai, '🤖 The AI\'s scoring', null) : ''}
       <div class="card" id="scoreForm">
-        <div class="card-head"><h3>🎓 Your scorecard</h3><span class="spacer"></span>${c.review && c.review.sentAt ? `<span class="badge green">Sent ${U.when(c.review.sentAt)}${c.review.seenAt ? ' · seen' : ''}</span>` : c.review ? '<span class="badge">Draft saved</span>' : ''}</div>
-        ${App.cfg.features.ai ? `<div class="row" style="margin-bottom:12px"><button class="btn btn-sm" data-sc="draft">✨ ${c.mode === 'live' ? (c.recording ? 'Draft with AI from the recording' : 'Draft with AI (no recording: from the note)') : 'Score again with AI'}</button>${c.aiDraft && c.review ? '<button class="btn btn-sm" data-sc="useai">Use the AI draft</button>' : ''}<span class="small muted" id="draftMsg"></span></div>` : ''}
+        <div class="card-head"><h3>🎓 Your scorecard</h3><span class="spacer"></span>${c.review && c.review.sentAt ? `<span class="badge green">Sent ${U.when(c.review.sentAt)}${c.review.seenAt ? ' · seen' : ''}</span>` : ''}${c.reviewDraft ? `<span class="badge amber">${c.review ? 'Unsent changes' : 'Draft saved'}: the trainee doesn't see ${c.review ? 'them' : 'it'} yet</span>` : ''}</div>
+        ${App.cfg.features.ai ? `<div class="row" style="margin-bottom:12px"><button class="btn btn-sm" data-sc="draft">✨ ${c.mode === 'live' ? (c.recording ? 'Draft with AI from the recording' : 'Draft with AI (no recording: from the note)') : 'Score again with AI'}</button>${c.aiDraft && (c.review || c.reviewDraft) ? '<button class="btn btn-sm" data-sc="useai">Use the AI draft</button>' : ''}<span class="small muted" id="draftMsg"></span></div>` : ''}
         ${!c.noteSubmittedAt ? '<div class="warn-box" style="margin-bottom:12px">The trainee hasn\'t submitted the note yet: you\'re seeing what they typed so far.</div>' : ''}
         <div class="field"><label class="f">Verdict</label><select class="input" data-f="verdict"><option value="">Choose…</option>${VERDICTS.map((v) => `<option ${v === S.verdict ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
         ${S.crit.map((x, i) => `<div class="crit"><div class="crit-head"><b title="${esc(x.desc)}">${esc(x.name)}</b><span class="dots" data-crit="${i}">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-n="${n}" class="${x.score === n ? 'on' : ''}">${n}</button>`).join('')}</span></div>
@@ -233,7 +235,7 @@
       const b = e.target.closest('[data-sc]'); if (!b) return;
       const act = b.dataset.sc;
       if (act === 'draft') return draftAi(c, b);
-      if (act === 'useai') { c.review = null; drawScore(c); return; }
+      if (act === 'useai') { c._useAi = true; drawScore(c); return; }
       read();
       const review = { verdict: S.verdict, summary: S.summary, note: S.note, tips: S.tips.split('\n').map((x) => x.trim()).filter(Boolean), criteria: S.crit.map((x) => ({ name: x.name, score: x.score, evaluation: x.evaluation })), goals: S.goals, send: act === 'send' };
       if (act === 'send' && S.crit.some((x) => !x.score)) return U.toast('Score every criterion (1 to 5) before sending.', 'error');
@@ -254,7 +256,7 @@
       if (c.mode === 'ai') {
         msg.textContent = 'Scoring…';
         const r = await API.post('/api/ai/grade', { id: c.id });
-        Object.assign(c, r.call); c.review = null;
+        Object.assign(c, r.call); c._useAi = true;
       } else {
         let wav = new Blob([], { type: 'audio/wav' });
         if (c.recording) {
@@ -264,7 +266,7 @@
         }
         msg.textContent = c.recording ? 'The AI is listening to the call (this can take a minute)…' : 'Drafting…';
         const r = await API.postBlob('/api/ai/draft?id=' + encodeURIComponent(c.id), wav, 'audio/wav');
-        Object.assign(c, r.call); c.review = null;
+        Object.assign(c, r.call); c._useAi = true;
       }
       U.toast('AI draft ready: check it, edit it, then send.', 'ok');
       const tr = U.$('.grid2 > div:first-child');
@@ -361,15 +363,21 @@
       const show = App.showArchived;
       const list = ts.filter((x) => !!x.archived === !!show);
       app.innerHTML = `<div class="card"><div class="card-head"><h2>👥 Trainees</h2><span class="spacer"></span><label class="check small"><input type="checkbox" id="arch" ${show ? 'checked' : ''}> Show archived</label></div>
-        <p class="small muted">Trainees appear here the first time they sign in with their name and batch.</p>
-        <div class="table-wrap"><table class="list"><thead><tr><th>Trainee</th><th>Batch</th><th>Last seen</th><th>Calls</th><th>Average</th><th></th></tr></thead><tbody>
+        <p class="small muted">Trainees appear here the first time they sign in with their name, batch and a PIN they choose. Forgot a PIN? <b>Reset PIN</b>: their next sign-in sets a new one. The live average counts reviewed live calls only; practice scores are the AI's.</p>
+        <div class="table-wrap"><table class="list"><thead><tr><th>Trainee</th><th>Batch</th><th>Last seen</th><th>Live calls</th><th>Live average</th><th>Practice</th><th></th></tr></thead><tbody>
         ${list.map((x) => `<tr><td><span class="led ${online.has(x.id) ? 'available' : ''}" style="display:inline-block;margin-right:8px"></span><b>${esc(x.name)}</b></td><td>${esc(x.batch)}</td><td>${online.has(x.id) ? '<span class="badge green">Online</span>' : U.when(x.last_seen)}</td>
-          <td>${x.calls || 0}</td><td>${x.avg != null ? Math.round(x.avg) + '%' : '–'}</td>
-          <td class="row" style="justify-content:flex-end"><button class="btn btn-sm" data-calls="${esc(x.id)}">🗂 Calls</button><button class="btn btn-sm" data-arch="${esc(x.id)}" data-v="${x.archived ? 0 : 1}">${x.archived ? 'Restore' : 'Archive'}</button></td></tr>`).join('') || `<tr><td colspan="6" class="empty">${show ? 'No archived trainees.' : 'No trainees yet.'}</td></tr>`}
+          <td>${x.calls || 0}</td><td>${x.avg != null ? `<b>${Math.round(x.avg)}%</b>` : '–'}</td><td class="small">${x.practice || 0} call${x.practice === 1 ? '' : 's'}${x.practiceAvg != null ? ' · ' + Math.round(x.practiceAvg) + '%' : ''}</td>
+          <td class="row" style="justify-content:flex-end"><button class="btn btn-sm" data-calls="${esc(x.id)}">🗂 Calls</button>${x.hasPin ? `<button class="btn btn-sm" data-pin="${esc(x.id)}" data-name="${esc(x.name)}">🔑 Reset PIN</button>` : '<span class="badge">No PIN yet</span>'}<button class="btn btn-sm" data-arch="${esc(x.id)}" data-v="${x.archived ? 0 : 1}">${x.archived ? 'Restore' : 'Archive'}</button></td></tr>`).join('') || `<tr><td colspan="7" class="empty">${show ? 'No archived trainees.' : 'No trainees yet.'}</td></tr>`}
         </tbody></table></div></div>`;
       U.$('#arch').onchange = (e) => { App.showArchived = e.target.checked; App.views.trainees.render(); };
       app.onclick = async (e) => {
         const c = e.target.closest('[data-calls]'); if (c) { F.traineeId = c.dataset.calls; F.batch = ''; location.hash = '#/calls'; return; }
+        const pin = e.target.closest('[data-pin]');
+        if (pin) {
+          if (!confirm(`Reset ${pin.dataset.name}'s PIN? Their next sign-in sets a new one.`)) return;
+          try { await API.post('/api/trainees/reset-pin', { id: pin.dataset.pin }); U.toast('PIN reset. Ask them to sign in again and choose a new PIN.', 'ok'); App.views.trainees.render(); } catch (err) { U.toast(err.message, 'error'); }
+          return;
+        }
         const a = e.target.closest('[data-arch]');
         if (a) { try { await API.post('/api/trainees/archive', { id: a.dataset.arch, archived: a.dataset.v === '1' }); App.views.trainees.render(); } catch (err) { U.toast(err.message, 'error'); } }
       };
