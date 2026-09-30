@@ -1,8 +1,8 @@
 {
-  "name": "mock-call-voip",
+  "name": "lshringchannel",
   "version": "1.0.0",
   "private": true,
-  "description": "LSH Mock Call Line: a training VOIP phone system for Receptionist and Intake mock calls (Cloudflare Worker + Durable Object + WebRTC).",
+  "description": "LSH Ring Channel: a training VOIP phone system for Receptionist and Intake mock calls (Cloudflare Worker + Durable Object + WebRTC).",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",

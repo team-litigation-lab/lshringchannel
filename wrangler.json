@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "mock-call-voip",
+  "name": "lshringchannel",
   "main": "src/worker.js",
   "compatibility_date": "2025-09-01",
   "assets": {

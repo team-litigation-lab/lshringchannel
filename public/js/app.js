@@ -1,5 +1,5 @@
 /* =========================================================
-   LSH Mock Call Line: the app shell
+   LSH Ring Channel: the app shell
    Sign-in, routes, the Switchboard connection, and the parts both
    the trainee's phone and the trainer's console use: the phone's
    screen, the note form, case lookup, the firm directory, dialogs.
@@ -85,7 +85,7 @@
     let st = {};
     try { st = await API.post('/api/auth/status'); } catch (e) { st = {}; }
     app.innerHTML = `<div class="login">
-      <div class="login-hero"><div class="big">☎</div><h1>LSH Mock Call Line</h1>
+      <div class="login-hero"><div class="big">☎</div><h1>LSH Ring Channel</h1>
         <p>The training phone system for Receptionist and Intake mock calls. Your trainer rings your phone here and plays the caller, live; you answer, handle the call and take the note, and get scored.</p></div>
       ${st.configured === false ? `<div class="warn-box" style="margin-bottom:16px">Sign-in isn't set up yet. The trainer adds the <b>ADMIN_PASSPHRASE</b> secret in Cloudflare (see the README).</div>` : ''}
       <div class="grid2">
@@ -307,9 +307,9 @@
   let titleFlash = null;
   App.flashTitle = function (on, text) {
     clearInterval(titleFlash);
-    if (!on) { document.title = 'LSH Mock Call Line'; return; }
+    if (!on) { document.title = 'LSH Ring Channel'; return; }
     let f = false;
-    titleFlash = setInterval(() => { document.title = (f = !f) ? text : 'LSH Mock Call Line'; }, 900);
+    titleFlash = setInterval(() => { document.title = (f = !f) ? text : 'LSH Ring Channel'; }, 900);
   };
 
   App.levelBadge = (l) => `<span class="badge lvl-${esc(l)}">${esc(l)}</span>`;

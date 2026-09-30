@@ -1,5 +1,5 @@
 /* =========================================================
-   LSH Mock Call Line: the scenario library
+   LSH Ring Channel: the scenario library
    ---------------------------------------------------------
    The firm, its directory and front-desk rules, the case files a
    trainee can look up during a call, the note forms, the rubrics,
@@ -257,7 +257,7 @@ const youIntake = 'You are the intake specialist at LSH Training Law Group (fict
 
 const RC = { track: 'reception' }, CAL = { track: 'calendar' }, IN = { track: 'intake' };
 const S = (base, o) => Object.assign({ source: 'LSH Training Portal · Foundational call pack' }, base, o);
-const N = (base, o) => Object.assign({ source: 'LSH Mock Call Line' }, base, o);
+const N = (base, o) => Object.assign({ source: 'LSH Ring Channel' }, base, o);
 
 export const SCENARIOS = [
   /* ---------- Reception (the Foundational call pack) ---------- */

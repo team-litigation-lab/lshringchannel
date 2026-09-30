@@ -1,4 +1,4 @@
-# LSH Mock Call Line
+# LSH Ring Channel
 
 A training phone system (VOIP) for the **Receptionist** and **Intake** mock calls in the LSH Foundational Training program.
 
@@ -101,7 +101,7 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
 
 ## Deploy (Cloudflare)
 
-1. **Create the Worker from this repo:** in Cloudflare, go to **Workers & Pages → Create → Import a repository**, pick `team-litigation-lab/mock-call-voip`, and keep the defaults: `npx wrangler deploy` deploys `wrangler.json`. From a computer instead: `npm install`, then `npx wrangler deploy`.
+1. **Create the Worker from this repo:** in Cloudflare, go to **Workers & Pages → Create → Import a repository**, pick `team-litigation-lab/lshringchannel`, and keep the defaults: `npx wrangler deploy` deploys `wrangler.json`. From a computer instead: `npm install`, then `npx wrangler deploy`.
    - The **Durable Object** (the Switchboard) is created on the first deploy (migration `v1`). It's SQLite-backed, which the Workers Free plan supports.
    - **Recordings** go in the shared **`LSH_KV`** namespace (the same one as the other LSH courses), under `voip:`. They delete themselves after `RECORDING_DAYS` (default 90).
 2. **Add the secrets:** in the Worker, go to **Settings → Variables and Secrets** (or `npx wrangler secret put <NAME>`):

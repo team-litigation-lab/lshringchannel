@@ -1,5 +1,5 @@
 {
-  "name": "mock-call-voip-tests",
+  "name": "lshringchannel-tests",
   "private": true,
   "description": "Browser tests: two Chrome windows (trainer and trainee) place a real WebRTC call through a local wrangler dev server.",
   "scripts": { "test": "bash run.sh" },

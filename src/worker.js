@@ -1,5 +1,5 @@
 /**
- * LSH Mock Call Line: a training VOIP phone system for Receptionist and Intake mock calls.
+ * LSH Ring Channel: a training VOIP phone system for Receptionist and Intake mock calls.
  *
  * Cloudflare Worker + one Durable Object (the Switchboard, src/switchboard.js):
  *   /             the app (public/), a softphone for trainees and a console for trainers
