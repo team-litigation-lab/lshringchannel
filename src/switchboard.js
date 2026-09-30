@@ -338,6 +338,11 @@ export class Switchboard extends DurableObject {
         this.save(r);
         this.send(this.peerOf(r, 'a'), { t: 'timeout', callId: r.id, on: !!m.on, msg: String(m.msg || '').slice(0, 300) });
         return;
+      case 'class':   // the trainer's Class view is playing this call into a Google Meet
+        if (!party || me.role !== 'a' || r.status !== 'live') return;
+        this.setLive(r, { classOn: !!m.on }); this.save(r);
+        this.send(this.peerOf(r, 'a'), { t: 'class', callId: r.id, on: !!m.on });
+        return;
       case 'note': {
         if (!party || me.role !== 't' || !['live', 'ended'].includes(r.status)) return;
         if (r.data.noteSubmittedAt) return;

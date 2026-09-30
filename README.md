@@ -43,12 +43,35 @@ Everything runs in the browser; there are no phone numbers and no phone bills. I
    - the call bar: timer, REC, the trainee's hold / mute, connection quality (and whether it's going through the relay).
 5. When the trainee transfers, a panel asks what happens: **Picks up** (the call is handed over and ends), **No answer** or **Voicemail**. The scenario says who is out.
 6. **⏸ Coaching time-out** pauses the role-play so the trainer can coach as themselves; the trainee's phone shows it. **▶ Resume** goes back to the role-play.
+   **📺 Class view** opens a tab to present in Google Meet, so the batch can listen (see *In a Google Meet class*).
 7. After the call, **📋 Score this call** opens the scorecard:
    - rate each rubric criterion 1 to 5 with an evaluation;
    - mark each goal ✓ / ~ / ✗ / n/a (the live ticks are already filled in);
    - write a verdict, a summary and "next time" tips.
 
    **✨ Draft with AI** listens to the recording and fills in a draft to check and edit, with a transcript. **📨 Send to the trainee** publishes it.
+
+## In a Google Meet class
+
+To let the batch listen to a mock call in your Google Meet (and record it with Meet), present the **📺 Class view**:
+
+1. On the console, click **📺 Class view**. A window opens; allow pop-ups for the site if the browser asks.
+2. In that window, click **🔊 Start class audio**. The Class view now plays the call, and your console goes quiet so you don't hear the trainee twice.
+3. In Meet, go to **Present now → A tab**, pick the Class view tab, turn on **Also share tab audio**, and click **Share**.
+4. Keep your **Meet mic on** and wear a headset.
+   - Your voice (the caller) reaches the class through Meet.
+   - The trainee's voice, hold music and the ringback reach the class from the Class view tab.
+5. The trainee on the call **mutes their Meet mic and the Meet tab** (right-click the tab → *Mute site*) until the call ends, so they don't hear an echo. Their phone reminds them while the class is listening.
+6. **Record** in Meet captures both voices and the Class view. Meet recording needs a Google Workspace plan that includes it.
+
+**What the class sees:**
+- who is taking the call, the line and the caller ID, the timer;
+- hold, transfers and coaching time-outs;
+- the trainee's note as it's typed.
+
+They never see the caller's script or the goals, and the call's title only shows once the call is over. The Class view follows your console from call to call, so keep it open for the whole session. Present it from Chrome or Edge, where Meet can share a tab's audio.
+
+This is separate from the platform's own recording: every live call is still recorded on the console and kept with its scorecard.
 
 **Timings the phone measures for the scorecard:** rings before the answer (the standard is 3), call length, each hold and its length, and each transfer and how it ended.
 
@@ -140,12 +163,15 @@ Open it in two browser windows (or one normal and one private window): sign in a
 npm test        # or: cd tests && npm install && npx playwright install chromium && bash run.sh
 ```
 
+`SHOTS=<folder>` keeps the screenshots the tests take; `LIVE_ONLY=1` runs only the live-call test. Google Meet itself can't be driven in a test: the tests check that the Class view plays the call's audio, which is what Meet's "share tab audio" sends.
+
 - `e2e-live.js`: the trainer rings, the trainee answers, and audio flows both ways. Then it runs:
   - the ✋ request, the live note, hold with hold music, a transfer answered "no answer", a coaching time-out;
+  - the 📺 Class view: it plays the call (the console goes quiet), the trainee is told the class is listening, it shows the live note and hold but never the script, and closing it brings the audio back to the console;
   - signing in as another trainee with a wrong PIN, or none, is refused;
   - a second trainer tab opened mid-call leaves the call alone;
   - a reload of the trainee's page and of the trainer's console mid-call (both reconnect);
-  - hang up, the recording saved and played, the note submitted, the scorecard sent;
+  - hang up, the recording saved, played and downloaded, the note submitted, the scorecard sent;
   - "Save draft" after sending keeps the edits from the trainee;
   - the trainee reads the scorecard (the caller's script and unsent drafts never reach the trainee);
   - a declined call.
@@ -169,7 +195,8 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `public/js/app.js` | Sign-in, pages, the phone screen, the note form, case lookup, the directory. |
 | `public/js/trainee.js` | 📞 My phone and 🎧 Practice. |
 | `public/js/console.js` | 🎛 The trainer's console. |
-| `public/js/review.js` | 🗂 Calls, a call's review and scorecard, 📚 Scenarios, 👥 Trainees, ⚙️ Setup. |
+| `public/js/review.js` | 🗂 Calls, a call's review and scorecard (recording playback and download), 📚 Scenarios, 👥 Trainees, ⚙️ Setup. |
+| `public/js/classview.js` | 📺 The Class view: a tab to present in Google Meet (plays the call, shows the live note, never the script). |
 | `tests/` | The end-to-end tests. |
 
 **Data:**
@@ -183,3 +210,4 @@ Trainee ids match the other LSH platforms (`name--batch`). Trainers can archive 
 - If the trainer's page reloads mid-call, the recording restarts from that point.
 - Practice calls are recorded on the trainee's phone.
 - Trainees can play their own recordings; trainers can play and delete any.
+- **⬇ Download the recording** saves it as, for example, `Mock call - Jamie Cruz - An Offer With a Deadline - 2026-09-30.webm` (plays in Chrome, Edge and VLC; upload it to the trainee's folder next to the Meet recording).

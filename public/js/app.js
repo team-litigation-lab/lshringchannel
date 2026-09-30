@@ -35,7 +35,9 @@
     }
     App.me = App.cfg.me;
     App.scen = Object.fromEntries(App.cfg.scenarios.map((s) => [s.id, s]));
-    App.connect();
+    // The Class view window only mirrors the console that opened it: it has no phone line of its own.
+    App.isClassView = /^#\/class\b/.test(location.hash) && App.trainer();
+    if (App.isClassView) document.body.classList.add('classview'); else App.connect();
     setInterval(App.tick, 500);
     App.go();
   };
@@ -58,6 +60,7 @@
     const def = App.trainer() ? 'console' : 'phone';
     const h = location.hash.replace(/^#\/?/, '');
     let [name, arg] = h.split('/');
+    if (App.isClassView) name = 'class';
     if (!App.views[name] || (App.views[name].trainer && !App.trainer()) || (App.views[name].trainee && App.trainer())) { name = def; if (location.hash !== '#/' + def) { history.replaceState(null, '', '#/' + def); } }
     if (App.leave) { try { App.leave(); } catch (e) {} App.leave = null; }
     App.route = { name, arg: arg ? decodeURIComponent(arg) : '' };

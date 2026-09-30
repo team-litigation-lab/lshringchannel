@@ -78,9 +78,35 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.waitForFunction(() => /Greg Hollis/.test(document.querySelector('#liveNote').textContent) && /010-7788/.test(document.querySelector('#liveNote').textContent));
   ok('Trainer sees the trainee\'s note as it is typed');
 
+  // 📺 Class view for Google Meet: plays the trainee's side of the call, shows the note, never the script
+  const [cv] = await Promise.all([tr.context().waitForEvent('page'), tr.click('#callbar [data-act="classview"]')]);
+  cv.on('pageerror', (e) => console.log('CLASS VIEW ERROR', e.message));
+  await cv.waitForSelector('#cvStart');
+  await cv.click('#cvStart');
+  await cv.waitForFunction(() => /Playing the call/.test(document.querySelector('#cvAudioState').textContent), null, { timeout: 10000 });
+  await sleep(1500);
+  const cvAudio = await cv.evaluate(async () => {
+    const a = document.querySelector('#cvAudio'), s = a.srcObject;
+    const ctx = new AudioContext(), an = ctx.createAnalyser(); ctx.createMediaStreamSource(s).connect(an);
+    // The fake microphone beeps with silence between, so listen for 2 seconds and keep the loudest moment.
+    const d = new Uint8Array(an.fftSize); let peak = 0;
+    for (let i = 0; i < 40; i++) { await new Promise((r) => setTimeout(r, 50)); an.getByteTimeDomainData(d); d.forEach((v) => (peak = Math.max(peak, Math.abs(v - 128)))); }
+    return { playing: !a.paused, live: s.getAudioTracks()[0].readyState, peak };
+  });
+  if (!(cvAudio.playing && cvAudio.live === 'live' && cvAudio.peak > 0)) throw new Error('Class view audio: ' + JSON.stringify(cvAudio));
+  await tr.waitForFunction(() => document.getElementById('remoteAudio').muted === true, null, { timeout: 5000 });
+  ok(`Class view plays the call (level ${cvAudio.peak}) and the console goes quiet so the trainer doesn't hear it twice`);
+  await te.waitForFunction(() => /class is listening/.test(document.querySelector('#device').textContent), null, { timeout: 5000 });
+  ok('The trainee\'s phone reminds them the class is listening in Meet (mute the Meet tab)');
+  const cvText = await cv.textContent('#cvBody');
+  if (!/Jamie Cruz/.test(cvText) || !/Greg Hollis, adjuster at Liberty Crest/.test(cvText) || !/LIBERTY CREST INS/.test(cvText)) throw new Error('Class view content: ' + cvText.slice(0, 300));
+  if (/Your offer on Robert Chen|What you know|An Offer With a Deadline/.test(await cv.textContent('body'))) throw new Error('Class view shows the script or the title during the call');
+  ok('Class view shows the trainee, caller ID and live note, and never the script');
+
   // Hold with hold music
   await te.click('[data-act="hold"]');
   await tr.waitForFunction(() => /ON HOLD/.test(document.querySelector('#callbar').textContent));
+  await cv.waitForFunction(() => /Caller on hold/.test(document.querySelector('#cvBody').textContent), null, { timeout: 5000 });
   await sleep(1500);
   const heldLevel = await inb(tr, 't');
   ok(`Hold: trainer sees "on hold" (hold music level ${heldLevel.level.toFixed(3)})`);
@@ -107,6 +133,10 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.click('[data-act="coach"]');
   await te.waitForFunction(() => !/Coaching time-out/.test(document.querySelector('#device').textContent));
   ok('Coaching time-out shows on the trainee phone and clears');
+  await cv.screenshot({ path: OUT + '/09-class-view.png' });
+  await cv.close();
+  await tr.waitForFunction(() => document.getElementById('remoteAudio').muted === false, null, { timeout: 5000 });
+  ok('Closing the Class view brings the call audio back to the console');
 
   // Checklist tick
   await tr.click('#goals input[data-goal="0"]');
@@ -169,6 +199,10 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.waitForSelector('audio.rec');
   const dur = await tr.evaluate(() => new Promise((r) => { const a = document.querySelector('audio.rec'); const f = () => r(a.duration); if (a.readyState >= 1) f(); else a.onloadedmetadata = f; setTimeout(() => r(a.duration), 4000); }));
   ok(`Review page plays the recording (${isFinite(dur) ? dur.toFixed(1) + ' s' : 'webm, duration streamed'})`);
+  const [dl] = await Promise.all([tr.waitForEvent('download'), tr.click('#recDl')]);
+  const dlName = dl.suggestedFilename();
+  if (!/^Mock call - Jamie Cruz - An Offer With a Deadline - \d{4}-\d{2}-\d{2}\.webm$/.test(dlName)) throw new Error('Download name: ' + dlName);
+  ok(`The recording downloads as "${dlName}"`);
   const goalsYes = await tr.$$eval('.seg button.yes.on', (x) => x.length);
   ok(`Scorecard pre-ticks the ${goalsYes} goals checked live`);
   await tr.selectOption('[data-f="verdict"]', 'Good, with Improvements Needed.');

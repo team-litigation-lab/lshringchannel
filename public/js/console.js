@@ -142,6 +142,7 @@
       board: App.board, callId: t.callId, offerer: true, iceServers: servers, stream, gen,
       onRemote: (s) => {
         const a = remote(); a.srcObject = s; a.volume = App.volume == null ? 1 : App.volume; a.play().catch(() => {});
+        C.syncAudio();
         if (t.record) { if (!t.rec) { try { t.rec = new VoIP.Recorder([stream, s]); } catch (e) { console.warn(e); } } else t.rec.add(s); }
       },
       onState: (st) => {
@@ -308,6 +309,7 @@
       <div class="row">${flags.join('')}</div><span class="spacer"></span>
       ${t.status === 'live' ? `<button class="btn btn-sm ${t.muted ? 'on' : ''}" data-act="mute">${t.muted ? '🔇 Unmute' : '🎙 Mute'}</button>
       <button class="btn btn-sm ${t.coaching ? 'coach-on' : ''}" data-act="coach" title="Pause the role-play to coach the trainee, then resume">${t.coaching ? '▶ Resume role-play' : '⏸ Coaching time-out'}</button>` : ''}
+      <button class="btn btn-sm ${C.classOn() ? 'coach-on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view'}</button>
       <button class="btn btn-sm btn-red" data-act="hangup">${t.status === 'ringing' ? 'Cancel call' : '☎ End call'}</button>`;
   }
 
@@ -365,6 +367,7 @@
         <label class="check"><input type="checkbox" id="pkHide" ${pick.withhold ? 'checked' : ''}> Withhold the caller ID</label>
         <span class="spacer"></span>
         <button class="btn" data-act="miccheck">🎙 Mic check</button>
+        <button class="btn" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view for Meet'}</button>
         <button class="btn btn-green btn-lg" data-act="ring">📞 Ring the trainee</button>
       </div></div>
       ${s ? `<div class="card script-card"><div class="card-head"><h3>🎭 Preview: ${esc(s.title)}</h3><span class="spacer"></span>${App.levelBadge(s.level)}</div>
@@ -380,6 +383,46 @@
     el.innerHTML = x ? `<div class="note-box">Calling <b>${esc(x.name)}</b> (${esc(x.batch)}) · ${x.call ? '<span class="badge red">on a call</span>' : x.status === 'available' ? '<span class="badge green">available</span>' : '<span class="badge amber">away: they can still answer</span>'}${x.hand ? ' · ✋ asked for a call' : ''}</div>`
       : `<div class="note-box">👈 Pick a trainee on the switchboard${pick.traineeId ? ' (the one you picked went offline)' : ''}.</div>`;
   }
+
+  /* ---------- 📺 the Class view (a tab to present in Google Meet) ----------
+     The Class view window (#/class, js/classview.js) is opened from here. It reads C.classState() and
+     plays C.remoteStream(): the trainee's side of the call, hold music included. The trainer's own
+     voice reaches Meet through their Meet microphone. While the Class view plays the call, this console
+     stops playing it (so the trainer doesn't hear the trainee twice), and the trainee's phone is told the
+     class is listening (so they mute the Meet tab and don't hear an echo). */
+  C.classWin = null; C.classAudio = false;
+  C.classOn = () => !!(C.classAudio && C.classWin && !C.classWin.closed);
+  function openClassView() {
+    if (C.classWin && !C.classWin.closed) { C.classWin.focus(); return; }
+    C.classWin = window.open(location.pathname + '#/class', 'lshclassview', 'width=1200,height=760');
+    if (!C.classWin) U.toast('The browser blocked the Class view window: allow pop-ups for this site, then try again.', 'error');
+  }
+  C.syncAudio = function () {
+    if (!App.trainer() || App.isClassView) return;
+    const on = C.classOn();
+    remote().muted = on;
+    const t = App.t;
+    if (t && t.status === 'live' && t.classSent !== on) { t.classSent = on; App.board.send({ t: 'class', callId: t.callId, on }); }
+    if (C._shown !== on) { C._shown = on; renderCallbar(); if (!App.t) renderStage(); }
+  };
+  setInterval(() => { if (C.classWin && C.classWin.closed) { C.classWin = null; C.classAudio = false; } C.syncAudio(); }, 1000);
+  // What the class may see: never the caller's script or the goals; the call's title only once it's over.
+  C.classState = function () {
+    const t = App.t;
+    if (!t || t.status === 'elsewhere' || !t.scenario) return { status: 'idle' };
+    const form = App.formFor(t.scenario.track);
+    const ended = t.status === 'ended';
+    return {
+      status: t.status, callId: t.callId, trainee: { name: t.trainee.name, batch: t.trainee.batch || '' },
+      lineLabel: t.lineLabel, callerId: t.callerId, trackLabel: (App.cfg.tracks[t.scenario.track] || {}).label || '',
+      ringAt: t.ringAt || null, answeredAt: t.answeredAt || null, endedAt: t.endedAt || null, endNote: ended ? t.endNote || '' : '',
+      held: !!t.traineeHeld, holdAt: t.holdAt || 0, coaching: !!t.coaching, record: !!t.record, reconnecting: !!t.peerLost,
+      transfer: t.transfer ? { to: t.transfer.to, ext: t.transfer.ext, result: t.transfer.result || null } : null,
+      noteTitle: form.title, note: form.fields.filter((f) => t.note && t.note[f.k]).map((f) => ({ label: f.label, value: String(t.note[f.k]) })),
+      title: ended ? t.scenario.title : null, caller: ended ? { name: t.scenario.caller.name, role: t.scenario.caller.role } : null
+    };
+  };
+  C.remoteStream = () => (App.t && App.t.rtc && App.t.rtc.remote) || null;
 
   /* ---------- page ---------- */
   App.register('console', {
@@ -415,6 +458,7 @@
     else if (act === 'miccheck') App.micCheck();
     else if (act === 'newcall') { App.t = null; render(); }
     else if (act === 'takehere') takeHere();
+    else if (act === 'classview') openClassView();
   }
   function onChange(e) {
     if (e.target.id === 'batchSel') { pick.batch = e.target.value; renderRoster(); }

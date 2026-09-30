@@ -34,7 +34,7 @@
       // A call is on the line: this tab reloaded during it (reconnect), or another tab has it (move it here).
       const lv = a.live || {};
       App.p = Object.assign(fromBrief(a), { status: 'live', answeredAt: a.answeredAt || Date.now(), needRejoin: true, elsewhere: App.ownCall() !== a.callId, note: a.note || {},
-        held: !!lv.held, holdAt: lv.holdAt || 0, coaching: !!lv.coaching, transfer: lv.transfer ? { to: lv.transfer.to, ext: lv.transfer.ext, state: 'ringing' } : null });
+        held: !!lv.held, holdAt: lv.holdAt || 0, coaching: !!lv.coaching, classOn: !!lv.classOn, transfer: lv.transfer ? { to: lv.transfer.to, ext: lv.transfer.ext, state: 'ringing' } : null });
       if (App.route.name !== 'phone') App.nav('#/phone'); else renderAll();
     }
   };
@@ -58,6 +58,7 @@
       case 'connected':
         if (!mine) return;
         App.ownCall(p.callId);
+        p.classOn = !!(m.live && m.live.classOn);
         p.answeredAt = Date.now();
         if (!p.note.when) p.note.when = U.stamp();
         renderAll();
@@ -72,6 +73,7 @@
         renderDevice();
         return;
       case 'timeout': if (mine) { p.coaching = !!m.on; p.coachMsg = m.msg || ''; renderDevice(); } return;
+      case 'class': if (mine) { p.classOn = !!m.on; renderDevice(); } return;
       case 'peer-lost': if (mine) { p.peerLost = true; renderDevice(); } return;
       case 'peer-back': if (mine) { p.peerLost = false; renderDevice(); } return;
       case 'resumed':
@@ -398,6 +400,7 @@
     } else if (p && p.peerLost) msg = `<div class="dev-msg lost">The caller's connection dropped. Waiting for them to come back…</div>`;
     else if (p && p.slow && p.status === 'connecting') msg = `<div class="dev-msg lost">Still connecting the audio… If it doesn't connect, your network may be blocking calls: tell your trainer (the TURN relay fixes this).</div>`;
     else if (p && p.notice && p.status === 'live') msg = `<div class="dev-msg">${esc(p.notice)}</div>`;
+    else if (p && p.classOn && p.status === 'live') msg = `<div class="dev-msg coach">🎧 <b>Your class is listening in Google Meet.</b> If you're in the Meet too, mute your Meet mic and the Meet tab (right-click the tab → Mute site) until the call ends, so there's no echo.</div>`;
     else if (p && p.rec && p.status === 'ringing') msg = `<div class="dev-msg">● This call will be recorded for your review.</div>`;
     const head = mode === 'live'
       ? `<span class="led ${led}"></span><b>My phone</b><span class="spacer"></span><span id="trOnline">${trainerLine()}</span>`

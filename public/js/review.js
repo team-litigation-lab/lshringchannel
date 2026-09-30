@@ -165,7 +165,15 @@
       const act = b.dataset.act;
       if (act === 'loadrec') {
         b.disabled = true; b.textContent = 'Loading…';
-        try { const blob = await API.getBlob('/api/recording/get', { id: c.id }); U.$('#recBox').innerHTML = `<audio class="rec" controls src="${URL.createObjectURL(blob)}"></audio>`; playable(U.$('#recBox audio')); }
+        try {
+          const blob = await API.getBlob('/api/recording/get', { id: c.id });
+          const url = URL.createObjectURL(blob);
+          // e.g. "Mock call - Jamie Cruz - An Offer With a Deadline - 2026-09-30.webm"
+          const ext = /ogg/.test(blob.type) ? 'ogg' : /mp4/.test(blob.type) ? 'm4a' : /wav/.test(blob.type) ? 'wav' : 'webm';
+          const name = `Mock call - ${c.traineeName} - ${c.title} - ${new Date(c.createdAt).toISOString().slice(0, 10)}`.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() + '.' + ext;
+          U.$('#recBox').innerHTML = `<audio class="rec" controls src="${url}"></audio><div class="row" style="margin-top:6px"><a class="btn btn-sm" id="recDl" href="${url}" download="${esc(name)}">⬇ Download the recording</a><span class="tiny muted">${esc(name)}</span></div>`;
+          playable(U.$('#recBox audio'));
+        }
         catch (err) { U.$('#recBox').innerHTML = `<span class="small err-box">${esc(err.message)}</span>`; }
       } else if (act === 'submitnote') {
         const note = App.readNote(U.$('#noteEdit'));

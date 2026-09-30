@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Runs the end-to-end tests against a local wrangler dev server with a stand-in for Google's Gemini API.
 #   cd tests && npm install && npx playwright install chromium && npm test
-# Set CHROME_PATH to use a Chrome you already have.
+# Set CHROME_PATH to use a Chrome you already have, SHOTS=<folder> to keep the screenshots,
+# LIVE_ONLY=1 to run only the live-call test.
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=..
@@ -19,6 +20,6 @@ LIVE_WS_URL=ws://127.0.0.1:9911/live
 VARS
 (cd "$ROOT" && NO_PROXY=127.0.0.1,localhost npx wrangler dev --port "$PORT" --ip 127.0.0.1 --persist-to "$STATE/data" --env-file "$STATE/.dev.vars" > "$STATE/wrangler.log" 2>&1) & WR=$!
 for i in $(seq 1 60); do curl -sf "http://127.0.0.1:$PORT/" > /dev/null && break; sleep 1; done
-export BASE="http://127.0.0.1:$PORT" OUT="$STATE"
+export BASE="http://127.0.0.1:$PORT" OUT="${SHOTS:-$STATE}"
 node e2e-live.js
-node e2e-ai.js
+if [ -z "${LIVE_ONLY:-}" ]; then node e2e-ai.js; fi
