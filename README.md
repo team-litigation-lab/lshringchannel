@@ -122,6 +122,26 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
   - each trainee gets 30 practice calls, 60 live-voice connections and 40 scorings an hour.
 - **Practice scores are self-practice.** The trainee's browser runs the call, so **👥 Trainees** shows the practice average apart from the live average (reviewed live calls only). A typed practice call's conversation is kept on the server.
 
+## 📊 Server request meter (trainers)
+
+All LSH sites share one Cloudflare account and one monthly allowance of server requests. Trainers see how much of it is used: a small chip in the bottom-left corner of every trainer page.
+
+| Chip | When |
+|---|---|
+| 🟢 **Requests 23%** | on track |
+| 🟠 **Getting close** / **On pace to run out Oct 24** | from 75%, or (after the month's first 3 days) when this month's pace reaches the limit before the allowance resets |
+| 🔴 **Nearly used up** | from 90% |
+| 🟥 **Paused until …** | the limit was reached: the sites' server parts are paused until the next billing month |
+| ⚪ **Not set up** / **Last checked 5 h ago** | no numbers yet, or none saved for over 3 hours |
+
+When it's amber or red, a note appears above the chip (Dismiss hides it until it gets closer, or until next month). Click the chip for the details: the total and the limit, the projection for the month, each day, each site, and what happens at the limit.
+
+How it works:
+- The Request budget workflow in **EA-PA-TRAINING** reads the month's requests and saves them to the shared `LSH_KV` namespace (key `_request-usage`) about once an hour, and every 10 minutes from 75% on. Its README (*Monthly request budget*) explains the limit, the pause and how to set it up.
+- This site's Worker answers trainers with those numbers: `POST /api/request-budget` (`src/worker.js`; trainees get 403). It only reads that one key.
+- The meter is `public/js/request-budget.js`: **the same file in every LSH platform** (change it in one, copy it to all). It asks once when a trainer opens the site, then every 15 minutes while the tab is in view, so it costs next to nothing.
+- Trainees never see it, and neither does the 📺 Class view (the class sees that tab in Meet).
+
 ## Deploy (Cloudflare)
 
 1. **Create the Worker from this repo:** in Cloudflare, go to **Workers & Pages → Create → Import a repository**, pick `team-litigation-lab/lshringchannel`, and keep the defaults: `npx wrangler deploy` deploys `wrangler.json`. From a computer instead: `npm install`, then `npx wrangler deploy`.
@@ -163,7 +183,7 @@ Open it in two browser windows (or one normal and one private window): sign in a
 npm test        # or: cd tests && npm install && npx playwright install chromium && bash run.sh
 ```
 
-`SHOTS=<folder>` keeps the screenshots the tests take; `LIVE_ONLY=1` runs only the live-call test. Google Meet itself can't be driven in a test: the tests check that the Class view plays the call's audio, which is what Meet's "share tab audio" sends.
+`SHOTS=<folder>` keeps the screenshots the tests take; `LIVE_ONLY=1` runs only the live-call test; `PORT=<port>` if 8799 is taken. Google Meet itself can't be driven in a test: the tests check that the Class view plays the call's audio, which is what Meet's "share tab audio" sends.
 
 - `e2e-live.js`: the trainer rings, the trainee answers, and audio flows both ways. Then it runs:
   - the ✋ request, the live note, hold with hold music, a transfer answered "no answer", a coaching time-out;
@@ -176,6 +196,10 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - the trainee reads the scorecard (the caller's script and unsent drafts never reach the trainee);
   - a declined call.
 - `e2e-ai.js`: a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, AI scoring, a typed practice call, the trainer's AI draft from a live recording, and a live-only call that can't be practiced.
+- `e2e-meter.js`: the 📊 server request meter. `/api/request-budget` refuses a visitor who isn't signed in and a trainee, and gives a trainer `usage: null` before the Request budget workflow has run and the month's numbers after (saved to the local KV with `wrangler kv key put --local`). A trainee's pages show no meter and never ask for it; the trainer's console shows it after one request and keeps it on every trainer page; the Class view has none.
+- `request-meter-widget.cjs`: the meter itself, in a blank page (the same test in every LSH platform): each level, the note above the chip, the details, how often it asks, signing out, a phone screen.
+
+**Checks on GitHub** (`.github/workflows/checks.yml`): every pull request and every push to `main` builds the Worker without deploying (`npm run check`) and runs all of the tests above (`tests/run.sh`). A red **Checks** status means something broke; the log says which step.
 
 ## Files
 
@@ -197,11 +221,13 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `public/js/console.js` | 🎛 The trainer's console. |
 | `public/js/review.js` | 🗂 Calls, a call's review and scorecard (recording playback and download), 📚 Scenarios, 👥 Trainees, ⚙️ Setup. |
 | `public/js/classview.js` | 📺 The Class view: a tab to present in Google Meet (plays the call, shows the live note, never the script). |
+| `public/js/request-budget.js` | 📊 The server request meter for trainers (the same file in every LSH platform). |
 | `tests/` | The end-to-end tests. |
+| `.github/workflows/checks.yml` | The checks GitHub runs on every pull request and push to `main`. |
 
 **Data:**
 - Durable Object SQLite: trainees (with a salted hash of each PIN), calls (timings, the note, the transcript, the reviews), written scenarios, and usage counts for the AI and sign-in limits.
-- KV (`LSH_KV`, prefix `voip:`): recordings only.
+- KV (`LSH_KV`, prefix `voip:`): recordings. The request meter also reads `_request-usage` there (saved by EA-PA-TRAINING's Request budget workflow); this site never writes it.
 
 Trainee ids match the other LSH platforms (`name--batch`). Trainers can archive trainees in **👥 Trainees**.
 
