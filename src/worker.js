@@ -4,8 +4,7 @@
  * Cloudflare Worker + one Durable Object (the Switchboard, src/switchboard.js):
  *   /             the app (public/), a softphone for trainees and a console for trainers
  *   /ws           each phone's WebSocket to the Switchboard (presence, ringing, WebRTC signaling)
- *   /api/...      sign-in, scenarios, call records, recordings, TURN credentials, AI practice and scoring,
- *                 and the trainers' server request meter
+ *   /api/...      sign-in, scenarios, call records, recordings, TURN credentials, AI practice and scoring
  *
  * Secrets (wrangler secret put <NAME>):
  *   ADMIN_PASSPHRASE     trainer sign-in (required: without it nobody can sign in)
@@ -17,8 +16,7 @@
  *   GEMINI_API_KEY5 … GEMINI_API_KEY9 (and GEMINI_API_KEY, _KEY1, _KEY2)
  *                        optional: AI practice callers and AI scoring (the LSH Gemini key pool)
  * Variables: RECORDING_DAYS (default 90), AI_MAX_MINUTES (default 8).
- * Recordings are kept in the shared LSH_KV namespace under "voip:" and expire on their own. The request meter
- * only reads "_request-usage" there (saved by the Request budget workflow in EA-PA-TRAINING).
+ * Recordings are kept in the shared LSH_KV namespace under "voip:" and expire on their own.
  */
 import { Switchboard } from './switchboard.js';
 import { makeToken, readToken, readTokenString, safeEqual, traineeId } from './auth.js';
@@ -85,14 +83,6 @@ async function iceServers(env) {
   } catch (e) {
     return { iceServers: fallback, turn: false, error: String(e.message || e) };
   }
-}
-
-// The month's server requests for the trainers' meter (public/js/request-budget.js), as the Request budget
-// workflow in EA-PA-TRAINING saved them to LSH_KV ("_request-usage"), without its own working data. null until it has run.
-async function requestMeter(kv) {
-  const raw = kv ? await kv.get('_request-usage') : null;
-  if (!raw) return null;
-  try { const u = JSON.parse(raw); delete u.cache; return u; } catch (e) { return null; }
 }
 
 export default {
@@ -183,7 +173,6 @@ export default {
         return json({ stats: await sb.stats(), setup: { ai: hasAI(env), aiKeys: keyNames(env).length, turn: ice.turn, turnError: ice.error || '', recordings: !!env.LSH_KV, recordingDays: recDays(env), traineeCode: !!env.TRAINEE_CODE } });
       }
       // 📊 How much of the Cloudflare account's monthly request allowance (shared by every LSH site) is used.
-      if (path === '/api/request-budget') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ ok: true, usage: await requestMeter(env.LSH_KV) }); }
 
       /* ---------- call records ---------- */
       if (path === '/api/calls') {
