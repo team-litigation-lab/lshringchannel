@@ -33,5 +33,5 @@ jobs:
           tests/node_modules/.bin/playwright install --with-deps chromium
       - name: Build the Worker without deploying (wrangler dry run)
         run: npm run check
-      - name: Live calls, AI practice and the server request meter (two browsers, local wrangler dev)
+      - name: Live calls, AI practice and the Blueprint (two browsers, local wrangler dev)
         run: bash tests/run.sh

@@ -3,5 +3,9 @@
   "private": true,
   "description": "Browser tests: two Chrome windows (trainer and trainee) place a real WebRTC call through a local wrangler dev server.",
   "scripts": { "test": "bash run.sh" },
-  "devDependencies": { "playwright": "^1.56.0", "ws": "^8.18.0" }
+  "devDependencies": {
+    "playwright": "^1.56.0",
+    "ws": "^8.18.0",
+    "jspdf": "4.2.1"
+  }
 }

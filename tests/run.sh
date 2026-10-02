@@ -3,8 +3,7 @@
 #   cd tests && npm install && npx playwright install chromium && npm test
 # Set CHROME_PATH to use a Chrome you already have, SHOTS=<folder> to keep the screenshots,
 # LIVE_ONLY=1 to run only the live-call test.
-# Also runs the server request meter's tests: e2e-meter.js (this site) and request-meter-widget.cjs (the meter
-# itself, the same test in every LSH platform).
+# Also runs the Blueprint test (blueprint.cjs).
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=..
@@ -29,6 +28,5 @@ export BASE="http://127.0.0.1:$PORT" OUT="${SHOTS:-$STATE}" PERSIST="$STATE/data
 node e2e-live.js
 if [ -z "${LIVE_ONLY:-}" ]; then
   node e2e-ai.js
-  node e2e-meter.js
-  CHROMIUM_PATH="${CHROMIUM_PATH:-${CHROME_PATH:-}}" node request-meter-widget.cjs ../public/js/request-budget.js
+  node blueprint.cjs
 fi

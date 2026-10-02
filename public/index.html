@@ -31,12 +31,12 @@
 <script src="js/console.js"></script>
 <script src="js/review.js"></script>
 <script src="js/classview.js"></script>
-<script src="js/request-budget.js"></script>
+<!-- 🧭 the Blueprint: a trainee deck and (trainers) a trainer deck, with a PDF of each.
+     blueprint-content.js is this site's slides; lsh-blueprint.js is the same file on every LSH platform. -->
+<script src="js/blueprint-content.js"></script>
+<script src="js/lsh-blueprint.js"></script>
 <script>
 App.boot();
-// 📊 Server request meter, for trainers: how much of the Cloudflare account's monthly request allowance (shared by
-// every LSH site) is used. Not in the Class view, which the class sees. README → Server request meter.
-RequestBudget.start({ load: () => API.post('/api/request-budget'), isAdmin: () => App.trainer() && !App.isClassView, site: 'lshringchannel' });
 </script>
 </body>
 </html>
