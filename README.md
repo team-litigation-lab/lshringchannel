@@ -130,6 +130,7 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
 - **Trainer blueprint** (trainers only; a cover and 9 slides): signing in, the Switchboard, on the call, transfers and coaching time-outs, Class view in Meet, scoring a call, the Call log and Trainees, Scenarios, and Setup and AI practice.
 - Trainers get both decks as tabs; trainees only ever get the Trainee blueprint. Neither shows in the 📺 Class view.
 - **Moving around:** ◀ ▶, the ← → keys or the contents strip. Esc closes it.
+- **Numbering:** the cover is ★ Cover (the counter says "Cover · 9 slides"); the slides are 1 to 9 everywhere: the contents strip, the counter ("9 / 9" on the last), the slide's heading and footer, and the PDF's page footers.
 - **⬇ Download PDF:** the deck that's showing, as a landscape PDF with one page per slide. It's made from the deployed site each time, stamped with the deploy (the page's ETag) and the date.
 - **Files:** the slides are in `public/js/blueprint-content.js`. `public/js/lsh-blueprint.js` (the page and the PDFs) is the same file on every LSH platform: change it in one, copy it to all. Test: `tests/blueprint.cjs`.
 
@@ -186,7 +187,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - "Save draft" after sending keeps the edits from the trainee;
   - the trainee reads the scorecard (the caller's script and unsent drafts never reach the trainee);
   - a declined call.
-- `blueprint.cjs`: the 🧭 Blueprint. A trainee gets the trainee deck only and a trainer both; every slide fits on a laptop and on a phone; both PDFs have a page per slide.
+- `blueprint.cjs`: the 🧭 Blueprint. A trainee gets the trainee deck only and a trainer both; every slide fits on a laptop and on a phone; both PDFs have a page per slide; the numbers match everywhere (Cover, then 1 to n, never n + 1).
 - `e2e-ai.js`: a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, AI scoring, a typed practice call, the trainer's AI draft from a live recording, and a live-only call that can't be practiced.
 
 **Checks on GitHub** (`.github/workflows/checks.yml`): every pull request and every push to `main` builds the Worker without deploying (`npm run check`) and runs all of the tests above (`tests/run.sh`). A red **Checks** status means something broke; the log says which step.
