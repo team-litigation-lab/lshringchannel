@@ -10,7 +10,7 @@
       { icon: '☎', title: 'What Ring Channel is', points: [
           'A training phone system in your browser for the Receptionist and Intake mock calls.',
           'Your trainer rings your phone and plays the caller over live audio; you handle the call like a real one.',
-          'The call is recorded, and your trainer scores it on the program\'s rubric.',
+          'The call is recorded and graded on the program\'s Mock Calls Metrics for its line.',
           'No phone numbers and no phone bills: it all runs in Chrome or Edge.'],
         where: 'Open Ring Channel from your training program.',
         tip: 'Wear a headset, and use Chrome or Edge on a computer.' },
@@ -49,14 +49,15 @@
         tip: 'Tell the caller before you put them on hold or transfer them.' },
       { icon: '📨', title: 'After the call', points: [
           'Finish your note and submit it.',
-          'Your trainer\'s review appears in 🗂 My calls: the scores, the verdict and tips for next time.',
+          'The AI grades a graded mock call from the recording and your note; your trainer checks the grade and sends it.',
+          'Your scorecard appears in 🗂 My calls: each metric\'s score and feedback, the weighted average and tips.',
           'If a connection drops, the phone has 30 seconds to come back; a reload offers 🔊 Reconnect the call.'],
         where: 'Top bar → 🗂 My calls.',
         tip: 'Read every scorecard before your next call.' },
       { icon: '🎧', title: 'Practice with an AI caller', points: [
           'When no trainer is free, 🎧 Practice rings you with an AI caller that talks back out loud.',
           'Pick a call, or 🎲 Surprise me for a random call on a line.',
-          'Hold and Transfer work, and the AI scores the call with the same rubric when you submit the note.',
+          'Hold and Transfer work, and the AI grades the call on the same metrics when you submit the note.',
           'Type instead of talking runs the call as text, if your microphone isn\'t available.'],
         where: 'Top bar → 🎧 Practice.',
         tip: 'Practice a line before your live mock call on it.' },
@@ -102,12 +103,13 @@
           'The class sees who\'s on the call, hold, transfers and the live note, never the caller\'s script or the goals.'],
         where: '🎛 Console → 📺 Class view.',
         tip: 'Keep your Meet mic on and wear a headset: your voice reaches the class through Meet.' },
-      { icon: '📋', title: 'Scoring a call', points: [
-          '📋 Score this call: rate each rubric criterion 1 to 5, mark each goal, write a verdict, a summary and tips.',
-          '✨ Draft with AI listens to the recording and fills in a draft with a transcript, for you to check.',
-          '📨 Send to the trainee publishes it to their 🗂 My calls.'],
-        where: 'After the call, on the console · 🗂 Call log.',
-        tip: 'Score while the call is fresh, even if you send it later.' },
+      { icon: '📋', title: 'Graded calls and autograding', points: [
+          'Tick 📋 Graded mock call before you ring (on by default): the call is recorded, and the AI grades it.',
+          'The AI listens to the recording and scores each metric of the line\'s Mock Calls Metrics, 1 to 5 with feedback.',
+          '📋 Score this call: ✅ Approve the AI grade & send, or change any score or feedback, then 📨 Send.',
+          '📋 Graded calls: each trainee\'s Reception, Calendar and Intake grades, with ⬇ Export CSV.'],
+        where: 'After the call, on the console · Top bar → 📋 Graded calls.',
+        tip: 'Play the recording before you approve a grade.' },
       { icon: '👥', title: 'Call log and Trainees', points: [
           '🗂 Call log: every call, its recording and its scorecard.',
           '👥 Trainees: each trainee\'s live average (reviewed calls) and practice average, kept apart.',
@@ -121,7 +123,7 @@
         where: 'Top bar → 📚 Scenarios.',
         tip: 'Write a call for anything the batch keeps getting wrong.' },
       { icon: '⚙️', title: 'Setup, AI practice and this Blueprint', points: [
-          '⚙️ Setup: the TURN relay, recordings, AI keys and the access code, with a mic check and a network test.',
+          '⚙️ Setup: the TURN relay, recordings, AI keys and the access code, a mic check, a network test, and the grading settings.',
           '🎧 Try practice: take a practice call with the AI caller yourself, as a trainee would.',
           '🧭 Blueprint: the Trainee blueprint is the deck to share on day one; ⬇ Download PDF gives either as a handout.'],
         where: 'Top bar → ⚙️ Setup · 🎧 Try practice · 🧭 Blueprint.',
