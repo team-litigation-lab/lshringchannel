@@ -22,7 +22,7 @@
     if (c.status === 'cancelled') return '<span class="badge">Cancelled</span>';
     if (c.status === 'live' || c.status === 'ringing') return '<span class="badge green">In progress</span>';
     const ag = typeof c.autograde === 'string' ? c.autograde : (c.autograde && c.autograde.state) || '';
-    if (c.reviewed) return `<span class="badge green">${App.trainer() ? 'Sent' : 'Graded'}</span>`;
+    if (c.reviewed) return `<span class="badge green">${App.trainer() ? 'Sent' : 'Scorecard ready'}</span>`;
     if (ag === 'queued' || ag === 'grading') return '<span class="badge blue">🤖 Grading…</span>';
     if (c.mode === 'ai') return c.ai ? '<span class="badge blue">🤖 AI graded</span>' : '<span class="badge">Not graded</span>';
     if (App.trainer() && (c.aiScore != null || c.aiDraft)) return '<span class="badge amber">🤖 AI graded: approve</span>';
