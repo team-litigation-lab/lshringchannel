@@ -173,6 +173,7 @@ export default {
         const ice = await iceServers(env);
         return json({ stats: await sb.stats(), setup: { ai: hasAI(env), aiKeys: keyNames(env).length, turn: ice.turn, turnError: ice.error || '', recordings: !!env.LSH_KV, recordingDays: recDays(env), traineeCode: !!env.TRAINEE_CODE } });
       }
+      // 📊 How much of the Cloudflare account's monthly request allowance (shared by every LSH site) is used.
 
       /* ---------- 📋 graded mock calls: settings and the report ---------- */
       if (path === '/api/settings/save') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ settings: await sb.saveSettings(body.settings || {}) }); }

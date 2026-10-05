@@ -175,6 +175,18 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
   - each trainee gets 30 practice calls, 60 live-voice connections and 40 scorings an hour.
 - **Practice scores are self-practice.** The trainee's browser runs the call, so **👥 Trainees** shows the practice average apart from the live average (reviewed live calls only). A typed practice call's conversation is kept on the server.
 
+
+## 🧭 Blueprint (how Ring Channel works, for trainees and for trainers)
+
+**🧭** in the header (next to the name and Log out; its name shows on hover) opens the Blueprint, a full-screen slide deck.
+- **Trainee blueprint** (a cover and 9 slides), for trainees: what Ring Channel is, signing in, My phone, answering a call, the tools during a call, Mute, Hold, Transfer and Hang up, after the call, practice with an AI caller, and when the class is listening.
+- **Trainer blueprint** (trainers only; a cover and 9 slides): signing in, the Switchboard, on the call, transfers and coaching time-outs, Class view in Meet, graded calls and autograding, the Call log and Trainees, Scenarios, and Setup and AI practice.
+- Trainers get both decks as tabs; trainees only ever get the Trainee blueprint. Neither shows in the 📺 Class view.
+- **Moving around:** ◀ ▶, the ← → keys or the contents strip. Esc closes it.
+- **Numbering:** the cover is ★ Cover (the counter says "Cover · 9 slides"); the slides are 1 to 9 everywhere: the contents strip, the counter ("9 / 9" on the last), the slide's heading and footer, and the PDF's page footers.
+- **⬇ Download PDF:** the deck that's showing, as a landscape PDF with one page per slide. It's made from the deployed site each time, stamped with the deploy (the page's ETag) and the date.
+- **Files:** the slides are in `public/js/blueprint-content.js`. `public/js/lsh-blueprint.js` (the page and the PDFs) is the same file on every LSH platform: change it in one, copy it to all. Test: `tests/blueprint.cjs`.
+
 ## Deploy (Cloudflare)
 
 1. **Create the Worker from this repo:** in Cloudflare, go to **Workers & Pages → Create → Import a repository**, pick `team-litigation-lab/lshringchannel`, and keep the defaults: `npx wrangler deploy` deploys `wrangler.json`. From a computer instead: `npm install`, then `npx wrangler deploy`.
@@ -216,7 +228,7 @@ Open it in two browser windows (or one normal and one private window): sign in a
 npm test        # or: cd tests && npm install && npx playwright install chromium && bash run.sh
 ```
 
-`SHOTS=<folder>` keeps the screenshots the tests take; `LIVE_ONLY=1` runs only the live-call test. Google Meet itself can't be driven in a test: the tests check that the Class view plays the call's audio, which is what Meet's "share tab audio" sends.
+`SHOTS=<folder>` keeps the screenshots the tests take; `LIVE_ONLY=1` runs only the live-call test; `PORT=<port>` if 8799 is taken. Google Meet itself can't be driven in a test: the tests check that the Class view plays the call's audio, which is what Meet's "share tab audio" sends.
 
 - `e2e-live.js`: the trainer rings, the trainee answers, and audio flows both ways. Then it runs:
   - the ✋ request, the live note, hold with hold music, a transfer answered "no answer", a coaching time-out;
@@ -230,7 +242,10 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - 📋 Graded calls and its CSV (every metric's score and feedback);
   - the trainee reads the scorecard and the weighted average (the caller's script and unsent drafts never reach the trainee);
   - a declined call.
+- `blueprint.cjs`: the 🧭 Blueprint. A trainee gets the trainee deck only and a trainer both; every slide fits on a laptop and on a phone; both PDFs have a page per slide; the numbers match everywhere (Cover, then 1 to n, never n + 1).
 - `e2e-ai.js`: a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, autograding, a typed practice call, the trainer's **Grade again with AI**, and a live-only call that can't be practiced.
+
+**Checks on GitHub** (`.github/workflows/checks.yml`): every pull request and every push to `main` builds the Worker without deploying (`npm run check`) and runs all of the tests above (`tests/run.sh`). A red **Checks** status means something broke; the log says which step.
 
 ## Files
 
@@ -253,7 +268,10 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `public/js/console.js` | 🎛 The trainer's console. |
 | `public/js/review.js` | 🗂 Calls, a call's review and scorecard (recording playback and download, approving the AI's grade), 📋 Graded calls (and the CSV), 📚 Scenarios, 👥 Trainees, ⚙️ Setup. |
 | `public/js/classview.js` | 📺 The Class view: a tab to present in Google Meet (plays the call, shows the live note, never the script). |
+| `public/js/blueprint-content.js` | 🧭 The Blueprint's slides: the trainee deck and the trainer deck. |
+| `public/js/lsh-blueprint.js` | 🧭 The Blueprint page and its PDFs (the same file on every LSH platform). |
 | `tests/` | The end-to-end tests. |
+| `.github/workflows/checks.yml` | The checks GitHub runs on every pull request and push to `main`. |
 
 **Data:**
 - Durable Object SQLite: trainees (with a salted hash of each PIN), calls (timings, the note, the transcript, the AI's grade and the reviews), written scenarios, grading settings, usage counts for the AI and sign-in limits, and the Grader's queue.
