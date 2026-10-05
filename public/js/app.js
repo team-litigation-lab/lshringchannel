@@ -44,7 +44,7 @@
 
   App.navItems = function () {
     return App.trainer()
-      ? [['console', '🎛 Console'], ['calls', '🗂 Call log'], ['scenarios', '📚 Scenarios'], ['trainees', '👥 Trainees'], ['practice', '🎧 Try practice'], ['setup', '⚙️ Setup']]
+      ? [['console', '🎛 Console'], ['calls', '🗂 Call log'], ['graded', '📋 Graded calls'], ['scenarios', '📚 Scenarios'], ['trainees', '👥 Trainees'], ['practice', '🎧 Try practice'], ['setup', '⚙️ Setup']]
       : [['phone', '📞 My phone'], ['practice', '🎧 Practice'], ['calls', '🗂 My calls']];
   };
 
@@ -143,6 +143,7 @@
     b.on('error', (m) => U.toast(m.msg, 'error'));
     b.on('trouble', () => { API.post('/api/me').catch(() => {}); });
     b.on('*', (m) => { if (!['hello', 'presence', 'error'].includes(m.t)) (App.trainer() ? Console : Trainee).onBoard(m); });
+    b.on('graded', (m) => { if (App.gradedHook) App.gradedHook(m); });
     b.connect();
   };
 
@@ -313,6 +314,20 @@
     if (!on) { document.title = 'LSH Ring Channel'; return; }
     let f = false;
     titleFlash = setInterval(() => { document.title = (f = !f) ? text : 'LSH Ring Channel'; }, 900);
+  };
+
+  // The grade: the weighted average of the scored metrics (1 to 5) and as a percentage (as src/scenarios.js weightedScore).
+  App.weighted = function (track, criteria) {
+    const w = ((App.cfg.settings && App.cfg.settings.weights) || {})[track] || {};
+    let sum = 0, wsum = 0;
+    (criteria || []).forEach((c) => {
+      if (!c || !(c.score >= 1 && c.score <= 5)) return;
+      const k = Number(w[c.name]); const wt = Number.isFinite(k) && k >= 0 ? k : 1;
+      sum += c.score * wt; wsum += wt;
+    });
+    if (!wsum) return null;
+    const avg = sum / wsum;
+    return { avg: Math.round(avg * 100) / 100, pct: Math.round(avg * 20) };
   };
 
   App.levelBadge = (l) => `<span class="badge lvl-${esc(l)}">${esc(l)}</span>`;

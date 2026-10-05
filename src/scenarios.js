@@ -187,12 +187,13 @@ export const NOTE_FORMS = {
     { k: 'when', label: 'Date / time of call', type: 'text', auto: 'now' },
     { k: 'caller', label: 'Caller name and role', type: 'text' },
     { k: 'verified', label: 'Verified?', type: 'select', options: ['', 'Verified: client', 'Verified: authorized person', 'Could not verify', 'Not authorized: message only', 'Business / outside caller'] },
-    { k: 'event', label: 'Event', type: 'text' },
-    { k: 'eventWhen', label: 'Day, date and time (time zone)', type: 'text' },
+    { k: 'event', label: 'Calendar title (meeting type – client name)', type: 'text' },
+    { k: 'eventWhen', label: 'Day, date and time (EST) and length', type: 'text' },
+    { k: 'format', label: 'Format', type: 'select', options: ['', 'Phone', 'Video (Zoom)', 'In person'] },
     { k: 'where', label: 'Location / dial-in / number to call', type: 'text' },
     { k: 'who', label: 'Who attends', type: 'text' },
     { k: 'confirmed', label: 'Confirmed with (name / number)', type: 'text' },
-    { k: 'reminder', label: 'Reminder / follow-up', type: 'text' },
+    { k: 'reminder', label: 'Reminder (email a day before) / follow-up', type: 'text' },
     { k: 'routed', label: 'Routed to / action taken', type: 'textarea' },
     { k: 'note', label: 'Case note (what was said, by whom)', type: 'textarea' },
     { k: 'initials', label: 'Your initials', type: 'text', short: true }
@@ -218,38 +219,106 @@ export const NOTE_FORMS = {
   ] }
 };
 
-// How each kind of call is scored (1 to 5 each) and the reminders shown to the trainee.
+// How each kind of call is scored: the program's own Mock Calls Metrics (Training Guide, Day 4 Reception
+// Mock Calls Metrics, Day 6 Calendar Management Mock Calls Metrics, Day 9 Intake Mock Calls Metrics).
+// Each metric is scored 1 to 5 with feedback; the call's grade is their WEIGHTED AVERAGE (weights in
+// ⚙️ Setup, 1 each by default). The descriptions are what the trainer and the AI grader score against.
+const M = (name, desc, voice) => ({ name, desc, voice: !!voice });
+const INTRO = M('Introduction of Law Firm and Name', 'Opens with the firm\'s name and their own name and offers help ("Thank you for calling LSH Training Law Group, this is Jamie. How may I help you?").');
+const COMMON_SOFT = [
+  M('Customer Service', 'Courteous, patient and helpful; acknowledges the caller\'s concern and keeps them informed of what is happening.'),
+  M('Assertiveness', 'Holds firm, politely, on confidentiality and firm policy; doesn\'t give in to pressure; redirects the caller to what the firm can do.'),
+  M('Listening Skills', 'Lets the caller finish, doesn\'t talk over them, catches the key details the first time and doesn\'t make the caller repeat themselves.', true),
+  M('Comprehension', 'Understands what the caller actually needs and answers that need; asks clarifying questions when something is unclear.'),
+  M('Attention to Details', 'Captures names, numbers, dates and amounts exactly; reads back the callback number and key details; the note matches the call and the file.')
+];
+const CLOSE_AND_VOICE = [
+  M('Closing Spiel', 'Recaps the next step, asks if there is anything else, thanks the caller and closes professionally with the firm name.'),
+  M('Time Management', 'Handles the call efficiently without rushing the caller: no unnecessary holds, long checks or detours; the call length fits the request.'),
+  M('Dead Air/Fillers', 'No long silences (dead air) and few fillers ("um", "uh", "like", "okay so"); explains any pause ("let me check the file for you").', true),
+  M('Clarity of Speech (Articulation, Volume, Enunciation)', 'Speaks clearly, at a good volume and pace; words are easy to understand over the phone.', true),
+  M('Tone of Voice', 'Warm, calm, confident and professional; matches the caller\'s emotion appropriately (reassuring with an upset caller, brisk with a busy one).', true)
+];
 export const TRACKS = {
   reception: {
-    label: 'Reception', lineLabel: 'Main Line', icon: '☎', note: 'message',
+    label: 'Reception', lineLabel: 'Main Line', icon: '☎', note: 'message', sheet: 'Reception Mock Calls Metrics',
     rubric: [
-      { name: 'Greeting & Control', desc: 'Greets with the firm name and their own name, calm and warm, controls the call and closes it properly.' },
-      { name: 'Verification & Confidentiality', desc: 'Verifies with name, DOB and one more identifier before sharing anything; shares only with the client or an authorized person; never confirms representation to others; no legal advice or values.' },
-      { name: 'Accuracy from the case file', desc: 'Anything they tell an authorized caller matches the CMS file exactly (dates, times, names, extensions).' },
-      { name: 'Routing & Message', desc: 'Routes to the right person and extension with the right urgency; the note is complete (date/time, caller and role, callback number, best time, case, what they need, urgency, initials).' }
+      INTRO,
+      M('Authentication (Name, DOL, DOB, Claim No, Case No.)', 'Verifies the caller before sharing anything: asks for the identifiers the file needs (full name, date of birth, date of loss, and the claim or case number or another identifier on file), compares them with the file and never reads them out; shares only with the client or an authorized person. A business caller is identified (name, company, claim number) and gets nothing about the client.'),
+      ...COMMON_SOFT,
+      M('Resolution', 'Gives an accurate answer from the file, or takes a complete message (date and time, caller and role, callback number, best time, case, what they need, urgency, initials) and routes it to the right person with the right urgency; the caller leaves with a clear next step.'),
+      M('Transfer Procedure', 'Asks before placing the caller on hold or transferring, says who they are transferring to and why, checks back on a caller on hold, and handles an unanswered transfer by returning to the caller with options (a message or voicemail). If no transfer was needed, judges correctly that a message was the right route.'),
+      ...CLOSE_AND_VOICE
     ],
-    tips: ['Firm name, your name, "how may I help you?"', 'Verify before you share: name, DOB, plus address or SSN last 4.', 'Not authorized? "I can take a message," and nothing more.', 'Read the callback number back.', 'Log a Note and route it to the person on the file.']
+    tips: ['Firm name, your name, "how may I help you?"', 'Verify before you share: name, DOB, date of loss, plus a claim or case number or another identifier on file.', 'Not authorized? "I can take a message," and nothing more.', 'Ask before you hold or transfer; say who you\'re transferring to.', 'Read the callback number back, recap, and close with the firm name.']
   },
   calendar: {
-    label: 'Calendar', lineLabel: 'Main Line', icon: '🗓', note: 'calendar',
+    label: 'Calendar', lineLabel: 'Main Line', icon: '🗓', note: 'calendar', sheet: 'Calendar Management Mock Calls Metrics',
     rubric: [
-      { name: 'Greeting & Verification', desc: 'Professional greeting; verifies the caller and that they are authorized before discussing any date.' },
-      { name: 'Calendar accuracy', desc: 'Reads the right event from the file and states the date, day, time, time zone and location exactly; never invents availability.' },
-      { name: 'Scheduling boundaries', desc: 'Doesn\'t agree to move court dates or depositions; offers only real options; confirms and reads back what was booked.' },
-      { name: 'Documentation & follow-up', desc: 'The calendar entry and note are complete (event, date/time/time zone, location, attendees, who confirmed, reminder, routing).' }
+      M('Professional Introduction & Call Control', 'Greets with the firm name and their own name, guides the call and keeps it on track.'),
+      M('Client Comprehension & Flow Control', 'Understands the request (the meeting type, its purpose, who attends) and follows a logical call flow; adapts to the caller\'s tone (easy, anxious, irritated, impatient or emotional).'),
+      M('Information Verification & Accuracy', 'Collects and verifies the minimum information (name, callback number, date of birth, date of loss) and checks the caller is authorized before discussing any date; every detail given is accurate.'),
+      M('Slot Identification & Scheduling Rule Compliance', 'Offers only real available slots and follows the scheduling rules: time zone, meeting durations, buffers, consult days and hours, same-day approval, and court dates or depositions never agreed at the front desk.'),
+      M('Alternative Time Offering', 'When the requested time isn\'t available, offers 2 to 3 alternative times instead of a dead end.'),
+      M('Calendar Creation & Attorney Reminder Setup', 'The calendar entry is complete and correct: a title with the meeting type and client name, the date and time in EST, the format (phone, video or in person), who attends, the callback number and notes; an email reminder is set for the day before.'),
+      M('Notes, Recap & Call Closing', 'Reads the booking back (day, date, time, time zone, format), records notes that reflect the case context and the caller\'s demeanor, and closes professionally.')
     ],
-    tips: ['Always say the day, date, time and time zone.', 'Read the booking back to the caller.', 'Court dates and depositions are never agreed at the front desk.', 'Log the calendar entry and a Note.']
+    // The Training Guide's Day 6 Calendar Management Mock Call guidelines (what the trainee and the grader go by).
+    rules: [
+      'Minimum information to collect from the caller: name, callback number, date of birth (DOB) and date of loss (DOL).',
+      'Identify available slots only; avoid lunch, buffer time and blocked events.',
+      'Offer 2 to 3 alternative times when a requested slot is unavailable.',
+      'Clarify the meeting type (phone, video or in person).',
+      'Plot the appointment in the attorney\'s calendar, in the EST time zone, and set an email reminder a day before the event.',
+      'The attorney does not take new client consults after 5:00 PM; new client consults are only on Tuesdays and Thursdays, at most 3 a day.',
+      'Phone consults, status updates, follow-up calls, reviews, regular and urgent meetings, and signing meetings are 30 minutes at most.',
+      'Follow-ups are not scheduled in the morning.',
+      'All consultation meetings are phone consults, only between 9:30 AM and 3:00 PM; the attorney calls the client, so confirm the callback number.',
+      'Preparation, strategy and settlement meetings are 45 minutes at most; conference meetings are 1 hour at most.',
+      'The attorney needs a 15-minute buffer before and after every meeting. Same-day bookings require the attorney\'s approval.',
+      'Court dates and depositions are never agreed at the front desk.'
+    ],
+    tips: ['Get the minimum: name, callback number, DOB and DOL.', 'Offer only open slots; give 2–3 alternatives when the time asked for is taken.', 'Say the day, date, time and time zone (EST), and the format.', 'Read the booking back, set the reminder for the day before, and close.']
   },
   intake: {
-    label: 'Intake', lineLabel: 'Intake Line', icon: '📋', note: 'intake',
+    label: 'Intake', lineLabel: 'Intake Line', icon: '📋', note: 'intake', sheet: 'Intake Mock Calls Metrics',
     rubric: [
-      { name: 'Rapport & Control', desc: 'Warm, patient, guides the caller one question at a time and keeps the call on track.' },
-      { name: 'Complete intake', desc: 'Collects contact details, DOB, date and place of the incident, what happened, injuries and treatment, other parties (for the conflict check), insurance contacts and evidence.' },
-      { name: 'Boundaries', desc: 'No legal advice, no case value, no deadline or SOL answers; doesn\'t promise the firm will take the case.' },
-      { name: 'Urgency & next step', desc: 'Spots deadlines and other urgent issues and routes them now; sets a clear next step; the intake note is complete and accurate.' }
+      INTRO,
+      M('Authentication (Name, DOL, DOB, Claim No, Case No.)', 'Collects and confirms the caller\'s identifying details (full name, date of birth, date of loss, and any claim or case number) and checks whether they are already on file; a returning caller is verified before anything about their file is shared; someone calling for another person is identified with their relationship.'),
+      ...COMMON_SOFT,
+      M('Setting Proper Expectations', 'Explains what happens next and when (conflict check, attorney review, a callback), without promising the firm will take the case or any outcome.'),
+      M('Explaining the Process', 'Explains the intake process in plain words: the questions, the attorney\'s review, the retainer and HIPAA forms by e-sign, the intake packet.'),
+      M('Answering Client\'s Inquiries', 'Answers the caller\'s questions accurately within the intake role; never gives legal advice, a case value, or a deadline or statute of limitations answer: those go to the attorney, urgently when time matters.'),
+      M('Commitment', 'Commits to a specific next step and who owns it (who will call, by when) and confirms the best callback number and time.'),
+      ...CLOSE_AND_VOICE
     ],
-    tips: ['One question at a time; let them tell the story.', 'Get the other parties\' names for the conflict check.', 'Never answer "Do I have a case?" or "Is it too late?"', 'Anything with a deadline is urgent: route it now.']
+    tips: ['Firm name, your name; then let them tell the story.', 'One question at a time: contact details, DOB, date and place of the incident, injuries, treatment, other parties, insurance, evidence.', 'Never answer "Do I have a case?" or "Is it too late?"; route deadlines now.', 'Set expectations, explain the process, commit to a next step, and close.']
   }
+};
+
+// The grade: the weighted average of the scored metrics (1 to 5), and the same as a percentage.
+// A metric left unscored (n/a) doesn't count. Weights come from ⚙️ Setup (settings.weights[track][metric]).
+export function weightedScore(track, criteria, weights) {
+  const w = (weights && weights[track]) || {};
+  let sum = 0, wsum = 0;
+  (criteria || []).forEach((c) => {
+    if (!c || !(c.score >= 1 && c.score <= 5)) return;
+    const k = Number(w[c.name]);
+    const wt = Number.isFinite(k) && k >= 0 ? k : 1;
+    sum += c.score * wt; wsum += wt;
+  });
+  if (!wsum) return null;
+  const avg = sum / wsum;
+  return { avg: Math.round(avg * 100) / 100, pct: Math.round(avg * 20) };
+}
+
+// ⚙️ Setup's graded mock call settings, as stored by the Switchboard.
+export const DEFAULT_SETTINGS = {
+  autograde: true,        // the AI grades every live call on its own once the call is over
+  autoRelease: false,     // AI grades go to trainees without a trainer's approval
+  defaultGraded: true,    // new live calls start as graded mock calls
+  passMark: null,         // a percentage; null = no pass/fail shown
+  weights: { reception: {}, calendar: {}, intake: {} }
 };
 
 const you = (role, id) => `You are the ${role} at LSH Training Law Group (fictional). The call is about ${CASES[id].name}: look the case up in 🔎 Case lookup (or open it in the CMS Training Library) while you handle it.`;

@@ -19,12 +19,13 @@
  * Recordings are kept in the shared LSH_KV namespace under "voip:" and expire on their own.
  */
 import { Switchboard } from './switchboard.js';
+import { Grader, GRADE_AUDIO } from './grader.js';
 import { makeToken, readToken, readTokenString, safeEqual, traineeId } from './auth.js';
 import { FIRM, CASES, TRACKS, NOTE_FORMS, LINES, LEVELS, CMS_URL, traineeView } from './scenarios.js';
-import { hasAI, keyNames, generate, parseJson, liveToken } from './gemini.js';
-import { callerPrompt, liveSetup, gradePrompt, cleanGrade } from './prompts.js';
+import { hasAI, keyNames, generate, liveToken } from './gemini.js';
+import { callerPrompt, liveSetup } from './prompts.js';
 
-export { Switchboard };
+export { Switchboard, Grader };
 
 const JSON_HEADERS = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: JSON_HEADERS });
@@ -33,11 +34,6 @@ const REC = 'voip:rec:';
 const recDays = (env) => Math.min(365, Math.max(1, Number(env.RECORDING_DAYS) || 90));
 const aiMinutes = (env) => Math.min(15, Math.max(2, Number(env.AI_MAX_MINUTES) || 8));
 
-function b64(buf) {
-  const bytes = new Uint8Array(buf); let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
 
 // What a trainee sees of a call record: never the caller's script or the trainer's unsent draft, and
 // nothing about a live call's scenario until they took the call and it ended (a missed call may be rung again).
@@ -53,7 +49,9 @@ function forTrainee(r) {
     id: r.id, mode: r.mode, track: r.track, title: traineeTitle(r.mode, r.status, r.title), status: r.status, createdAt: r.created_at, answeredAt: r.answered_at, endedAt: r.ended_at,
     traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, trainer: r.trainer, reviewed: !!r.reviewed, score: r.score,
     scenario: scen, metrics: d.metrics || {}, note: d.note || {}, noteSubmittedAt: d.noteSubmittedAt || null, transcript: done ? d.transcript || [] : [],
-    recording: d.recording || null, ai: d.ai || null, review: d.review && d.review.sentAt ? d.review : null
+    recording: d.recording || null, ai: d.ai || null, review: d.review && d.review.sentAt ? d.review : null,
+    graded: !!d.graded, audioStats: done ? d.audioStats || null : null,
+    autograde: r.mode === 'ai' && d.autograde ? { state: d.autograde.state, error: d.autograde.error || '' } : null
   };
 }
 function forTrainer(r) {
@@ -62,7 +60,8 @@ function forTrainer(r) {
     id: r.id, mode: r.mode, track: r.track, title: r.title, status: r.status, createdAt: r.created_at, answeredAt: r.answered_at, endedAt: r.ended_at,
     traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, trainer: r.trainer, reviewed: !!r.reviewed, score: r.score,
     scenario: d.scenario, metrics: d.metrics || {}, note: d.note || {}, noteSubmittedAt: d.noteSubmittedAt || null, transcript: d.transcript || [],
-    recording: d.recording || null, ai: d.ai || null, aiDraft: d.aiDraft || null, review: d.review || null, reviewDraft: d.reviewDraft || null, ticks: d.ticks || [], events: d.events || []
+    recording: d.recording || null, ai: d.ai || null, aiDraft: d.aiDraft || null, review: d.review || null, reviewDraft: d.reviewDraft || null, ticks: d.ticks || [], events: d.events || [],
+    graded: !!d.graded, aiScore: d.aiScore != null ? d.aiScore : null, autograde: d.autograde || null, gradeAudio: !!d.gradeAudio, audioStats: d.audioStats || null
   };
 }
 
@@ -143,16 +142,18 @@ export default {
         if (!t || t.archived) return json({ error: 'Sign-in required' }, 401);
         me = { role: 't', id: t.id, name: t.name, batch: t.batch };
       }
-      const body = path === '/api/recording/put' || path === '/api/ai/draft' ? null : await request.json().catch(() => ({}));
+      const body = path === '/api/recording/put' ? null : await request.json().catch(() => ({}));
 
       if (path === '/api/me') return json(me);
 
       if (path === '/api/config') {
         const all = await sb.listScenarios();
+        const st = await sb.getSettings();
         return json({
           me, firm: FIRM, cases: CASES, tracks: TRACKS, forms: NOTE_FORMS, lines: LINES, levels: LEVELS, cms: CMS_URL,
           scenarios: admin ? all : all.map(traineeView),
-          features: { ai: hasAI(env), recordings: !!env.LSH_KV, aiMinutes: aiMinutes(env) }
+          features: { ai: hasAI(env), recordings: !!env.LSH_KV, aiMinutes: aiMinutes(env) },
+          settings: admin ? st : { weights: st.weights, passMark: st.passMark }
         });
       }
       if (path === '/api/ice') {
@@ -172,6 +173,10 @@ export default {
         const ice = await iceServers(env);
         return json({ stats: await sb.stats(), setup: { ai: hasAI(env), aiKeys: keyNames(env).length, turn: ice.turn, turnError: ice.error || '', recordings: !!env.LSH_KV, recordingDays: recDays(env), traineeCode: !!env.TRAINEE_CODE } });
       }
+
+      /* ---------- 📋 graded mock calls: settings and the report ---------- */
+      if (path === '/api/settings/save') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ settings: await sb.saveSettings(body.settings || {}) }); }
+      if (path === '/api/graded') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ calls: await sb.gradedCalls(body || {}) }); }
 
       /* ---------- call records ---------- */
       if (path === '/api/calls') {
@@ -194,7 +199,7 @@ export default {
       if (path === '/api/call/delete') {
         if (!admin) return json({ error: 'Not allowed' }, 403);
         await sb.deleteCall(String(body.id || ''));
-        if (env.LSH_KV) await env.LSH_KV.delete(REC + String(body.id || ''));
+        if (env.LSH_KV) { await env.LSH_KV.delete(REC + String(body.id || '')); await env.LSH_KV.delete(GRADE_AUDIO + String(body.id || '')); }
         return json({ ok: true });
       }
 
@@ -210,6 +215,19 @@ export default {
         if (!/^audio\/(webm|ogg|mp4|mpeg|wav)$/.test(type)) return json({ error: 'Unsupported audio type' }, 415);
         const buf = await request.arrayBuffer();
         if (buf.byteLength < 200) return json({ error: 'Empty recording' }, 400);
+        if (url.searchParams.get('kind') === 'grade') {
+          // The copy the AI grades from (8 kHz WAV, both voices, up to 15 minutes), kept 14 days.
+          if (type !== 'audio/wav' || buf.byteLength > 15 * 1024 * 1024) return json({ error: 'The grading copy must be a WAV of 15 minutes at most.' }, 413);
+          let stats = null;
+          try {
+            const x = JSON.parse(request.headers.get('X-Audio-Stats') || 'null');
+            const n = (v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.round(Number(v) * 10) / 10) : 0);
+            if (x && x.deadAir) stats = { durationSec: n(x.durationSec), deadAir: { count: n(x.deadAir.count), total: n(x.deadAir.total), longest: n(x.deadAir.longest), gaps: (Array.isArray(x.deadAir.gaps) ? x.deadAir.gaps : []).slice(0, 20).map((g) => [n(g[0]), n(g[1])]) } };
+          } catch (e) { stats = null; }
+          await env.LSH_KV.put(GRADE_AUDIO + id, buf, { expirationTtl: 14 * 86400 });
+          await sb.markGradeAudio(id, stats);
+          return json({ ok: true });
+        }
         if (buf.byteLength > 24 * 1024 * 1024) return json({ error: 'The recording is too large to keep (over 24 MB).' }, 413);
         const meta = { type, size: buf.byteLength, at: Date.now(), durMs: Number(url.searchParams.get('dur')) || null, expires: Date.now() + recDays(env) * 86400000 };
         await env.LSH_KV.put(REC + id, buf, { expirationTtl: recDays(env) * 86400, metadata: meta });
@@ -270,45 +288,17 @@ export default {
         } catch (e) { return json({ error: String(e.message || e) }, 502); }
       }
 
-      /* ---------- AI scoring ---------- */
-      if (path === '/api/ai/grade') {
-        if (!hasAI(env)) return json({ error: 'AI scoring isn\'t set up on this site yet.' }, 501);
+      /* ---------- AI grading (the Grader queue, src/grader.js) ---------- */
+      // Grade (again) now: a trainer on any call, a trainee on their own practice call.
+      if (path === '/api/ai/autograde' || path === '/api/ai/grade') {
+        if (!hasAI(env)) return json({ error: 'AI grading isn\'t set up on this site yet.' }, 501);
         const r = await sb.getCall(String(body.id || ''));
         if (!r || (!admin && r.trainee_id !== me.id)) return json({ error: 'No such call' }, 404);
         if (r.status !== 'ended') return json({ error: 'Finish the call first.' }, 409);
-        if (r.mode !== 'ai' && !admin) return json({ error: 'Your trainer scores live calls.' }, 403);
-        if (!admin && (await sb.countUsage(me.id, 'grade', 3600000)) >= 40) return json({ error: 'Too many scorings this hour.' }, 429);
+        if (r.mode !== 'ai' && !admin) return json({ error: 'Your trainer grades live calls.' }, 403);
+        if (!admin && (await sb.countUsage(me.id, 'grade', 3600000)) >= 40) return json({ error: 'Too many gradings this hour.' }, 429);
         await sb.logUsage(me.id, 'grade');
-        const s = r.data.scenario;
-        const call = { metrics: r.data.metrics, note: r.data.note, transcript: r.data.transcript };
-        const p = gradePrompt(s, call, {});
-        try {
-          const g = await generate(env, { system: p.system, parts: [{ text: p.prompt }], json: true, maxTokens: 2500 });
-          const grade = cleanGrade(s, parseJson(g.text));
-          if (!grade) return json({ error: 'The AI\'s answer couldn\'t be read. Try again.' }, 502);
-          const saved = await sb.setGrade(r.id, grade, r.mode === 'live');
-          return json({ call: admin ? forTrainer(saved) : forTrainee(saved) });
-        } catch (e) { return json({ error: String(e.message || e) }, 502); }
-      }
-      // Live calls: the trainer's console sends the recording (as 8 kHz WAV) for a transcript and a draft scorecard.
-      if (path === '/api/ai/draft') {
-        if (!admin) return json({ error: 'Not allowed' }, 403);
-        if (!hasAI(env)) return json({ error: 'AI scoring isn\'t set up on this site yet.' }, 501);
-        const r = await sb.getCall(url.searchParams.get('id') || '');
-        if (!r || r.status !== 'ended') return json({ error: 'No finished call with that id.' }, 404);
-        const buf = await request.arrayBuffer();
-        if (buf.byteLength > 14 * 1024 * 1024) return json({ error: 'The recording is too long to score (about 15 minutes at most).' }, 413);
-        const s = r.data.scenario;
-        const call = { metrics: r.data.metrics, note: r.data.note, transcript: r.data.transcript };
-        const p = gradePrompt(s, call, { audio: buf.byteLength > 1000 });
-        const parts = buf.byteLength > 1000 ? [{ inlineData: { mimeType: 'audio/wav', data: b64(buf) } }, { text: p.prompt }] : [{ text: p.prompt }];
-        try {
-          const g = await generate(env, { system: p.system, parts, json: true, maxTokens: 6000 });
-          const grade = cleanGrade(s, parseJson(g.text));
-          if (!grade) return json({ error: 'The AI\'s answer couldn\'t be read. Try again.' }, 502);
-          const saved = await sb.setGrade(r.id, grade, true);
-          return json({ call: forTrainer(saved) });
-        } catch (e) { return json({ error: String(e.message || e) }, 502); }
+        return json({ autograde: await sb.scheduleGrade(r.id, { force: true }) });
       }
 
       return json({ error: 'Unknown endpoint' }, 404);

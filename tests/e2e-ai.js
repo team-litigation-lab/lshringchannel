@@ -78,11 +78,11 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   // open a live call that has a recording
   const id = await tr.evaluate(async () => (await API.post('/api/calls', { mode: 'live' })).calls.find((c) => c.recording).id);
   await tr.goto(B + '/#/call/' + id);
-  await tr.waitForSelector('[data-sc="draft"]');
-  await tr.click('[data-sc="draft"]');
-  await tr.waitForFunction(() => /Specific evaluation/.test(document.querySelector('#scoreForm').innerHTML), null, { timeout: 30000 });
+  await tr.waitForSelector('[data-act="grade"]');
+  await tr.click('#scoreForm [data-act="grade"]');
+  await tr.waitForFunction(() => /Autograded/.test(document.querySelector('#scoreForm').textContent) && /Specific feedback/.test(document.querySelector('#scoreForm').innerHTML), null, { timeout: 30000 });
   const hasTr = await tr.$('.transcript');
-  ok(`Trainer "Draft with AI" from the recording fills the scorecard${hasTr ? ' and adds a transcript' : ''}`);
+  ok(`Trainer "✨ Grade again with AI" regrades the live call from its recording${hasTr ? ' (transcript on the page)' : ''}`);
   await tr.screenshot({ path: OUT + '/13-trainer-ai-draft.png', fullPage: true });
 
   // A call the trainer marks "live only" can't be practiced, and leaves no call record behind

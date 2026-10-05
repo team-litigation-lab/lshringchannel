@@ -210,14 +210,16 @@
     }
   }
 
-  // A recording as 8 kHz mono WAV (phone quality), small enough for the AI to transcribe and score.
+  /* A recording as 8 kHz mono WAV (phone quality, small enough for the AI to grade: up to 15 minutes),
+     and the dead air in it: stretches of 4 seconds or more where nobody speaks (hold music is sound,
+     so a hold isn't dead air). Returns { wav, stats: { durationSec, deadAir: { count, total, longest, gaps } } }. */
   async function toWav8k(blob) {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     const c = new Ctx();
     const buf = await c.decodeAudioData(await blob.arrayBuffer());
     try { c.close(); } catch (e) {}
     const rate = 8000, secs = Math.min(buf.duration, 15 * 60);
-    const off = new OfflineAudioContext(1, Math.ceil(secs * rate), rate);
+    const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(secs * rate)), rate);
     const src = off.createBufferSource(); src.buffer = buf; src.connect(off.destination); src.start();
     const out = await off.startRendering();
     const pcm = out.getChannelData(0);
@@ -227,7 +229,34 @@
     view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, rate, true);
     view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); w(36, 'data'); view.setUint32(40, pcm.length * 2, true);
     for (let i = 0; i < pcm.length; i++) { const s = Math.max(-1, Math.min(1, pcm[i])); view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true); }
-    return new Blob([view.buffer], { type: 'audio/wav' });
+    return { wav: new Blob([view.buffer], { type: 'audio/wav' }), stats: deadAir(pcm, rate) };
+  }
+
+  // Silence = 200 ms frames quieter than the call's own noise floor (×3, at least -46 dB); 4 s or more in a row is dead air.
+  function deadAir(pcm, rate) {
+    const frame = Math.round(rate / 5), n = Math.floor(pcm.length / frame);
+    const rms = new Float32Array(n);
+    for (let f = 0; f < n; f++) { let s = 0; for (let i = f * frame; i < (f + 1) * frame; i++) s += pcm[i] * pcm[i]; rms[f] = Math.sqrt(s / frame); }
+    const sorted = Array.from(rms).sort((a, b) => a - b);
+    const floor = sorted[Math.floor(sorted.length * 0.1)] || 0;
+    const thr = Math.max(0.005, floor * 3);
+    const gaps = [];
+    let run = 0;
+    const edge = 5;   // ignore the first and last second (picking up, hanging up)
+    for (let f = edge; f <= n - edge; f++) {
+      if (f < n - edge && rms[f] < thr) { run++; continue; }
+      if (run * 0.2 >= 4) gaps.push([Math.round((f - run) * 0.2 * 10) / 10, Math.round(run * 0.2 * 10) / 10]);
+      run = 0;
+    }
+    const total = gaps.reduce((a, g) => a + g[1], 0);
+    return { durationSec: Math.round(pcm.length / rate), deadAir: { count: gaps.length, total: Math.round(total), longest: gaps.reduce((a, g) => Math.max(a, g[1]), 0), gaps: gaps.slice(0, 20) } };
+  }
+
+  // After a call: the copy the AI grades from, uploaded with what was measured in it.
+  async function uploadForGrading(callId, blob) {
+    const { wav, stats } = await toWav8k(blob);
+    await API.postBlob(`/api/recording/put?id=${encodeURIComponent(callId)}&kind=grade`, wav, 'audio/wav', { 'X-Audio-Stats': JSON.stringify(stats) });
+    return stats;
   }
 
   // Microphone level (0 to 1) for the mic check and the "you're talking" light.
@@ -242,5 +271,5 @@
     return () => { cancelAnimationFrame(raf); try { c.close(); } catch (e) {} };
   }
 
-  window.VoIP = { Board, Mic, RtcCall, Recorder, ice, toWav8k, meter, iceInfo: () => iceCache };
+  window.VoIP = { Board, Mic, RtcCall, Recorder, ice, toWav8k, uploadForGrading, meter, iceInfo: () => iceCache };
 })();

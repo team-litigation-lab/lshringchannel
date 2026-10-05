@@ -21,12 +21,14 @@ const server = http.createServer((req, res) => {
       const prompt = JSON.stringify(j.contents || []);
       let text;
       if (json) {
-        const names = [...prompt.matchAll(/- ([A-Z][A-Za-z &]+): /g)].map((x) => x[1]).slice(0, 4);
+        // The grader lists the program's metrics as "M<n>. <name> — <description>".
+        const names = [...prompt.matchAll(/M\d+\. (.+?) \u2014 /g)].map((x) => x[1].replace(/\\(.)/g, '$1'));
+        log.push({ grade: true, audio: hasAudio, metrics: names.length });
         text = JSON.stringify({
           transcript: hasAudio ? [{ who: 'trainee', text: 'Thank you for calling LSH Training Law Group, this is Jamie.' }, { who: 'caller', text: 'Greg Hollis, Liberty Crest.' }] : undefined,
           verdict: 'Good, with Improvements Needed.',
           summary: 'Good, with Improvements Needed. Demonstrated a good understanding of the greeting. However, improvement is needed in verification.',
-          criteria: names.map((n, i) => ({ name: n, score: 3 + (i % 2), evaluation: 'Specific evaluation for ' + n + '.' })),
+          criteria: names.map((n, i) => ({ name: n, score: 4 + (i % 2), evaluation: 'Specific feedback on ' + n + '.' })),
           goals: [{ goal: 'x', met: 'yes', evidence: '"this is Jamie"' }, { goal: 'y', met: 'no', evidence: 'not asked' }],
           note: 'The callback number is missing.', tips: ['Verify first.', 'Read the number back.']
         });

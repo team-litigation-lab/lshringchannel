@@ -74,6 +74,7 @@
         return;
       case 'timeout': if (mine) { p.coaching = !!m.on; p.coachMsg = m.msg || ''; renderDevice(); } return;
       case 'class': if (mine) { p.classOn = !!m.on; renderDevice(); } return;
+      case 'graded': if (p && p.callId === m.callId && p.wake) p.wake(); return;
       case 'peer-lost': if (mine) { p.peerLost = true; renderDevice(); } return;
       case 'peer-back': if (mine) { p.peerLost = false; renderDevice(); } return;
       case 'resumed':
@@ -331,16 +332,30 @@
     Sounds.endTone();
     renderAll();
     try { await API.post('/api/call/update', { id: p.callId, transcript, metrics: p.metrics, note: p.note, end: true }); } catch (e) { U.toast(e.message, 'error'); }
+    // The recording (to play back and download) and its copy for the AI grader (8 kHz WAV, dead air measured).
     if (res && res.recording && res.recording.blob.size > 2000 && App.cfg.features.recordings) {
-      API.postBlob(`/api/recording/put?id=${encodeURIComponent(p.callId)}&dur=${p.metrics.talkMs}`, res.recording.blob, res.recording.type).catch(() => {});
+      p.audioUp = (async () => {
+        await API.postBlob(`/api/recording/put?id=${encodeURIComponent(p.callId)}&dur=${p.metrics.talkMs}`, res.recording.blob, res.recording.type);
+        await VoIP.uploadForGrading(p.callId, res.recording.blob);
+      })().catch(() => {});
     }
   }
 
-  async function gradeAi(p) {
-    p.grading = true; renderWork();
+  // Submitting the note sends the call to the AI grader (the same Mock Calls Metrics as graded calls); this waits for the scorecard.
+  async function gradeAi(p, again) {
+    p.grading = true; p.gradeError = null; renderWork();
     try {
-      const r = await API.post('/api/ai/grade', { id: p.callId });
-      p.grade = r.call.ai; p.score = r.call.score;
+      if (again) await API.post('/api/ai/autograde', { id: p.callId });
+      if (p.audioUp) await p.audioUp;
+      const until = Date.now() + 5 * 60000;
+      while (App.p === p && Date.now() < until) {
+        const c = (await API.post('/api/call', { id: p.callId })).call;
+        if (c.ai) { p.grade = c.ai; p.score = c.score; break; }
+        const ag = c.autograde || {};
+        if (ag.state === 'failed' || ag.state === 'off') throw new Error(ag.error || 'The AI couldn\'t grade this call.');
+        await new Promise((res) => { p.wake = res; setTimeout(res, 3000); });
+      }
+      if (!p.grade && App.p === p) throw new Error('Grading is taking longer than usual: your scorecard will be in My calls when it\'s ready.');
     } catch (e) { p.gradeError = e.message; }
     p.grading = false;
     if (App.p === p) renderWork();
@@ -484,11 +499,11 @@
   }
 
   function gradeHTML(p) {
-    if (p.grading) return `<div class="note-box" style="margin-bottom:14px">⏳ Scoring your call…</div>`;
+    if (p.grading) return `<div class="note-box" style="margin-bottom:14px">⏳ The AI is grading your call on the ${esc((App.cfg.tracks[p.track] || {}).sheet || 'Mock Calls Metrics')}${p.voice === 'voice' ? ' (it listens to the recording)' : ''}…</div>`;
     if (p.gradeError) return `<div class="err-box" style="margin-bottom:14px">The AI couldn't score this call: ${esc(p.gradeError)} <button class="btn btn-sm" data-act="regrade">Try again</button> <a href="#/call/${esc(p.callId)}">Open the call</a></div>`;
     const g = p.grade; if (!g) return '';
     return `<div class="card" style="margin-bottom:14px;border-color:#fed7aa">
-      <div class="row"><div class="score-big">${p.score != null ? p.score + '%' : '–'}</div><div style="flex:1"><div class="verdict">${esc(g.verdict)}</div><div class="small">${esc(g.summary)}</div></div></div>
+      <div class="row"><div class="score-big">${p.score != null ? p.score + '%' : '–'}</div><div style="flex:1"><div class="verdict">${esc(g.verdict)}${g.avg != null ? ` <span class="badge">Weighted average ${g.avg} / 5</span>` : ''}</div><div class="small">${esc(g.summary)}</div></div></div>
       <div class="row" style="margin-top:12px"><a class="btn btn-primary" href="#/call/${esc(p.callId)}">See the full scorecard →</a><button class="btn" data-act="next">Take another call</button></div></div>`;
   }
 
@@ -514,7 +529,7 @@
       else if (act === 'miccheck') App.micCheck();
       else if (act === 'rejoin') rejoin();
       else if (act === 'submit') submitNote();
-      else if (act === 'regrade') { App.p.gradeError = null; gradeAi(App.p); }
+      else if (act === 'regrade') gradeAi(App.p, true);
       else if (act === 'send') sendTyped();
       else if (act === 'next') { App.p = null; renderAll(); if (App.route.name === 'practice') App.views.practice.render(); }
       else if (act === 'hand') { App.hand = !App.hand; App.board.send({ t: 'hand', up: App.hand }); renderDevice(); if (App.hand) askNotify(); }

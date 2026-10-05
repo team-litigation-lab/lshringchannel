@@ -48,6 +48,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   // Trainer picks the trainee + a scenario and rings
   await tr.click('#roster .tr[data-tid]');
   await tr.click('#pkList .scen[data-sid="ft_rc_offer"]');
+  if (!(await tr.isChecked('#pkGraded'))) throw new Error('New live calls should start as graded mock calls');
   await tr.screenshot({ path: OUT + '/02-trainer-picker.png', fullPage: true });
   await tr.click('[data-act="ring"]');
   await te.waitForSelector('.lcd.ringing');
@@ -59,6 +60,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await te.waitForSelector('.lcd.live', { timeout: 20000 });
   await tr.waitForSelector('#callbar .t', { timeout: 20000 });
   ok('Answered: both sides connected over WebRTC');
+  if (!/GRADED/.test(await tr.textContent('#callbar'))) throw new Error('The call bar should show GRADED');
 
   // Audio flows both ways
   await sleep(3000);
@@ -190,9 +192,18 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   ok('Trainee submitted the note');
   await te.screenshot({ path: OUT + '/06-trainee-submitted.png' });
 
-  // Trainer scores the call
+  // The AI grades the call by itself (recording + note), on the Reception Mock Calls Metrics
+  await tr.waitForFunction(() => /Autograded/.test((document.querySelector('#endedInfo') || {}).textContent || ''), null, { timeout: 30000 });
+  ok('Nobody clicked anything: the call was autograded once the note was in (the console says so)');
   await tr.click('a[href^="#/call/"]');
   await tr.waitForSelector('#scoreForm');
+  await tr.waitForFunction(() => /Autograded from the recording/.test(document.querySelector('#scoreForm').textContent), null, { timeout: 20000 });
+  const rows = await tr.$$eval('#scoreForm table.sheet tbody tr', (x) => x.length);
+  if (rows !== 15) throw new Error('Expected 14 Reception metrics + the weighted average, got ' + rows);
+  const avgText = await tr.textContent('#scAvg');
+  ok(`The scorecard has the 14 Reception metrics filled in by the AI from the recording, weighted average ${avgText}`);
+  await tr.waitForSelector('#trCard');
+  ok('The AI transcribed the recording (transcript on the review page)');
   const hasRec = await tr.$('[data-act="loadrec"]');
   if (!hasRec) throw new Error('No recording on the review page');
   await tr.click('[data-act="loadrec"]');
@@ -204,19 +215,32 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   if (!/^Mock call - Jamie Cruz - An Offer With a Deadline - \d{4}-\d{2}-\d{2}\.webm$/.test(dlName)) throw new Error('Download name: ' + dlName);
   ok(`The recording downloads as "${dlName}"`);
   const goalsYes = await tr.$$eval('.seg button.yes.on', (x) => x.length);
-  ok(`Scorecard pre-ticks the ${goalsYes} goals checked live`);
-  await tr.selectOption('[data-f="verdict"]', 'Good, with Improvements Needed.');
-  for (let i = 0; i < 4; i++) await tr.click(`[data-crit="${i}"] button[data-n="${4 + (i % 2)}"]`);
-  await tr.fill('[data-f="summary"]', 'Good, with Improvements Needed. Demonstrated a good understanding of urgent routing: tried Atty. Reyes (201) live before taking a priority message with the amount, deadline and claim number. However, improvement is needed in reading the details back to the caller.');
-  await tr.click('[data-sc="send"]');
+  ok(`The call's checklist carries ${goalsYes} goals marked met`);
+  await tr.click('[data-sc="approve"]');
   await tr.waitForFunction(() => /Sent/.test(document.querySelector('#scoreForm').textContent));
-  ok('Trainer sent the review');
+  ok('Trainer approved the AI grade and sent it with one click');
+  const hdr = await tr.textContent('#callStatus');
+  if (!/Sent/.test(hdr)) throw new Error('The header still says: ' + hdr);
+  const naTop = await tr.evaluate(() => { const d = document.querySelector('[data-crit="0"]'); const b = d.querySelectorAll('button'); return b[b.length - 1].offsetTop - b[0].offsetTop; });
+  if (naTop > 4) throw new Error('The n/a button wraps under the 1 to 5 scores');
+  ok('The header shows "Sent" after approving, and each metric\'s scores fit on one line');
+  await tr.screenshot({ path: OUT + '/07-trainer-scorecard.png', fullPage: true });
   // Editing after sending: "Save draft" keeps the changes from the trainee until they're sent
   await tr.fill('[data-f="summary"]', 'DRAFT CHANGES NOT SENT');
   await tr.click('[data-sc="save"]');
   await tr.waitForFunction(() => /Unsent changes/.test(document.querySelector('#scoreForm').textContent));
   ok('"Save draft" after sending keeps the edits as unsent changes');
-  await tr.screenshot({ path: OUT + '/07-trainer-scorecard.png', fullPage: true });
+
+  // 📋 Graded calls: the report and its CSV
+  await tr.click('a[href="#/graded"]');
+  await tr.waitForSelector('table.graded td.gcell');
+  const gRow = await tr.textContent('table.graded tbody tr');
+  if (!/Jamie Cruz/.test(gRow) || !/\d+%/.test(gRow)) throw new Error('Graded report row: ' + gRow);
+  const [csv] = await Promise.all([tr.waitForEvent('download'), tr.click('#gCsv')]);
+  const csvText = require('fs').readFileSync(await csv.path(), 'utf8');
+  if (!/Introduction of Law Firm and Name \(score\)/.test(csvText) || !/Jamie Cruz/.test(csvText) || !/Tone of Voice \(feedback\)/.test(csvText)) throw new Error('CSV: ' + csvText.slice(0, 300));
+  ok(`Graded calls report shows Jamie's Reception grade, and the CSV export has every metric's score and feedback (${csv.suggestedFilename()})`);
+  await tr.screenshot({ path: OUT + '/10-graded-report.png', fullPage: true });
 
   // Trainee reads it
   await te.goto(B + '/#/calls');
@@ -226,6 +250,9 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   ok(`Trainee's My calls shows the score (${row.match(/\d+%/)[0]})`);
   await te.click('[data-open]');
   await te.waitForFunction(() => /Your trainer's review/.test(document.body.textContent));
+  await te.waitForFunction(() => /WEIGHTED AVERAGE/.test(document.body.textContent) && /Introduction of Law Firm and Name/.test(document.body.textContent));
+  ok('The trainee sees the graded scorecard: every metric with its score and feedback, and the weighted average');
+  await te.screenshot({ path: OUT + '/08-trainee-review.png', fullPage: true });
   const hidden = await te.evaluate(() => /Your offer on Robert Chen/.test(document.body.textContent));
   if (hidden) throw new Error('Trainee can see the caller script!');
   if (await te.evaluate(() => /DRAFT CHANGES NOT SENT/.test(document.body.textContent))) throw new Error('The trainee sees an unsent draft');

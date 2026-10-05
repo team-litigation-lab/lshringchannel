@@ -14,7 +14,12 @@
   const C = window.Console = {};
   const remote = () => document.getElementById('remoteAudio');
   const active = (t) => t && ['ringing', 'connecting', 'live'].includes(t.status);
-  const pick = C.pick = { traineeId: '', scenarioId: '', track: 'reception', record: true, withhold: false, batch: '' };
+  const pick = C.pick = { traineeId: '', scenarioId: '', track: 'reception', record: true, withhold: false, batch: '', graded: null };
+  // 📋 Graded mock call: starts as ⚙️ Setup says, then as the trainer last left it (on this computer).
+  const gradedPick = () => {
+    if (pick.graded === null) { let v = null; try { v = localStorage.getItem('mcv_graded'); } catch (e) {} pick.graded = v === null ? !!(App.cfg.settings && App.cfg.settings.defaultGraded) : v === '1'; }
+    return pick.graded;
+  };
 
   /* ---------- Switchboard messages ---------- */
   C.onUp = function (m) {
@@ -45,7 +50,7 @@
   };
   C.onPresence = function () { if (App.route.name === 'console') { renderRoster(); if (!active(App.t) && !(App.t && App.t.status === 'ended')) renderPickerTrainee(); } };
 
-  const fromBrief = (m) => ({ callId: m.callId, scenario: m.scenario, trainee: m.trainee, line: m.line, lineLabel: m.lineLabel, callerId: m.callerId, record: !!m.recording,
+  const fromBrief = (m) => ({ callId: m.callId, scenario: m.scenario, trainee: m.trainee, line: m.line, lineLabel: m.lineLabel, callerId: m.callerId, record: !!m.recording, graded: !!m.graded,
     ringAt: m.createdAt || Date.now(), note: m.note || {}, ticks: m.ticks || [], metrics: m.metrics || {}, traineeHeld: false, traineeMuted: false, muted: false, transfer: null, coaching: false });
 
   C.onBoard = function (m) {
@@ -118,6 +123,7 @@
         endCall(m);
         return;
       case 'gone': if (mine) endCall({ by: 'system', reason: 'gone', status: m.status }); return;
+      case 'graded': if (mine && t.status === 'ended') { t.grade = m.state; renderEnded(); } return;
     }
   };
 
@@ -129,7 +135,8 @@
     try { await VoIP.Mic.open(); } catch (e) { return U.toast(e.message, 'error'); }
     VoIP.ice();   // warm up the TURN credentials
     App.t = null;
-    App.board.send({ t: 'ring', traineeId: pick.traineeId, scenarioId: pick.scenarioId, record: pick.record && App.cfg.features.recordings, withhold: pick.withhold });
+    const graded = gradedPick();
+    App.board.send({ t: 'ring', traineeId: pick.traineeId, scenarioId: pick.scenarioId, graded, record: (pick.record || graded) && App.cfg.features.recordings, withhold: pick.withhold });
   }
 
   async function connect(t, gen) {
@@ -190,6 +197,9 @@
         t.rec = null;
         if (blob.size < 2000) throw new Error('The recording was empty.');
         await API.postBlob(`/api/recording/put?id=${encodeURIComponent(t.callId)}&dur=${durMs}`, blob, type);
+        // The copy the AI grades from (8 kHz WAV) and the dead air measured in it.
+        t.upload = 'prep'; if (App.t === t) renderEnded();
+        try { t.deadAir = (await VoIP.uploadForGrading(t.callId, blob)).deadAir; } catch (e) { t.gradeCopyError = e.message; }
         t.upload = 'done';
       } catch (e) { t.upload = 'failed'; t.uploadError = e.message; }
       if (App.t === t) renderEnded();
@@ -297,6 +307,7 @@
       : t.status === 'connecting' ? `<span class="badge amber">${t.slow ? 'Still connecting the audio…' : 'Connecting…'}</span>` : '';
     const flags = [];
     if (t.status === 'live') {
+      if (t.graded) flags.push('<span class="lb" style="background:#422006;color:#fdba74">📋 GRADED</span>');
       if (t.record) flags.push('<span class="lb rec">REC</span>');
       if (t.traineeHeld) flags.push(`<span class="lb hold">YOU'RE ON HOLD <span data-since="${t.holdAt}">${U.since(t.holdAt)}</span></span>`);
       if (t.traineeMuted) flags.push('<span class="lb mute">TRAINEE MUTED</span>');
@@ -338,16 +349,24 @@
       <div id="endedInfo"></div>
       <div class="row" style="margin-top:12px"><a class="btn btn-orange" id="scoreBtn" href="#/call/${esc(t.callId)}">📋 Score this call →</a><button class="btn" data-act="newcall">📞 Place another call</button></div>
       <p class="small muted" style="margin-top:12px">The trainee is finishing and submitting their note; you'll see it on the scorecard.</p></div>`;
+    if (!t.grade && t.graded) t.grade = 'waiting';
     renderEnded();
   }
   function renderEnded() {
     const el = U.$('#endedInfo'); const t = App.t; if (!el || !t) return;
     const sb = U.$('#scoreBtn');
-    if (sb) { const wait = t.upload === 'saving'; sb.style.pointerEvents = wait ? 'none' : ''; sb.style.opacity = wait ? '.5' : ''; }
-    el.innerHTML = !t.record ? '<p class="small muted">This call wasn\'t recorded.</p>'
+    if (sb) { const wait = t.upload === 'saving' || t.upload === 'prep'; sb.style.pointerEvents = wait ? 'none' : ''; sb.style.opacity = wait ? '.5' : ''; }
+    const rec = !t.record ? '<p class="small muted">This call wasn\'t recorded.</p>'
       : t.upload === 'saving' ? '<p class="small">⏳ Saving the recording…</p>'
-      : t.upload === 'done' ? '<p class="small">✅ Recording saved.</p>'
+      : t.upload === 'prep' ? '<p class="small">✅ Recording saved. ⏳ Preparing it for grading…</p>'
+      : t.upload === 'done' ? `<p class="small">✅ Recording saved${t.deadAir ? ` · dead air: ${t.deadAir.count ? `${t.deadAir.count} × 4 s or more (longest ${t.deadAir.longest} s)` : 'none over 4 s'}` : ''}.</p>`
       : t.upload === 'failed' ? `<p class="small err-box">The recording couldn't be saved: ${esc(t.uploadError || '')}</p>` : '';
+    const ai = !App.cfg.features.ai || (App.cfg.settings && App.cfg.settings.autograde === false) ? ''
+      : t.grade === 'done' ? `<p class="small">🤖 <b>Autograded.</b> <a href="#/call/${esc(t.callId)}">Open the scorecard</a> to check it and send it.</p>`
+      : t.grade === 'grading' ? '<p class="small">🤖 The AI is grading the call now (it listens to the recording)…</p>'
+      : t.grade === 'failed' ? '<p class="small err-box">The AI couldn\'t grade this call. Grade it on the scorecard, or try ✨ Grade again there.</p>'
+      : '<p class="small">🤖 The AI grades the call as soon as the trainee submits the note (or in 10 minutes), from the recording.</p>';
+    el.innerHTML = rec + ai;
   }
 
   // Before a call: who to ring and what to play.
@@ -363,7 +382,8 @@
           <div class="meta">${App.levelBadge(x.level)}${x.caseId ? `<span class="badge">${esc(x.caseId)}</span>` : ''}${x.custom ? '<span class="badge blue">Yours</span>' : ''}</div>
           <h4>${esc(x.title)}</h4><p><b>${esc(x.caller.name)}</b>: ${esc(x.caller.role)}</p></div>`).join('')}</div>
       <div class="row" style="margin-top:16px">
-        <label class="check"><input type="checkbox" id="pkRec" ${pick.record && App.cfg.features.recordings ? 'checked' : ''} ${App.cfg.features.recordings ? '' : 'disabled'}> Record the call${App.cfg.features.recordings ? '' : ' (recordings aren\'t set up)'}</label>
+        <label class="check" title="Graded mock calls are recorded, autograded on the program's Mock Calls Metrics, and listed in 📋 Graded calls"><input type="checkbox" id="pkGraded" ${gradedPick() ? 'checked' : ''}> <b>📋 Graded mock call</b></label>
+        <label class="check"><input type="checkbox" id="pkRec" ${(pick.record || gradedPick()) && App.cfg.features.recordings ? 'checked' : ''} ${App.cfg.features.recordings && !gradedPick() ? '' : 'disabled'}> Record the call${App.cfg.features.recordings ? (gradedPick() ? ' (always, on graded calls)' : '') : ' (recordings aren\'t set up)'}</label>
         <label class="check"><input type="checkbox" id="pkHide" ${pick.withhold ? 'checked' : ''}> Withhold the caller ID</label>
         <span class="spacer"></span>
         <button class="btn" data-act="miccheck">🎙 Mic check</button>
@@ -463,6 +483,7 @@
   function onChange(e) {
     if (e.target.id === 'batchSel') { pick.batch = e.target.value; renderRoster(); }
     else if (e.target.id === 'pkRec') pick.record = e.target.checked;
+    else if (e.target.id === 'pkGraded') { pick.graded = e.target.checked; try { localStorage.setItem('mcv_graded', pick.graded ? '1' : '0'); } catch (err) {} renderStage(); }
     else if (e.target.id === 'pkHide') pick.withhold = e.target.checked;
     else if (e.target.dataset.goal != null) { tick(Number(e.target.dataset.goal), e.target.checked); e.target.closest('.goal').classList.toggle('done', e.target.checked); }
   }

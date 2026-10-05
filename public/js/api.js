@@ -25,8 +25,8 @@
       if (!res.ok) { const e = new Error(data.error || `Error ${res.status}`); e.status = res.status; e.code = data.code; throw e; }
       return data;
     },
-    async postBlob(path, blob, type) {
-      const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': type || blob.type || 'application/octet-stream', Authorization: 'Bearer ' + memToken }, body: blob });
+    async postBlob(path, blob, type, headers) {
+      const res = await fetch(path, { method: 'POST', headers: Object.assign({ 'Content-Type': type || blob.type || 'application/octet-stream', Authorization: 'Bearer ' + memToken }, headers || {}), body: blob });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
       return data;

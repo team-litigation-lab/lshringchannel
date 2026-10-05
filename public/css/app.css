@@ -301,3 +301,23 @@ body.classview main { max-width: none; padding: 0; }
 .cv-row b { color: #94a3b8; font-weight: 600; font-size: 16px; }
 .cv-row span { color: #fff; white-space: pre-wrap; }
 .cv-empty-note { color: #64748b; font-size: 18px; padding: 20px 0; }
+
+/* ---------- 📋 graded mock calls: the metrics sheet, the report ---------- */
+table.sheet td { vertical-align: top; }
+table.sheet tr.avg td { background: #f1f5f9; border-top: 2px solid #cbd5e1; }
+table.sheet.edit .fb { margin-top: 6px; min-height: 34px; font-size: 13px; }
+table.sheet.edit th.scorecol { width: 236px; }
+table.sheet.edit .dots { flex-wrap: nowrap; gap: 3px; }
+table.sheet.edit .dots button { width: 28px; }
+table.sheet.edit .dots button.na { width: auto; }
+@media (max-width: 700px) { table.sheet.edit th.scorecol { width: auto; } table.sheet.edit .dots { flex-wrap: wrap; } }
+.dots button.na { width: auto; padding: 0 6px; font-size: 11px; font-weight: 600; }
+table.graded td.gcell { cursor: pointer; }
+table.graded td.gcell:hover { background: #f8fafc; }
+table.graded td.gcell.pass b { color: var(--green); }
+table.graded td.gcell.fail b { color: var(--red); }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+@media (max-width: 1000px) { .grid3 { grid-template-columns: 1fr; } }
+.wrow { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
+.wrow span { flex: 1; }
+.wrow input { width: 70px; padding: 4px 6px; }

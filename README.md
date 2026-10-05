@@ -8,11 +8,11 @@ The trainer rings a trainee's phone in the browser and plays the caller over liv
 - uses **Hold** (the caller hears hold music) and **Transfer** (the trainer decides whether the extension picks up);
 - takes the message or intake note, which the trainer sees as it's typed.
 
-The call is recorded, and the trainer scores it on the program's rubric. The trainee reads the scorecard in **My calls**.
+The call is recorded (the trainer can play and download it), and it's graded on the program's **Mock Calls Metrics** for its line: Reception, Calendar Management or Intake. The AI **autogrades** the call from the recording; the trainer checks the grade, edits it if needed, and sends it. The trainee reads the scorecard in **My calls**, and **📋 Graded calls** shows every trainee's grades, with a CSV export.
 
 When no trainer is free, trainees can **practice** the same calls with an **AI caller** that talks back out loud. The AI scores those calls with the same rubric.
 
-Everything runs in the browser; there are no phone numbers and no phone bills. It's a Cloudflare Worker with one Durable Object (the Switchboard). The audio goes straight between the two browsers over WebRTC, through a TURN relay when a network blocks direct audio.
+Everything runs in the browser; there are no phone numbers and no phone bills. It's a Cloudflare Worker with two Durable Objects: the Switchboard and the Grader. The audio goes straight between the two browsers over WebRTC, through a TURN relay when a network blocks direct audio.
 
 ## How a live mock call works
 
@@ -32,6 +32,7 @@ Everything runs in the browser; there are no phone numbers and no phone bills. I
 1. Signs in with their name and the trainer passphrase.
 2. **☎ Switchboard** (left) shows every trainee online, by batch: available, away, on a call, or ✋ asking for a call.
 3. Picks a trainee and the call to play (Reception, Calendar or Intake; Beginner to Advanced), then chooses:
+   - **📋 Graded mock call** (on by default; see *Graded mock calls and autograding*). A graded call is always recorded;
    - **Record the call** (on by default);
    - **Withhold the caller ID**.
 
@@ -44,12 +45,12 @@ Everything runs in the browser; there are no phone numbers and no phone bills. I
 5. When the trainee transfers, a panel asks what happens: **Picks up** (the call is handed over and ends), **No answer** or **Voicemail**. The scenario says who is out.
 6. **⏸ Coaching time-out** pauses the role-play so the trainer can coach as themselves; the trainee's phone shows it. **▶ Resume** goes back to the role-play.
    **📺 Class view** opens a tab to present in Google Meet, so the batch can listen (see *In a Google Meet class*).
-7. After the call, **📋 Score this call** opens the scorecard:
-   - rate each rubric criterion 1 to 5 with an evaluation;
-   - mark each goal ✓ / ~ / ✗ / n/a (the live ticks are already filled in);
-   - write a verdict, a summary and "next time" tips.
+7. After the call, the recording uploads and the AI grades the call on its own. **📋 Score this call** opens the scorecard:
+   - each metric of the line's Mock Calls Metrics, 1 to 5 (or n/a) with feedback, and the weighted average;
+   - each goal ✓ / ~ / ✗ / n/a (the live ticks are already filled in);
+   - a verdict, a summary and "next time" tips.
 
-   **✨ Draft with AI** listens to the recording and fills in a draft to check and edit, with a transcript. **📨 Send to the trainee** publishes it.
+   When the AI's grade is in, the scorecard holds it: **✅ Approve the AI grade & send**, or change any score or feedback and **📨 Send to the trainee**. **✨ Grade again with AI** re-grades the call.
 
 ## In a Google Meet class
 
@@ -82,6 +83,58 @@ This is separate from the platform's own recording: every live call is still rec
 - **An unanswered call** rings out after 45 seconds and shows as *Missed*.
 - **A trainee on a practice call** can't take a live call. Their trainer is told they're busy, and the trainee sees that the trainer rang.
 
+## Graded mock calls and autograding
+
+Trainer-facilitated mock calls are graded on the program's **Mock Calls Metrics** (Foundational Training, Days 4, 6 and 9), each metric scored 1 to 5 with feedback:
+
+| Line | Sheet | Metrics |
+|---|---|---|
+| Reception | Reception Mock Calls Metrics | 14: Introduction of Law Firm and Name · Authentication (Name, DOL, DOB, Claim No, Case No.) · Customer Service · Assertiveness · Listening Skills · Comprehension · Attention to Details · Resolution · Transfer Procedure · Closing Spiel · Time Management · Dead Air/Fillers · Clarity of Speech · Tone of Voice |
+| Calendar | Calendar Management Mock Calls Metrics | 7: Professional Introduction & Call Control · Client Comprehension & Flow Control · Information Verification & Accuracy · Slot Identification & Scheduling Rule Compliance · Alternative Time Offering · Calendar Creation & Attorney Reminder Setup · Notes, Recap & Call Closing (graded against the Day 6 scheduling rules) |
+| Intake | Intake Mock Calls Metrics | 16: the Reception metrics plus Setting Proper Expectations · Explaining the Process · Answering Client's Inquiries · Commitment |
+
+The grade is the **weighted average** of the scored metrics (n/a doesn't count), shown out of 5 and as a percentage (average × 20).
+
+**How a graded call goes:**
+1. The trainer ticks **📋 Graded mock call** on the console (on by default) and rings. The call bar shows 📋 GRADED, and the call is recorded.
+2. When the call ends, the console uploads the recording (to play and download) and a phone-quality copy for grading (8 kHz WAV, both voices, up to 15 minutes, with the dead air the phone measured).
+3. The **Grader** grades the call once the grading copy is in and the trainee has submitted the note. If either never comes, it grades anyway: 3 minutes after the call without the recording, 10 minutes after without the note. The AI listens to the recording and reads:
+   - the line's metrics (and, for Calendar, the scheduling rules);
+   - the call's goals and the case file;
+   - the trainee's note;
+   - what the phone measured: rings before the answer, holds, transfers, dead air.
+
+   It scores every metric with feedback in the LSH facilitator's voice, checks the goals, and writes a transcript.
+4. The call's page shows each step (waiting for the recording or the note, grading, autograded). The trainer can:
+   - **✅ Approve the AI grade & send** as it is;
+   - change any score or feedback, then **📨 Send to the trainee**;
+   - **💾 Save draft** to keep editing later (the trainee sees nothing until it's sent);
+   - **✨ Grade again with AI**.
+
+   A grade that lands while the trainer is typing never overwrites their edits; they get a button to load it instead. A failed grading is retried twice, then shows **Grade again**.
+5. The trainee sees "waiting for your trainer's review" until the grade is sent, then the full scorecard in **🗂 My calls**: each metric's score and feedback, and the weighted average.
+
+**📋 Graded calls** (trainer):
+- a table of trainees by batch, with each trainee's latest graded Reception, Calendar and Intake call: the score, the number of attempts, and whether it's ✅ sent, 🤖 waiting for approval or ⏳ not graded yet;
+- every graded call in a list below the table;
+- click a score to open the call;
+- **⬇ Export CSV**: one row per graded call, with each metric's score and feedback (opens in Excel or Google Sheets).
+
+**⚙️ Setup → 📋 Graded mock calls and autograding:**
+- **Autograde every live call** (on by default; needs the Gemini keys);
+- **Send AI grades to trainees without my approval** (off by default). When on, the AI's grade goes to the trainee as soon as it's ready, signed "AI grader"; the trainer can still change it and resend;
+- **New live calls start as 📋 graded**;
+- **Pass mark** (optional), for Pass / Below badges in the scorecard and the report;
+- **Metric weights**: per line, 1 = normal, 2 = counts double, 0 = left out.
+
+**Downloads:**
+- **⬇ Download the recording** on the call's page (see *Recordings* below);
+- **⬇ Export CSV** in 📋 Graded calls.
+
+**Without Gemini keys:** graded calls work the same, but the trainer scores every metric by hand.
+
+**Costs:** each grading is one Gemini request with the call's audio (about 32 tokens a second of audio, so a 6-minute call is about 12,000 tokens) and runs on the same key pool as the rest of the AI.
+
 ## The calls
 
 24 calls. Case files are the training CMS's Training Library (`CaseManagementTraining/mock-cases.js`, MC-01 … MC-36). **Case lookup** shows the same facts, with a link to open the case in the CMS.
@@ -110,13 +163,13 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
   - both sides are transcribed and recorded.
 
   **Show the live transcript** is optional. **Type instead of talking** runs the call as text, for when there's no microphone or live voice isn't available.
-- When the trainee submits the note, the AI scores the call on the rubric and the goals, in the LSH facilitator's voice (the same feedback DNA as the Foundational platform). Trainers can override it with their own review.
-- **✨ Draft with AI** on a live call sends the recording (as 8 kHz audio, up to 15 minutes) for a transcript and a draft scorecard.
+- When the trainee submits the note, the AI grades the practice call on the same Mock Calls Metrics and the goals, in the LSH facilitator's voice (the same feedback DNA as the Foundational platform), from the recording of a voice call. Trainers can override it with their own review.
+- Live calls are autograded from their recording (see *Graded mock calls and autograding*).
 - **Keys:** the same Gemini key pool as the Foundational Worker, `GEMINI_API_KEY5` … `GEMINI_API_KEY9`, then `GEMINI_API_KEY`, `_KEY1` and `_KEY2`.
   - Each request starts on the next key; a key at its limit rests while the others take over.
   - Keys from different Google Cloud projects add capacity; keys from the same project share one allowance.
   - The key never reaches the browser: live voice uses a single-use token with the caller's script locked in.
-  - Without keys, live calls work as normal; Practice and AI drafts are off.
+  - Without keys, live calls work as normal; Practice and autograding are off.
 - **Limits (enforced by the server):**
   - each practice call runs at most `AI_MAX_MINUTES` (default 8); the Switchboard closes it even if the tab was closed;
   - each trainee gets 30 practice calls, 60 live-voice connections and 40 scorings an hour.
@@ -125,8 +178,8 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
 ## Deploy (Cloudflare)
 
 1. **Create the Worker from this repo:** in Cloudflare, go to **Workers & Pages → Create → Import a repository**, pick `team-litigation-lab/lshringchannel`, and keep the defaults: `npx wrangler deploy` deploys `wrangler.json`. From a computer instead: `npm install`, then `npx wrangler deploy`.
-   - The **Durable Object** (the Switchboard) is created on the first deploy (migration `v1`). It's SQLite-backed, which the Workers Free plan supports.
-   - **Recordings** go in the shared **`LSH_KV`** namespace (the same one as the other LSH courses), under `voip:`. They delete themselves after `RECORDING_DAYS` (default 90).
+   - The **Durable Objects** are created on deploy: the Switchboard (migration `v1`) and the Grader (migration `v2`). They're SQLite-backed, which the Workers Free plan supports.
+   - **Recordings** go in the shared **`LSH_KV`** namespace (the same one as the other LSH courses), under `voip:`. They delete themselves after `RECORDING_DAYS` (default 90). The grading copies (`voip:wav:`) delete themselves after 14 days.
 2. **Add the secrets:** in the Worker, go to **Settings → Variables and Secrets** (or `npx wrangler secret put <NAME>`):
 
    | Secret | What it does |
@@ -135,7 +188,7 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
    | `SESSION_SECRET` | Optional. Signs sign-in tokens (defaults to `ADMIN_PASSPHRASE`; changing it signs everyone out). |
    | `TRAINEE_CODE` | Optional. A code trainees must enter to sign in. Without it, anyone with the link can create a trainee account (their own PIN still protects everyone else's). |
    | `TURN_KEY_ID`, `TURN_KEY_API_TOKEN` | **Recommended.** Cloudflare's TURN relay (step 3). |
-   | `GEMINI_API_KEY5` … `GEMINI_API_KEY9` | Optional. AI practice callers and AI scoring. |
+   | `GEMINI_API_KEY5` … `GEMINI_API_KEY9` | Optional. AI practice callers and autograding. |
 
 3. **Set up the TURN relay:** in Cloudflare, go to **Realtime → TURN Server → Create**, then copy the **Turn Token ID** into `TURN_KEY_ID` and the **API Token** into `TURN_KEY_API_TOKEN`.
    - Without it, most calls still connect directly. Trainees on strict home routers, mobile data or office networks may get no audio: their phone says "Still connecting the audio…".
@@ -171,20 +224,23 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - signing in as another trainee with a wrong PIN, or none, is refused;
   - a second trainer tab opened mid-call leaves the call alone;
   - a reload of the trainee's page and of the trainer's console mid-call (both reconnect);
-  - hang up, the recording saved, played and downloaded, the note submitted, the scorecard sent;
+  - a 📋 graded call: hang up, the recording and its grading copy uploaded, the note submitted, then the call autograded from the recording with no clicks (all 14 Reception metrics, the transcript);
+  - the recording played and downloaded, the AI grade approved and sent with one click;
   - "Save draft" after sending keeps the edits from the trainee;
-  - the trainee reads the scorecard (the caller's script and unsent drafts never reach the trainee);
+  - 📋 Graded calls and its CSV (every metric's score and feedback);
+  - the trainee reads the scorecard and the weighted average (the caller's script and unsent drafts never reach the trainee);
   - a declined call.
-- `e2e-ai.js`: a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, AI scoring, a typed practice call, the trainer's AI draft from a live recording, and a live-only call that can't be practiced.
+- `e2e-ai.js`: a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, autograding, a typed practice call, the trainer's **Grade again with AI**, and a live-only call that can't be practiced.
 
 ## Files
 
 | Path | What it is |
 |---|---|
 | `src/worker.js` | The Worker: sign-in, the API, recordings (KV), TURN credentials, AI practice and scoring. |
-| `src/switchboard.js` | The Switchboard Durable Object: every phone's WebSocket (presence, ringing, WebRTC signaling, hold, transfer, notes, coaching), the reconnect grace period and ring timeout (alarms), and the call records, trainees and written scenarios (SQLite). |
-| `src/scenarios.js` | The firm (directory, rules), the case files, the note forms, the rubrics, and the 24 calls. |
-| `src/prompts.js` | The AI caller's instructions and the scorer's (the facilitator's voice). |
+| `src/switchboard.js` | The Switchboard Durable Object: every phone's WebSocket (presence, ringing, WebRTC signaling, hold, transfer, notes, coaching), the reconnect grace period and ring timeout (alarms), the call records, trainees, written scenarios and grading settings (SQLite), and when a call is ready to grade. |
+| `src/grader.js` | The Grader Durable Object: the queue of calls to autograde, one at a time, with retries. |
+| `src/scenarios.js` | The firm (directory, rules), the case files, the note forms, the Mock Calls Metrics, and the 24 calls. |
+| `src/prompts.js` | The AI caller's instructions and the grader's (the metrics, the facilitator's voice). |
 | `src/gemini.js` | The Gemini key pool, text and audio scoring, and Gemini Live tokens. |
 | `src/auth.js` | Sign-in tokens, trainee ids (the same shapes as the other LSH platforms) and PIN hashing. |
 | `public/index.html`, `public/css/app.css` | The app shell and its look (LSH navy and orange, IBM Plex). |
@@ -195,13 +251,13 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `public/js/app.js` | Sign-in, pages, the phone screen, the note form, case lookup, the directory. |
 | `public/js/trainee.js` | 📞 My phone and 🎧 Practice. |
 | `public/js/console.js` | 🎛 The trainer's console. |
-| `public/js/review.js` | 🗂 Calls, a call's review and scorecard (recording playback and download), 📚 Scenarios, 👥 Trainees, ⚙️ Setup. |
+| `public/js/review.js` | 🗂 Calls, a call's review and scorecard (recording playback and download, approving the AI's grade), 📋 Graded calls (and the CSV), 📚 Scenarios, 👥 Trainees, ⚙️ Setup. |
 | `public/js/classview.js` | 📺 The Class view: a tab to present in Google Meet (plays the call, shows the live note, never the script). |
 | `tests/` | The end-to-end tests. |
 
 **Data:**
-- Durable Object SQLite: trainees (with a salted hash of each PIN), calls (timings, the note, the transcript, the reviews), written scenarios, and usage counts for the AI and sign-in limits.
-- KV (`LSH_KV`, prefix `voip:`): recordings only.
+- Durable Object SQLite: trainees (with a salted hash of each PIN), calls (timings, the note, the transcript, the AI's grade and the reviews), written scenarios, grading settings, usage counts for the AI and sign-in limits, and the Grader's queue.
+- KV (`LSH_KV`, prefix `voip:`): recordings, and their grading copies.
 
 Trainee ids match the other LSH platforms (`name--batch`). Trainers can archive trainees in **👥 Trainees**.
 

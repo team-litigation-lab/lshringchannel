@@ -19,13 +19,15 @@
      sees the trainee's submitted note the moment it is sent).
    ========================================================= */
 import { DurableObject } from 'cloudflare:workers';
-import { SCENARIOS, cleanScenario, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM } from './scenarios.js';
+import { SCENARIOS, cleanScenario, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM, weightedScore, DEFAULT_SETTINGS } from './scenarios.js';
 import { hashPin, checkPin } from './auth.js';
 
 const RING_MS = 45000;     // an unanswered call rings out after 45 seconds
 const GRACE_MS = 30000;    // a dropped phone has 30 seconds to reconnect before its call ends
 const MAX_CALL_MS = 2 * 3600 * 1000;
 const PIN_TRIES = 5;       // wrong PINs allowed per trainee in 15 minutes
+const AUDIO_WAIT = 3 * 60000;   // autograding waits this long after a call for its recording …
+const NOTE_WAIT = 10 * 60000;   // … and this long for the trainee to submit the note
 const OPEN = 1;
 
 const now = () => Date.now();
@@ -49,6 +51,7 @@ export class Switchboard extends DurableObject {
     this.sql.exec(`CREATE INDEX IF NOT EXISTS calls_by_time ON calls (created_at)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS scenarios (id TEXT PRIMARY KEY, data TEXT, updated_at INTEGER, deleted INTEGER DEFAULT 0)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS usage (id INTEGER PRIMARY KEY AUTOINCREMENT, who TEXT, kind TEXT, at INTEGER)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT)`);
     // Each trainee's PIN (a salted hash), set at their first sign-in.
     if (!this.sql.exec(`SELECT name FROM pragma_table_info('trainees') WHERE name = 'pin'`).toArray().length) this.sql.exec('ALTER TABLE trainees ADD COLUMN pin TEXT');
     // Phones ping every 20 seconds; this answers without waking the object.
@@ -111,7 +114,7 @@ export class Switchboard extends DurableObject {
     const b = { callId: r.id, status: r.status, line, lineLabel: LINES[line].label, lineNumber: LINES[line].number, track: s.track,
       callerId: r.data.withheld ? { name: 'PRIVATE CALLER', number: 'Unknown' } : { name: s.caller.idName, number: s.caller.number },
       createdAt: r.created_at, answeredAt: r.answered_at || null, recording: !!r.data.record, trainer: r.trainer, live: r.data.live || {} };
-    if (role === 'a') Object.assign(b, { scenario: s, trainee: { id: r.trainee_id, name: r.trainee_name, batch: r.batch }, note: r.data.note || {}, ticks: r.data.ticks || [], metrics: r.data.metrics || {}, traineeCid: r.data.traineeCid || null });
+    if (role === 'a') Object.assign(b, { scenario: s, graded: !!r.data.graded, trainee: { id: r.trainee_id, name: r.trainee_name, batch: r.batch }, note: r.data.note || {}, ticks: r.data.ticks || [], metrics: r.data.metrics || {}, traineeCid: r.data.traineeCid || null });
     else Object.assign(b, { trainerCid: r.data.trainerCid || null, note: r.data.note || {}, hideCases: s.hideCases || [], caseId: null });
     return b;
   }
@@ -167,6 +170,7 @@ export class Switchboard extends DurableObject {
     }
     this.clearCallOn(r.id);
     this.presence();
+    if (r.status === 'ended') this.scheduleGrade(r.id).catch(() => {});
   }
 
   // What's happening on the line now (so a phone that reloads can show it again).
@@ -233,7 +237,7 @@ export class Switchboard extends DurableObject {
         if (!phones.length) return this.send(ws, { t: 'ring-failed', reason: `${tr.name} isn't online.` });
         if (phones.some((w) => { const a = this.att(w); if (!a.call) return false; const c = this.row(a.call); return c && ['ringing', 'live'].includes(c.status); })) return this.send(ws, { t: 'ring-failed', reason: `${tr.name} is on another call.` });
         const r2 = { id: newId(), mode: 'live', track: s.track, scenario_id: s.id, title: s.title, trainee_id: tr.id, trainee_name: tr.name, batch: tr.batch, trainer: me.name,
-          status: 'ringing', created_at: t, data: { scenario: s, trainerCid: me.cid, record: m.record !== false, withheld: !!m.withhold, metrics: {}, note: {}, ticks: [], events: [{ t: 'ring', at: t }] } };
+          status: 'ringing', created_at: t, data: { scenario: s, trainerCid: me.cid, graded: !!m.graded, record: m.record !== false || !!m.graded, withheld: !!m.withhold, metrics: {}, note: {}, ticks: [], events: [{ t: 'ring', at: t }] } };
         this.save(r2);
         this.setAtt(ws, { call: r2.id });
         phones.forEach((w) => { this.setAtt(w, { call: r2.id, hand: false, handAt: 0 }); this.send(w, Object.assign({ t: 'incoming' }, this.brief(r2, 't'))); });
@@ -460,7 +464,8 @@ export class Switchboard extends DurableObject {
       const d = JSON.parse(r.data || '{}');
       return { id: r.id, mode: r.mode, track: r.track, scenarioId: r.scenario_id, title: r.title, traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, trainer: r.trainer,
         status: r.status, createdAt: r.created_at, answeredAt: r.answered_at, endedAt: r.ended_at, reviewed: !!r.reviewed, score: r.score, draft: !!d.reviewDraft,
-        talkMs: d.metrics && d.metrics.talkMs, ringMs: d.metrics && d.metrics.ringMs, recording: !!d.recording, ai: !!d.ai, noteSubmitted: !!d.noteSubmittedAt, reviewSeen: !!(d.review && d.review.seenAt) };
+        talkMs: d.metrics && d.metrics.talkMs, ringMs: d.metrics && d.metrics.ringMs, recording: !!d.recording, ai: !!d.ai, noteSubmitted: !!d.noteSubmittedAt, reviewSeen: !!(d.review && d.review.seenAt),
+        graded: !!d.graded, aiScore: d.aiScore != null ? d.aiScore : null, autograde: (d.autograde && d.autograde.state) || '' };
     });
   }
   getCall(id) { return this.row(id); }
@@ -500,7 +505,7 @@ export class Switchboard extends DurableObject {
     const d = r.data;
     if (mine) {
       if (p.note && !d.noteSubmittedAt) d.note = cleanNote(r.track, p.note);
-      if (p.submit && !d.noteSubmittedAt && r.status !== 'live') d.noteSubmittedAt = now();
+      if (p.submit && !d.noteSubmittedAt && r.status !== 'live') { d.noteSubmittedAt = now(); r._grade = 'note'; }
       if (p.seen && d.review && !d.review.seenAt) d.review.seenAt = now();
       if (r.mode === 'ai' && r.status === 'live') {
         if (Array.isArray(p.transcript) && !d.typed) d.transcript = p.transcript.slice(0, 400).map((x) => ({ who: x && x.who === 'caller' ? 'caller' : 'trainee', text: String((x && x.text) || '').slice(0, 1500) })).filter((x) => x.text);
@@ -511,46 +516,163 @@ export class Switchboard extends DurableObject {
             transfers: (Array.isArray(m.transfers) ? m.transfers : []).slice(0, 10).map((x) => ({ to: String(x.to || '').slice(0, 80), ext: String(x.ext || '').slice(0, 8), result: String(x.result || '').slice(0, 20) })),
             voice: m.voice === 'text' ? 'text' : 'voice' };
         }
-        if (p.end) { r.status = 'ended'; r.ended_at = now(); }
+        if (p.end) { r.status = 'ended'; r.ended_at = now(); r._grade = 'end'; }
       }
     }
     // The trainee only ever sees the review that was sent; a saved draft stays with the trainer until sent.
     if (who.role === 'a' && p.review) {
       const v = p.review, str = (x, n) => String(x == null ? '' : x).slice(0, n);
       const score5 = (x) => { const n = Math.round(Number(x)); return n >= 1 && n <= 5 ? n : null; };
-      const criteria = (Array.isArray(v.criteria) ? v.criteria : []).slice(0, 8).map((c) => ({ name: str(c.name, 80), score: score5(c.score), evaluation: str(c.evaluation, 1500) }));
-      const scores = criteria.map((c) => c.score).filter(Boolean);
+      const criteria = (Array.isArray(v.criteria) ? v.criteria : []).slice(0, 24).map((c) => ({ name: str(c.name, 80), score: score5(c.score), evaluation: str(c.evaluation, 1500) }));
+      const sc = weightedScore(r.track, criteria, this.getSettings().weights);
       const rev = { verdict: str(v.verdict, 80), summary: str(v.summary, 3000), criteria,
         goals: (Array.isArray(v.goals) ? v.goals : []).slice(0, 20).map((g) => ({ goal: str(g.goal, 300), met: ['yes', 'partly', 'no', 'n/a'].includes(g.met) ? g.met : 'no', evidence: str(g.evidence, 500) })),
         note: str(v.note, 1500), tips: (Array.isArray(v.tips) ? v.tips : []).slice(0, 5).map((x) => str(x, 300)).filter(Boolean),
-        by: who.id, savedAt: now() };
+        by: who.id, savedAt: now(), avg: sc ? sc.avg : null, pct: sc ? sc.pct : null };
       if (v.send) {
         d.review = Object.assign(rev, { sentAt: now(), seenAt: null });
         delete d.reviewDraft;
         r.reviewed = 1;
-        r.score = scores.length ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 20) : null;
+        r.score = sc ? sc.pct : null;
       } else d.reviewDraft = rev;
     }
+    const why = r._grade; delete r._grade;
     this.save(r);
+    // The note is in (or a practice call ended): the call may be ready to grade. A note submitted after
+    // the AI already graded without it is graded again, unless a trainer has started on the review.
+    if (why) this.scheduleGrade(r.id, { again: why === 'note' && !d.review && !d.reviewDraft }).catch(() => {});
     return { ok: true, call: r };
   }
 
-  // The AI's scorecard: shown to the trainee on practice calls; a draft for the trainer on live calls.
-  setGrade(id, grade, draft) {
+  /* ---------------- autograding ----------------
+     A call is graded once it has ended, its recording for grading is in (if it was recorded) and the
+     trainee has submitted the note; or after AUDIO_WAIT / NOTE_WAIT if either never comes. The Grader
+     (src/grader.js) does the grading and calls applyAutograde. `force` grades now (a trainer's
+     "grade again", or a practice call the trainee submitted). */
+  async scheduleGrade(id, opts) {
+    opts = opts || {};
+    const r = this.row(id);
+    if (!r || r.status !== 'ended' || !this.env.GRADER) return null;
+    const d = r.data, st = this.getSettings();
+    if (!opts.force && r.mode === 'live' && !st.autograde) return null;
+    const ag = d.autograde || {};
+    if (!opts.force && !opts.again && (ag.state === 'done' || ag.state === 'grading')) return ag;
+    const t = now(), end = r.ended_at || t;
+    let due = t;
+    if (!opts.force) {
+      const recorded = r.mode === 'live' ? !!d.record : !!(d.metrics && d.metrics.voice === 'voice');
+      if (recorded && this.env.LSH_KV && !d.gradeAudio) due = Math.max(due, end + AUDIO_WAIT);
+      if (!d.noteSubmittedAt) due = Math.max(due, end + NOTE_WAIT);
+    }
+    d.autograde = { state: 'queued', due, at: t };
+    this.save(r);
+    await this.env.GRADER.get(this.env.GRADER.idFromName('grader')).enqueue(id, due);
+    this.tellGraded(r);
+    return d.autograde;
+  }
+  // The recording for grading (8 kHz WAV in KV) and what the phone measured in it (dead air).
+  async markGradeAudio(id, stats) {
     const r = this.row(id);
     if (!r) return null;
-    grade.at = now();
-    if (grade.transcript && !(r.data.transcript && r.data.transcript.length)) r.data.transcript = grade.transcript;
+    r.data.gradeAudio = true;
+    if (stats) r.data.audioStats = stats;
+    this.save(r);
+    await this.scheduleGrade(id, { again: !!(r.data.autograde && r.data.autograde.state === 'done' && !r.data.autograde.fromAudio && !r.data.review && !r.data.reviewDraft) });
+    return true;
+  }
+  autogradeState(id, patch) {
+    const r = this.row(id);
+    if (!r) return null;
+    r.data.autograde = Object.assign({}, r.data.autograde || {}, patch, { at: now() });
+    this.save(r);
+    this.tellGraded(r);
+    return r.data.autograde;
+  }
+  // The AI's scorecard: on a practice call it's the trainee's result; on a live call it's a draft for the
+  // trainer, or the trainee's review straight away when ⚙️ Setup releases AI grades automatically.
+  applyAutograde(id, grade) {
+    const r = this.row(id);
+    if (!r) return null;
+    const d = r.data, st = this.getSettings();
+    const sc = weightedScore(r.track, grade.criteria, st.weights);
+    grade.at = now(); grade.ai = true;
+    grade.avg = sc ? sc.avg : null; grade.pct = sc ? sc.pct : null;
+    if (grade.transcript && !(d.transcript && d.transcript.length)) d.transcript = grade.transcript;
     delete grade.transcript;
-    if (draft) r.data.aiDraft = grade;
+    d.autograde = { state: 'done', at: now(), fromAudio: !!grade.fromAudio, model: grade.model || '' };
+    if (r.mode === 'ai') { d.ai = grade; if (!r.reviewed) r.score = grade.pct; }
     else {
-      r.data.ai = grade;
-      const scores = grade.criteria.map((c) => c.score).filter(Boolean);
-      if (!r.reviewed && scores.length) r.score = Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 20);
+      d.aiDraft = grade;
+      d.aiScore = grade.pct;
+      if (st.autoRelease && !(d.review && !d.review.ai) && !d.reviewDraft) {
+        d.review = Object.assign({}, grade, { by: 'AI grader', sentAt: now(), seenAt: null });
+        r.reviewed = 1; r.score = grade.pct;
+      }
     }
     this.save(r);
+    this.tellGraded(r);
     return r;
   }
+  // Open pages of the trainer and the trainee update when a call's grade changes.
+  tellGraded(r) {
+    const msg = { t: 'graded', callId: r.id, state: (r.data.autograde || {}).state || '' };
+    for (const w of this.ctx.getWebSockets()) {
+      if (w.readyState !== OPEN) continue;
+      const a = this.att(w);
+      if ((a.role === 'a') || (a.role === 't' && a.id === r.trainee_id)) this.send(w, msg);
+    }
+  }
+
+  /* ---------------- ⚙️ settings (graded mock calls) ---------------- */
+  getSettings() {
+    const row = this.sql.exec(`SELECT v FROM settings WHERE k = 'grading'`).toArray()[0];
+    const v = row ? JSON.parse(row.v) : {};
+    const out = Object.assign({}, DEFAULT_SETTINGS, v);
+    out.weights = Object.assign({ reception: {}, calendar: {}, intake: {} }, v.weights || {});
+    return out;
+  }
+  saveSettings(o) {
+    o = o || {};
+    const cur = this.getSettings();
+    const weights = {};
+    for (const [track, t] of Object.entries(TRACKS)) {
+      weights[track] = {};
+      const w = (o.weights && o.weights[track]) || cur.weights[track] || {};
+      t.rubric.forEach((m) => { const k = Number(w[m.name]); if (Number.isFinite(k) && k >= 0 && k <= 10 && k !== 1) weights[track][m.name] = Math.round(k * 100) / 100; });
+    }
+    const pm = Number(o.passMark);
+    const v = {
+      autograde: o.autograde === undefined ? cur.autograde : !!o.autograde,
+      autoRelease: o.autoRelease === undefined ? cur.autoRelease : !!o.autoRelease,
+      defaultGraded: o.defaultGraded === undefined ? cur.defaultGraded : !!o.defaultGraded,
+      passMark: o.passMark === null || o.passMark === '' ? null : Number.isFinite(pm) && pm > 0 && pm <= 100 ? Math.round(pm) : cur.passMark,
+      weights
+    };
+    this.sql.exec(`INSERT OR REPLACE INTO settings (k, v) VALUES ('grading', ?)`, JSON.stringify(v));
+    return this.getSettings();
+  }
+
+  // 📋 Graded mock calls: every graded live call with its scorecard (the sent review, else the AI's draft).
+  gradedCalls(f) {
+    f = f || {};
+    const args = [];
+    let where = `mode = 'live' AND status = 'ended'`;
+    if (f.batch) { where += ' AND batch = ?'; args.push(f.batch); }
+    const rows = this.sql.exec(`SELECT * FROM calls WHERE ${where} ORDER BY created_at DESC LIMIT 2000`, ...args).toArray();
+    const out = [];
+    for (const r of rows) {
+      const d = JSON.parse(r.data || '{}');
+      if (!d.graded) continue;
+      const card = (d.review && d.review.sentAt ? d.review : null) || d.aiDraft || null;
+      out.push({ id: r.id, createdAt: r.created_at, traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, track: r.track, title: r.title, trainer: r.trainer,
+        status: d.review && d.review.sentAt ? (d.review.ai ? 'released' : 'reviewed') : d.aiDraft ? 'ai' : (d.autograde && d.autograde.state) || 'pending',
+        score: r.reviewed ? r.score : d.aiScore != null ? d.aiScore : null, avg: card ? card.avg : null,
+        criteria: card ? card.criteria : [], verdict: card ? card.verdict : '', summary: card ? card.summary : '',
+        talkMs: d.metrics && d.metrics.talkMs, recording: !!d.recording, noteSubmitted: !!d.noteSubmittedAt });
+    }
+    return out;
+  }
+
   setRecording(id, meta) {
     const r = this.row(id);
     if (!r) return null;

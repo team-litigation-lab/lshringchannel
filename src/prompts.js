@@ -54,7 +54,7 @@ Grade severity in the wording ("Only minor … issues were noted", "significant 
 
 function fmtMs(ms) { const s = Math.round((ms || 0) / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 
-export function metricsText(m) {
+export function metricsText(m, audio) {
   if (!m) return 'Not recorded.';
   const rows = [];
   if (m.ringMs != null) rows.push(`Answered after ${Math.round(m.ringMs / 1000)} seconds (${Math.max(1, Math.ceil(m.ringMs / 6000))} ring${m.ringMs > 6000 ? 's' : ''}; the standard is within 3 rings).`);
@@ -63,7 +63,9 @@ export function metricsText(m) {
   if (holds.length) rows.push(`Put the caller on hold ${holds.length} time(s): ${holds.map((h) => fmtMs((h.end || h.start) - h.start)).join(', ')}.`);
   else rows.push('No holds.');
   (m.transfers || []).forEach((t) => rows.push(`Transfer to ${t.to} (ext ${t.ext}): ${t.result || 'not completed'}.`));
-  if (m.endedBy) rows.push(`Call ended by the ${m.endedBy}.`);
+  if (m.endedBy) rows.push(`Call ended by the ${m.endedBy === 'trainer' ? 'caller' : m.endedBy}${m.endReason === 'transferred' ? ' (transferred)' : ''}.`);
+  const d = audio && audio.deadAir;
+  if (d) rows.push(d.count ? `Dead air measured in the recording (both sides silent for 4 seconds or more, holds excluded): ${d.count} time(s), ${d.total} s in all, the longest ${d.longest} s${(d.gaps || []).length ? ' (at ' + d.gaps.slice(0, 6).map((g) => fmtMs(g[0] * 1000)).join(', ') + ')' : ''}.` : 'No dead air of 4 seconds or more measured in the recording.');
   return rows.join(' ');
 }
 
@@ -77,66 +79,70 @@ export function transcriptText(tr) {
   return (tr || []).map((x) => `${x.who === 'caller' ? 'CALLER' : 'TRAINEE'}: ${x.text}`).join('\n');
 }
 
-/* The scorer. `transcript` may be empty when the audio is attached instead (live calls). */
+/* The grader: the program's Mock Calls Metrics for the call's line, each scored 1 to 5 with feedback.
+   opts.audio: the call's recording is attached (8 kHz WAV, both voices): the grader transcribes it and
+   judges the voice metrics by listening. Without it, it works from the transcript and the note. */
 export function gradePrompt(s, call, opts) {
   const t = TRACKS[s.track] || TRACKS.reception;
+  const audio = !!(opts && opts.audio);
   const onFile = s.caseId && !(s.hideCases || []).includes(s.caseId) ? CASES[s.caseId] : null;
   const ref = s.reference && CASES[s.reference];
-  const system = `You score mock phone calls for the LSH Foundational Training program (legal virtual assistants at a personal-injury law firm). You are fair, specific and strict about confidentiality and accuracy.\n\n${VOICE}`;
+  const system = `You grade mock phone calls for the LSH Foundational Training program (legal virtual assistants at a personal-injury law firm), using the program's ${t.sheet}. You are fair, specific and strict about confidentiality and accuracy.\n\n${VOICE}`;
   const prompt = `THE FIRM: ${FIRM.name} (fictional). Main line ${FIRM.mainLine}.
 Directory: ${FIRM.directory.map((d) => `${d.name} (${d.role}) ${d.ext}`).join(' · ')}
 Front-desk rules:
 ${FIRM.rules.map((r) => '- ' + r).join('\n')}
-
-THE CALL: "${s.title}" (${t.label} call, level ${s.level}).
+${t.rules ? `\nTHE CALENDAR GUIDELINES (Training Guide, Day 6). The call's own situation below (who is free, which slots are open) comes first; apply these where they fit:\n${t.rules.map((r) => '- ' + r).join('\n')}\n` : ''}
+THE CALL: "${s.title}" (${t.label} mock call, level ${s.level}).
 The trainee's role: ${s.you}
 The situation: ${s.facts}
 The caller: ${s.caller.name}, ${s.caller.role}. What the caller knew and how they were told to behave: ${s.hidden}
 ${onFile ? `\nTHE CASE FILE THE TRAINEE HAD (${onFile.id}):\n${onFile.text}\n` : '\nNothing was on file for this caller (a first call).\n'}${ref && ref !== onFile ? `\nFOR REFERENCE, THE FINISHED FILE (what a complete intake would capture; the trainee did not have it):\n${ref.text}\n` : ''}
-WHAT A GOOD CALL DOES (the goals):
+WHAT THIS CALL SHOULD ACHIEVE (the call's own checklist):
 ${(s.goals || []).map((g, i) => `${i + 1}. ${g}`).join('\n')}
 
-THE RUBRIC (score each 1 to 5: 5 excellent, 4 good, 3 satisfactory, 2 needs improvement, 1 not done or wrong):
-${t.rubric.map((r) => `- ${r.name}: ${r.desc}`).join('\n')}
+THE METRICS (${t.sheet}). Score each 1 to 5: 5 excellent, 4 good, 3 satisfactory, 2 needs improvement, 1 not done or wrong. Use null only when the call gave no chance to show it (for example no transfer was needed and none was attempted wrongly${audio ? '' : ', or a voice metric with no recording'}):
+${t.rubric.map((r, i) => `M${i + 1}. ${r.name} — ${r.desc}`).join('\n')}
 
-CALL HANDLING (measured by the phone system): ${metricsText(call.metrics)}
+MEASURED BY THE PHONE SYSTEM: ${metricsText(call.metrics, call.audioStats)}
 
 THE TRAINEE'S NOTE:
 ${noteText(s, call.note)}
 
-${opts && opts.audio ? `THE CALL: the recording is attached (the trainee works at the firm; the caller is ${s.caller.name}). First transcribe it faithfully, labelling each turn TRAINEE or CALLER, then score it.` : `THE TRANSCRIPT:\n${transcriptText(call.transcript) || '(empty: the trainee said nothing)'}`}
+${audio ? `THE CALL: the recording is attached (both voices; the trainee works at the firm, the caller is ${s.caller.name}${call.mode === 'live' ? ', played by the trainer' : ''}). Hold music is the trainee's hold, not dead air. First transcribe it faithfully, labelling each turn TRAINEE or CALLER; then grade. Judge Listening Skills, Dead Air/Fillers, Clarity of Speech and Tone of Voice by listening to the trainee's voice.` : `THE TRANSCRIPT:\n${transcriptText(call.transcript) || '(empty: the trainee said nothing)'}\n${call.transcript && call.transcript.length ? 'There is no recording: judge the voice metrics only as far as the words show (fillers, long gaps noted above); otherwise null.' : ''}`}
 
-Score only what the ${opts && opts.audio ? 'recording' : 'transcript'} and the note show. A goal the trainee never had the chance to reach (the caller never raised it) is "n/a". Quote the trainee's words as evidence where you can.
+Grade only what the ${audio ? 'recording' : 'transcript'}, the measurements and the note show. Each metric's feedback is 1 to 3 specific sentences in the facilitator's voice, quoting the trainee where you can.
 Answer with JSON only, in this shape:
-{${opts && opts.audio ? '\n "transcript": [{"who": "trainee" | "caller", "text": "…"}],' : ''}
+{${audio ? '\n "transcript": [{"who": "trainee" | "caller", "text": "…"}],' : ''}
  "verdict": "one verdict label",
- "summary": "2–4 sentences in the facilitator's voice",
- "criteria": [${t.rubric.map((r) => `{"name": "${r.name}", "score": 1-5, "evaluation": "2–3 specific sentences"}`).join(', ')}],
- "goals": [{"goal": "the goal as written", "met": "yes" | "partly" | "no" | "n/a", "evidence": "a short quote or reason"}],
+ "summary": "2–4 sentences in the facilitator's voice: the strength first, then 'However, improvement is needed in …'",
+ "criteria": [${t.rubric.map((r) => `{"name": ${JSON.stringify(r.name)}, "score": 1-5 or null, "evaluation": "feedback"}`).join(', ')}],
+ "goals": [{"goal": "the checklist item as written", "met": "yes" | "partly" | "no" | "n/a", "evidence": "a short quote or reason"}],
  "note": "1–2 sentences on the note: what is missing or wrong, field by field",
  "tips": ["2–3 short, concrete things to do on the next call"]
 }`;
   return { system, prompt };
 }
 
-// Keep a model's scorecard to the shape the page shows.
+// Keep a model's scorecard to the shape the page shows: every metric of the sheet, in order.
 export function cleanGrade(s, g) {
   if (!g || typeof g !== 'object') return null;
   const t = TRACKS[s.track] || TRACKS.reception;
   const str = (v, n) => String(v == null ? '' : v).slice(0, n || 1200);
+  const list = Array.isArray(g.criteria) ? g.criteria : [];
+  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
   const criteria = t.rubric.map((r, i) => {
-    const list = Array.isArray(g.criteria) ? g.criteria : [];
-    const x = list.find((c) => c && String(c.name || '').toLowerCase().startsWith(r.name.toLowerCase().slice(0, 12))) || list[i] || {};
+    const x = list.find((c) => c && norm(c.name) === norm(r.name)) || list.find((c) => c && norm(c.name).startsWith(norm(r.name).slice(0, 14))) || list[i] || {};
     const n = Math.round(Number(x.score));
-    const score = n >= 1 && n <= 5 ? n : null;
-    return { name: r.name, score, evaluation: str(x.evaluation, 900) };
+    return { name: r.name, score: n >= 1 && n <= 5 ? n : null, evaluation: str(x.evaluation, 900) };
   });
+  if (!criteria.some((c) => c.score)) return null;
   const goals = (s.goals || []).map((goal, i) => {
     const x = (g.goals || [])[i] || {};
     const met = ['yes', 'partly', 'no', 'n/a'].includes(String(x.met).toLowerCase()) ? String(x.met).toLowerCase() : 'no';
     return { goal, met, evidence: str(x.evidence, 400) };
   });
   const out = { verdict: str(g.verdict, 80), summary: str(g.summary, 1600), criteria, goals, note: str(g.note, 800), tips: (Array.isArray(g.tips) ? g.tips : []).slice(0, 4).map((x) => str(x, 300)) };
-  if (Array.isArray(g.transcript)) out.transcript = g.transcript.slice(0, 400).map((x) => ({ who: x && x.who === 'caller' ? 'caller' : 'trainee', text: str(x && x.text, 1200) })).filter((x) => x.text);
+  if (Array.isArray(g.transcript)) out.transcript = g.transcript.slice(0, 600).map((x) => ({ who: x && x.who === 'caller' ? 'caller' : 'trainee', text: str(x && x.text, 1200) })).filter((x) => x.text);
   return out;
 }
