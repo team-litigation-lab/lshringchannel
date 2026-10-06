@@ -19,7 +19,7 @@
      sees the trainee's submitted note the moment it is sent).
    ========================================================= */
 import { DurableObject } from 'cloudflare:workers';
-import { SCENARIOS, cleanScenario, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM, weightedScore, DEFAULT_SETTINGS } from './scenarios.js';
+import { SCENARIOS, cleanScenario, openCall, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM, weightedScore, DEFAULT_SETTINGS } from './scenarios.js';
 import { hashPin, checkPin } from './auth.js';
 
 const RING_MS = 45000;     // an unanswered call rings out after 45 seconds
@@ -241,9 +241,11 @@ export class Switchboard extends DurableObject {
       case 'ring': {
         if (me.role !== 'a') return;
         if (me.call) { const cur = this.row(me.call); if (cur && ['ringing', 'live'].includes(cur.status)) return err('You are already on a call. Hang up first.'); this.setAtt(ws, { call: null }); }
-        const s = this.scenario(String(m.scenarioId || ''));
+        // No call picked: an open call on the line of the track the trainer is on (the trainer improvises the caller).
+        const s = m.scenarioId ? this.scenario(String(m.scenarioId)) : openCall(String(m.track || 'reception'));
         const tr = this.trainee(String(m.traineeId || ''));
-        if (!s || !tr) return err('Pick a trainee and a scenario.');
+        if (!tr) return err('Dial a trainee first.');
+        if (!s) return err('That call isn\'t in the library any more. Pick another, or ring without one.');
         const phones = this.open('u:' + tr.id).filter((w) => this.att(w).role === 't');
         if (!phones.length) return this.send(ws, { t: 'ring-failed', reason: `${tr.name} isn't online.` });
         if (phones.some((w) => { const a = this.att(w); if (!a.call) return false; const c = this.row(a.call); return c && ['ringing', 'live'].includes(c.status); })) return this.send(ws, { t: 'ring-failed', reason: `${tr.name} is on another call.` });

@@ -34,11 +34,12 @@ Everything runs in the browser; there are no phone numbers and no phone bills. I
 2. **☎ Switchboard** (left) shows every trainee online, by batch, with their extension: available, away, on a call, or ✋ asking for a call. It works as the phone's contact list: clicking a trainee puts their extension on the dialer.
 3. The **☎ dialer** is a desk phone on screen:
    - **Dial the trainee's extension** on the keypad (or type it; Backspace deletes, Esc clears). The screen says who it reaches: *Ready to call* with the trainee's name, *Not signed in*, a firm extension (201 is Atty. Reyes), or *No such extension*.
-   - Pick **🎭 the call to play** beside it (Reception, Calendar or Intake; Beginner to Advanced). The dialer's screen shows the caller ID the trainee will see and the line it rings on.
+   - The **line keys** under the screen pick the line: Reception, Calendar (both ring the Main Line) or Intake (the Intake Line). The line decides the note the trainee takes and the metrics the call is graded on.
+   - **🎭 The call to play** is optional, in the list under the dialer (Beginner to Advanced, by line). Pick one to play its script, or leave **🎙 Open call: no script** selected and play any caller you like. The dialer's screen shows the caller ID the trainee will see (WIRELESS CALLER on an open call), the line, and the call.
    - The soft keys under the keypad: **📋 Graded** (on by default; see *Graded mock calls and autograding*; a graded call is always recorded), **Record** (on by default) and **🙈 Hide ID** (the trainee sees PRIVATE CALLER).
-   - **📞** (or Enter) rings the trainee. The trainer hears the ringback.
+   - **📞** (or Enter) rings the trainee. The trainer hears the ringback. After a call the screen clears; 📞 on an empty screen brings back the last number (redial).
 4. On the call, the dialer shows who's on the line, the timer, 📋 GRADED, REC, the trainee's hold / mute, the connection quality (and whether it's going through the relay), and 🔊 SPEAKER. Its keys are **Mute**, **🔊 Speaker**, **⏸ Coaching time-out**, **📺 Class view** and **End call**. Beside it:
-   - **🎭 You are the caller**: the opening line, what the caller knows and how they act, the situation, who is out of the office;
+   - **🎭 You are the caller**: the opening line, what the caller knows and how they act, the situation, who is out of the office (on an open call: any case file to play a client from);
    - **✅ Live checklist**: the call's goals, ticked as they happen;
    - **📝 The trainee's note**, live.
 5. When the trainee transfers, a panel asks what happens: **Picks up** (the call is handed over and ends), **No answer** or **Voicemail**. The scenario says who is out.
@@ -100,6 +101,8 @@ Trainer-facilitated mock calls are graded on the program's **Mock Calls Metrics*
 | Reception | Reception Mock Calls Metrics | 14: Introduction of Law Firm and Name · Authentication (Name, DOL, DOB, Claim No, Case No.) · Customer Service · Assertiveness · Listening Skills · Comprehension · Attention to Details · Resolution · Transfer Procedure · Closing Spiel · Time Management · Dead Air/Fillers · Clarity of Speech · Tone of Voice |
 | Calendar | Calendar Management Mock Calls Metrics | 7: Professional Introduction & Call Control · Client Comprehension & Flow Control · Information Verification & Accuracy · Slot Identification & Scheduling Rule Compliance · Alternative Time Offering · Calendar Creation & Attorney Reminder Setup · Notes, Recap & Call Closing (graded against the Day 6 scheduling rules) |
 | Intake | Intake Mock Calls Metrics | 16: the Reception metrics plus Setting Proper Expectations · Explaining the Process · Answering Client's Inquiries · Commitment |
+
+An **open call** (no script) is graded the same way, on the line's metrics; there's no checklist, and the AI works out from the recording who called and what they needed.
 
 The grade is the **weighted average** of the scored metrics (n/a doesn't count), shown out of 5 and as a percentage (average × 20).
 
@@ -250,6 +253,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - "Save draft" after sending keeps the edits from the trainee;
   - 📋 Graded calls and its CSV (every metric's score and feedback);
   - the trainee reads the scorecard and the weighted average (the caller's script and unsent drafts never reach the trainee);
+  - an open call with no script on the Intake line (WIRELESS CALLER on the Intake Line, the open-call card with the case files, the Intake note);
   - dialing on the keyboard (201 is a firm extension, Esc clears, 7001 + Enter rings) and a declined call.
 - `blueprint.cjs`: the 🧭 Blueprint. A trainee gets the trainee deck only and a trainer both; every slide fits on a laptop and on a phone; both PDFs have a page per slide; the numbers match everywhere (Cover, then 1 to n, never n + 1).
 - `e2e-ai.js`: a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, autograding, a typed practice call, the trainer's **Grade again with AI**, and a live-only call that can't be practiced.

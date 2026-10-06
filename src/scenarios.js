@@ -565,6 +565,21 @@ export const LINES = {
   intake: { label: 'Intake Line', number: FIRM.intakeLine, icon: '📋' }
 };
 
+/* An open call: the trainer rings without picking a script and plays any caller they like. The line
+   follows the track (Reception and Calendar ring the Main Line, Intake the Intake Line); it's graded on
+   the line's metrics alone (no checklist), with every case file in 🔎 Case lookup as usual. */
+export function openCall(track) {
+  const t = TRACKS[track] ? track : 'reception';
+  return {
+    id: 'open_' + t, open: true, track: t, level: 'Open', title: `Open ${TRACKS[t].label} call (no script)`, source: 'LSH Ring Channel',
+    caller: { name: 'The caller', role: 'Played by the trainer, no script', gender: '', idName: 'WIRELESS CALLER', number: '(555) 010-0100' },
+    you: t === 'intake' ? youIntake : 'You are the receptionist answering the main line at LSH Training Law Group (fictional). Find out who is calling and why; if they say they\'re a client, look them up in 🔎 Case lookup.',
+    facts: 'An open call: no script. The trainer plays a caller of their own choosing.',
+    opening: '', hidden: 'Decide who you are (a client on one of the case files, a family member, an adjuster, a new caller…) and what you need, and stay in character.',
+    goals: [], caseId: '', hideCases: [], unavailable: [], ai: false, live: true
+  };
+}
+
 // What a trainee may see of a scenario before and during a call (no persona, no goals).
 export function traineeView(s) {
   return {

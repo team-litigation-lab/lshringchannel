@@ -21,7 +21,7 @@
 import { Switchboard } from './switchboard.js';
 import { Grader, GRADE_AUDIO } from './grader.js';
 import { makeToken, readToken, readTokenString, safeEqual, traineeId } from './auth.js';
-import { FIRM, CASES, TRACKS, NOTE_FORMS, LINES, LEVELS, CMS_URL, traineeView } from './scenarios.js';
+import { FIRM, CASES, TRACKS, NOTE_FORMS, LINES, LEVELS, CMS_URL, traineeView, openCall } from './scenarios.js';
 import { hasAI, keyNames, generate, liveToken } from './gemini.js';
 import { callerPrompt, liveSetup } from './prompts.js';
 
@@ -150,7 +150,7 @@ export default {
         const all = await sb.listScenarios();
         const st = await sb.getSettings();
         return json({
-          me, firm: FIRM, cases: CASES, tracks: TRACKS, forms: NOTE_FORMS, lines: LINES, levels: LEVELS, cms: CMS_URL,
+          me, firm: FIRM, cases: CASES, tracks: TRACKS, forms: NOTE_FORMS, lines: LINES, levels: LEVELS, cms: CMS_URL, openCaller: openCall('reception').caller,
           scenarios: admin ? all : all.map(traineeView),
           features: { ai: hasAI(env), recordings: !!env.LSH_KV, aiMinutes: aiMinutes(env) },
           settings: admin ? st : { weights: st.weights, passMark: st.passMark }

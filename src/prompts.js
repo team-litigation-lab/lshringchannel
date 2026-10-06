@@ -93,14 +93,20 @@ Directory: ${FIRM.directory.map((d) => `${d.name} (${d.role}) ${d.ext}`).join(' 
 Front-desk rules:
 ${FIRM.rules.map((r) => '- ' + r).join('\n')}
 ${t.rules ? `\nTHE CALENDAR GUIDELINES (Training Guide, Day 6). The call's own situation below (who is free, which slots are open) comes first; apply these where they fit:\n${t.rules.map((r) => '- ' + r).join('\n')}\n` : ''}
-THE CALL: "${s.title}" (${t.label} mock call, level ${s.level}).
+${s.open ? `THE CALL: an open ${t.label} mock call with no script. The trainer played a caller of their own choosing, so work out from the ${audio ? 'recording' : 'transcript'} who called and what they needed, and judge how the trainee handled that caller.
+The trainee's role: ${s.you}
+The trainee had every case file in Case lookup:
+${Object.values(CASES).map((c) => `${c.id}: ${c.name}`).join(' · ')}
+
+THE CALL'S CHECKLIST: none (an open call). Grade on the metrics, and answer "goals" with [].
+` : `THE CALL: "${s.title}" (${t.label} mock call, level ${s.level}).
 The trainee's role: ${s.you}
 The situation: ${s.facts}
 The caller: ${s.caller.name}, ${s.caller.role}. What the caller knew and how they were told to behave: ${s.hidden}
 ${onFile ? `\nTHE CASE FILE THE TRAINEE HAD (${onFile.id}):\n${onFile.text}\n` : '\nNothing was on file for this caller (a first call).\n'}${ref && ref !== onFile ? `\nFOR REFERENCE, THE FINISHED FILE (what a complete intake would capture; the trainee did not have it):\n${ref.text}\n` : ''}
 WHAT THIS CALL SHOULD ACHIEVE (the call's own checklist):
 ${(s.goals || []).map((g, i) => `${i + 1}. ${g}`).join('\n')}
-
+`}
 THE METRICS (${t.sheet}). Score each 1 to 5: 5 excellent, 4 good, 3 satisfactory, 2 needs improvement, 1 not done or wrong. Use null only when the call gave no chance to show it (for example no transfer was needed and none was attempted wrongly${audio ? '' : ', or a voice metric with no recording'}):
 ${t.rubric.map((r, i) => `M${i + 1}. ${r.name} — ${r.desc}`).join('\n')}
 
@@ -109,7 +115,7 @@ MEASURED BY THE PHONE SYSTEM: ${metricsText(call.metrics, call.audioStats)}
 THE TRAINEE'S NOTE:
 ${noteText(s, call.note)}
 
-${audio ? `THE CALL: the recording is attached (both voices; the trainee works at the firm, the caller is ${s.caller.name}${call.mode === 'live' ? ', played by the trainer' : ''}). Hold music is the trainee's hold, not dead air. First transcribe it faithfully, labelling each turn TRAINEE or CALLER; then grade. Judge Listening Skills, Dead Air/Fillers, Clarity of Speech and Tone of Voice by listening to the trainee's voice.` : `THE TRANSCRIPT:\n${transcriptText(call.transcript) || '(empty: the trainee said nothing)'}\n${call.transcript && call.transcript.length ? 'There is no recording: judge the voice metrics only as far as the words show (fillers, long gaps noted above); otherwise null.' : ''}`}
+${audio ? `THE CALL: the recording is attached (both voices; the trainee works at the firm, the caller is ${s.open ? 'the trainer, playing a caller of their own choosing' : s.caller.name + (call.mode === 'live' ? ', played by the trainer' : '')}). Hold music is the trainee's hold, not dead air. First transcribe it faithfully, labelling each turn TRAINEE or CALLER; then grade. Judge Listening Skills, Dead Air/Fillers, Clarity of Speech and Tone of Voice by listening to the trainee's voice.` : `THE TRANSCRIPT:\n${transcriptText(call.transcript) || '(empty: the trainee said nothing)'}\n${call.transcript && call.transcript.length ? 'There is no recording: judge the voice metrics only as far as the words show (fillers, long gaps noted above); otherwise null.' : ''}`}
 
 Grade only what the ${audio ? 'recording' : 'transcript'}, the measurements and the note show. Each metric's feedback is 1 to 3 specific sentences in the facilitator's voice, quoting the trainee where you can.
 Answer with JSON only, in this shape:

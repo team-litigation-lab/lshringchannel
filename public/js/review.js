@@ -173,7 +173,8 @@
           ${transcriptView(c.transcript)}
           ${onFile ? `<div class="card"><details><summary style="cursor:pointer"><b>📁 The case file (${esc(onFile.id)})</b></summary><pre class="case">${esc(onFile.text)}</pre></details></div>` : ''}
           ${ref && ended ? `<div class="card"><details><summary style="cursor:pointer"><b>✅ How the finished file looks (${esc(ref.id)})</b></summary><p class="small muted" style="margin-top:8px">What a complete intake captures, for comparing with the note.</p><pre class="case">${esc(ref.text)}</pre><a class="small" target="_blank" rel="noopener" href="${App.cfg.cms}?program=intake&mock=${ref.id}&from=standard">Open ${ref.id} in the CMS ↗</a></details></div>` : ''}
-          ${tr ? `<div class="card"><details><summary style="cursor:pointer"><b>🎭 The caller's script</b></summary><div class="opening">${esc(s.opening || '')}</div><div class="persona">${esc(s.hidden || '')}</div><p class="small" style="margin-top:8px">${esc(s.facts || '')}</p></details></div>` : ''}
+          ${tr && s.open ? '<div class="card note-box">🎙 <b>Open call:</b> no script. The trainer played a caller of their own choosing.</div>' : ''}
+          ${tr && !s.open ? `<div class="card"><details><summary style="cursor:pointer"><b>🎭 The caller's script</b></summary><div class="opening">${esc(s.opening || '')}</div><div class="persona">${esc(s.hidden || '')}</div><p class="small" style="margin-top:8px">${esc(s.facts || '')}</p></details></div>` : ''}
         </div>
         <div id="scorecol"></div>
       </div>`;
@@ -260,7 +261,7 @@
       if (!c.review && !c.ai) html += c.mode === 'ai'
         ? (c.noteSubmittedAt ? (c.autograde && ['queued', 'grading'].includes(c.autograde.state) ? '' : `<div class="card note-box">Not graded yet. ${App.cfg.features.ai ? '<button class="btn btn-sm" data-act="grade">🤖 Grade it now</button>' : ''}</div>`) : '<div class="card note-box">Submit your note to get this call graded.</div>')
         : `<div class="card note-box">⏳ ${c.graded ? 'Graded mock call: ' : ''}waiting for your trainer's review.${c.noteSubmittedAt ? '' : ' Submit your note first.'}</div>`;
-      if (c.scenario && c.scenario.goals && !c.review && !c.ai) html += `<div class="card"><h3>What a good call does</h3><ul class="small">${c.scenario.goals.map((g) => `<li>${esc(g)}</li>`).join('')}</ul></div>`;
+      if (c.scenario && c.scenario.goals && c.scenario.goals.length && !c.review && !c.ai) html += `<div class="card"><h3>What a good call does</h3><ul class="small">${c.scenario.goals.map((g) => `<li>${esc(g)}</li>`).join('')}</ul></div>`;
       col.innerHTML = html;
       return;
     }
@@ -295,7 +296,7 @@
           <td><span class="dots" data-crit="${i}">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-n="${n}" class="${x.score === n ? 'on' : ''}">${n}</button>`).join('')}<button type="button" data-n="0" class="na ${!x.score ? 'on' : ''}" title="Not applicable: doesn't count">n/a</button></span></td></tr>`).join('')}
         <tr class="avg"><td><b>WEIGHTED AVERAGE</b> <span class="tiny muted">(weights in ⚙️ Setup)</span></td><td><b class="mono" id="scAvg"></b> <span id="scPass"></span></td></tr>
         </tbody></table>
-        <h4 style="margin-top:14px">The call's checklist</h4>
+        ${S.goals.length ? '<h4 style="margin-top:14px">The call\'s checklist</h4>' : ''}
         ${S.goals.map((g, i) => `<div class="gm"><span class="seg" data-goal="${i}">${[['yes', '✓'], ['partly', '~'], ['no', '✗'], ['n/a', 'n/a']].map(([v, l]) => `<button type="button" data-v="${v}" class="${v === 'n/a' ? 'na' : v} ${g.met === v ? 'on' : ''}">${l}</button>`).join('')}</span><div style="flex:1">${esc(g.goal)}${g.evidence ? `<div class="tiny muted">${esc(g.evidence)}</div>` : ''}</div></div>`).join('')}
         <div class="field" style="margin-top:12px"><label class="f">Summary (the trainee reads this first)</label><textarea class="input" data-f="summary" rows="4">${esc(S.summary)}</textarea></div>
         <div class="field"><label class="f">The note</label><textarea class="input" data-f="note" rows="2">${esc(S.note)}</textarea></div>

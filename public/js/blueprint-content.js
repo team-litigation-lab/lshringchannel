@@ -80,7 +80,7 @@
         tip: 'Open ⚙️ Setup once before your first session to check the relay, recordings and AI keys.' },
       { icon: '☎', title: 'The Switchboard and the dialer', points: [
           'The Switchboard: every trainee online, by batch, with their extension; ✋ shows who asked for a call.',
-          'Dial the trainee\'s extension on the dialer (or click them on the Switchboard), and pick the call to play.',
+          'Dial the trainee\'s extension (or click them on the Switchboard), pick the line, and a call to play, or none for an open call.',
           'The soft keys: 📋 Graded, Record and Hide ID. Then 📞 rings the trainee.'],
         where: '🎛 Console → ☎ Switchboard and the dialer.',
         tip: 'Start with trainees who have their hand up.' },
