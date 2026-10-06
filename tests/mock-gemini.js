@@ -18,7 +18,7 @@ const server = http.createServer((req, res) => {
       if (!good) { res.statusCode = 401; res.end(JSON.stringify({ ok: false, code: 'signature' })); return; }
       const t = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
       if (!(t.exp > Date.now())) { res.statusCode = 401; res.end(JSON.stringify({ ok: false, code: 'expired' })); return; }
-      res.end(JSON.stringify(t.r === 'a' ? { ok: true, admin: true } : { ok: true, first: t.first, last: t.last, batch: t.b }));
+      res.end(JSON.stringify(t.r === 'a' ? { ok: true, admin: true, name: t.n || '' } : { ok: true, first: t.first, last: t.last, batch: t.b }));
       return;
     }
     if (req.url.startsWith('/v1beta/auth_tokens')) {

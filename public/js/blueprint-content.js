@@ -12,15 +12,15 @@
           'Your trainer rings your phone and plays the caller over live audio; you handle the call like a real one.',
           'The call is recorded and graded on the program\'s Mock Calls Metrics for its line.',
           'No phone numbers and no phone bills: it all runs in Chrome or Edge.'],
-        where: 'Open Ring Channel from your training program.',
+        where: 'The LSH Training Portal → Training Directory → ☎ LSH Ring Channel.',
         tip: 'Wear a headset, and use Chrome or Edge on a computer.' },
-      { icon: '🔑', title: 'Signing in', points: [
-          'Sign in with your full name and batch, the same as on your training platform, and your PIN.',
-          'Your first sign-in sets your PIN (4 to 8 digits), so nobody else can sign in as you.',
-          'Five wrong PINs lock the account for 15 minutes; your trainer can reset your PIN.',
+      { icon: '🏠', title: 'Opening Ring Channel', points: [
+          'There\'s no separate sign-in: sign in on the LSH Training Portal, then open ☎ LSH Ring Channel from the Training Directory.',
+          'You arrive signed in, on your phone, as your Portal name and batch.',
+          'Opening Ring Channel\'s own link only shows the way to the Portal.',
           '🎧 Audio check tests your microphone, headset and speaker before the first call.'],
-        where: 'The sign-in screen · 📞 My phone → 🎧 Audio check.',
-        tip: 'Pick a PIN you\'ll remember: your trainer can reset it, but it takes a moment of class time.' },
+        where: 'The LSH Training Portal · 📞 My phone → 🎧 Audio check.',
+        tip: 'Keep the Portal open in its own tab: it\'s your way back in.' },
       { icon: '📞', title: 'My phone', points: [
           'Keep 📞 My phone open with your headset on. It shows your desk extension (ext 7001…): the number your trainer dials.',
           'Set ● Available when you\'re ready for a call, or ◌ Away when you step out.',
@@ -72,11 +72,11 @@
   const TRAINER = {
     sub: 'Running live mock calls from the trainer console',
     slides: [
-      { icon: '🔑', title: 'Signing in as a trainer', points: [
-          'Sign in with your name and the trainer passphrase.',
-          'Your top bar: 🎛 Console, 🗂 Call log, 📚 Scenarios, 👥 Trainees, 🎧 Try practice and ⚙️ Setup.',
-          'Trainees sign in with their name, batch and their own PIN.'],
-        where: 'The sign-in screen · the top bar.',
+      { icon: '🏠', title: 'Opening the console', points: [
+          'Open ☎ LSH Ring Channel from the LSH Training Portal (Training Directory or Master Control): you arrive on the console, under your Portal name.',
+          'Your top bar: 🎛 Console, 🗂 Call log, 📋 Graded calls, 📚 Scenarios, 👥 Trainees, 🎧 Try practice and ⚙️ Setup; 🏠 goes back to the Portal.',
+          'Trainees open it from the Portal too: no sign-in form, no PINs. The trainer passphrase is only for when the Portal is down.'],
+        where: 'The LSH Training Portal · the top bar.',
         tip: 'Open ⚙️ Setup once before your first session to check the relay, recordings and AI keys.' },
       { icon: '☎', title: 'The Switchboard and the dialer', points: [
           'The Switchboard: every trainee online, by batch, with their extension; ✋ shows who asked for a call.',
@@ -113,7 +113,7 @@
       { icon: '👥', title: 'Call log and Trainees', points: [
           '🗂 Call log: every call, its recording and its scorecard.',
           '👥 Trainees: each trainee\'s live average (reviewed calls) and practice average, kept apart.',
-          '🔑 Reset PIN for a trainee who is locked out.'],
+          'Each trainee\'s desk extension (the number you dial), and 🗂 Calls for their calls.'],
         where: 'Top bar → 🗂 Call log · 👥 Trainees.',
         tip: 'Compare live and practice averages before you rank the batch.' },
       { icon: '📚', title: 'Scenarios', points: [

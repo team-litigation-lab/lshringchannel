@@ -40,18 +40,6 @@ export async function readToken(env, request) {
   return readTokenString(env, h.startsWith('Bearer ') ? h.slice(7) : '');
 }
 
-// A trainee's PIN, stored only as a salted PBKDF2 hash ("<salt>.<hash>").
-export async function hashPin(pin, salt) {
-  salt = salt || btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(12))));
-  const key = await crypto.subtle.importKey('raw', enc.encode(String(pin)), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: enc.encode(salt), iterations: 100000 }, key, 256);
-  return salt + '.' + btoa(String.fromCharCode(...new Uint8Array(bits)));
-}
-export async function checkPin(pin, stored) {
-  const salt = String(stored || '').split('.')[0];
-  return !!salt && safeEqual(await hashPin(pin, salt), stored);
-}
-
 export function slugPart(t) {
   return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }

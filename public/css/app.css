@@ -123,7 +123,11 @@ table.list tr.click:hover td { background: #f8fafc; }
 .login-hero { text-align: center; margin-bottom: 26px; }
 .login-hero .big { font-size: 46px; }
 .login-hero p { color: var(--muted); max-width: 620px; margin: 6px auto 0; }
-.login .grid2 .card h2 { display: flex; align-items: center; gap: 8px; }
+.login.gate { max-width: 640px; }
+.gate-card { text-align: center; padding: 26px; }
+.gate-card p { color: var(--muted); max-width: 520px; margin: 8px auto 18px; }
+.gate-fallback { margin-top: 22px; text-align: left; border-top: 1px solid var(--line); padding-top: 12px; }
+.gate-fallback summary { cursor: pointer; font-size: 13px; color: var(--muted); text-align: center; }
 
 /* ---------- the softphone (a desk phone on screen) ---------- */
 .phone-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }

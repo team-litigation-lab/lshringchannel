@@ -4,23 +4,23 @@
  * Cloudflare Worker + one Durable Object (the Switchboard, src/switchboard.js):
  *   /             the app (public/), a softphone for trainees and a console for trainers
  *   /ws           each phone's WebSocket to the Switchboard (presence, ringing, WebRTC signaling)
- *   /api/...      sign-in, scenarios, call records, recordings, TURN credentials, AI practice and scoring
+ *   /api/...      sign-in from the LSH Training Portal, scenarios, call records, recordings, TURN credentials, AI practice and scoring
  *
  * Secrets (wrangler secret put <NAME>):
- *   ADMIN_PASSPHRASE     trainer sign-in (required: without it nobody can sign in)
- *   SESSION_SECRET       optional; signs sign-in tokens (defaults to ADMIN_PASSPHRASE)
- *   TRAINEE_CODE         optional; trainees must enter it to sign in
+ *   ADMIN_PASSPHRASE     required: signs sign-in tokens, and the trainers' fallback sign-in if the Portal is down
+ *   SESSION_SECRET       optional; signs sign-in tokens instead (changing it signs everyone out)
+ *   PORTAL_SSO_SECRET    optional; the LSH Training Portal's ticket secret (without it, tickets are checked by the Portal)
  *   TURN_KEY_ID, TURN_KEY_API_TOKEN
  *                        optional but recommended: Cloudflare Realtime TURN, so calls connect on
  *                        networks that block direct audio (strict home routers, mobile data, offices)
  *   GEMINI_API_KEY5 … GEMINI_API_KEY9 (and GEMINI_API_KEY, _KEY1, _KEY2)
  *                        optional: AI practice callers and AI scoring (the LSH Gemini key pool)
- * Variables: RECORDING_DAYS (default 90), AI_MAX_MINUTES (default 8).
+ * Variables: RECORDING_DAYS (default 90), AI_MAX_MINUTES (default 8), PORTAL_URL (default https://cm-training-activity.pages.dev).
  * Recordings are kept in the shared LSH_KV namespace under "voip:" and expire on their own.
  */
 import { Switchboard } from './switchboard.js';
 import { Grader, GRADE_AUDIO } from './grader.js';
-import { makeToken, readToken, readTokenString, safeEqual, traineeId } from './auth.js';
+import { makeToken, readToken, readTokenString, safeEqual, traineeId, secretOf } from './auth.js';
 import { FIRM, CASES, TRACKS, NOTE_FORMS, LINES, LEVELS, CMS_URL, traineeView, openCall } from './scenarios.js';
 import { hasAI, keyNames, generate, liveToken } from './gemini.js';
 import { callerPrompt, liveSetup } from './prompts.js';
@@ -107,7 +107,7 @@ export default {
 
       /* ---------- sign-in ---------- */
       if (path === '/api/auth/status') {
-        return json({ configured: !!env.ADMIN_PASSPHRASE, traineeCode: !!env.TRAINEE_CODE, ai: hasAI(env), turn: !!(env.TURN_KEY_ID && env.TURN_KEY_API_TOKEN), recordings: !!env.LSH_KV, firm: FIRM.name, portal: portalHome(env) });
+        return json({ configured: !!secretOf(env), ai: hasAI(env), turn: !!(env.TURN_KEY_ID && env.TURN_KEY_API_TOKEN), recordings: !!env.LSH_KV, firm: FIRM.name, portal: portalHome(env) });
       }
       if (path === '/api/auth/admin') {
         if (!env.ADMIN_PASSPHRASE) return json({ error: 'Trainer sign-in isn\'t set up yet: add the ADMIN_PASSPHRASE secret in Cloudflare.' }, 501);
@@ -117,9 +117,10 @@ export default {
         const who = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 40) || 'Trainer';
         return json({ token: await makeToken(env, 'a', who, 12), role: 'a', id: who, name: who });
       }
-      // 🏠 Opened from the LSH Training Portal: its short-lived ticket signs a trainee in (src/portal.js).
+      // 🏠 Ring Channel opens from the LSH Training Portal: its short-lived ticket signs a trainee in as a trainee and
+      // an administrator in as a trainer (src/portal.js). There's no sign-in form; /api/auth/admin is only the fallback.
       if (path === '/api/auth/portal') {
-        if (!env.ADMIN_PASSPHRASE) return json({ error: 'Sign-in isn\'t set up yet: the trainer needs to add the ADMIN_PASSPHRASE secret in Cloudflare.', code: 'not-configured' }, 501);
+        if (!secretOf(env)) return json({ error: 'Ring Channel isn\'t set up yet: add the ADMIN_PASSPHRASE (or SESSION_SECRET) secret in Cloudflare.', code: 'not-configured' }, 501);
         const { ticket } = await request.json().catch(() => ({}));
         const v = await readPortalTicket(env, ticket);
         if (!v.ok) {
@@ -128,27 +129,14 @@ export default {
             signature: 'The LSH Training Portal\'s sign-in couldn\'t be verified here (PORTAL_SSO_SECRET differs from the Portal\'s). Please tell your administrator.' }[v.code];
           return json({ error: why || 'The LSH Training Portal didn\'t confirm this sign-in. Open Ring Channel from the Portal again.', code: v.code }, 401);
         }
-        if (v.admin || v.system) return json({ error: 'Trainers sign in here with the trainer passphrase.', code: 'admin-password' }, 403);
+        if (v.system) return json({ error: 'That ticket isn\'t for a person.', code: 'system' }, 403);
+        if (!(await board(env).claimTicket(v.sig, v.exp))) return json({ error: 'This link from the LSH Training Portal was already used. Open Ring Channel from the Portal again.', code: 'used' }, 401);
+        if (v.admin) { const who = v.name || 'Trainer'; return json({ token: await makeToken(env, 'a', who, 12), role: 'a', id: who, name: who, portal: true }); }
         const n = `${v.first} ${v.last}`.replace(/\s+/g, ' ').slice(0, 60), b = v.batch.replace(/\s+/g, ' ').slice(0, 30);
         const id = traineeId(n, b);
         const res = await board(env).traineePortalSignIn(id, n, b);
         if (res.error) return json({ error: res.error }, res.status || 400);
         return json({ token: await makeToken(env, 't', id, 24 * 30), role: 't', id, name: res.trainee.name, batch: res.trainee.batch, portal: true });
-      }
-      if (path === '/api/auth/trainee') {
-        if (!env.ADMIN_PASSPHRASE) return json({ error: 'Sign-in isn\'t set up yet: the trainer needs to add the ADMIN_PASSPHRASE secret in Cloudflare.' }, 501);
-        const { name, batch, code, pin } = await request.json().catch(() => ({}));
-        const n = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 60), b = String(batch || '').trim().replace(/\s+/g, ' ').slice(0, 30);
-        if (!n || !b) return json({ error: 'Enter your full name and your batch.' }, 400);
-        if (env.TRAINEE_CODE) {
-          await new Promise((r) => setTimeout(r, 300));
-          if (!safeEqual(String(code || '').trim(), String(env.TRAINEE_CODE).trim())) return json({ error: 'That access code isn\'t right. Ask your trainer for it.' }, 401);
-        }
-        const id = traineeId(n, b);
-        const res = await board(env).traineeSignIn(id, n, b, String(pin || '').trim());
-        if (res.error) return json({ error: res.error, needPin: !!res.needPin, firstTime: !!res.firstTime, portal: !!res.portal }, res.status || 400);
-        const rec = res.trainee;
-        return json({ token: await makeToken(env, 't', id, 24 * 30), role: 't', id, name: rec.name, batch: rec.batch });
       }
 
       const tok = await readToken(env, request);
@@ -185,12 +173,11 @@ export default {
       if (path === '/api/scenarios/save') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ scenario: await sb.saveScenario(body.scenario || {}) }); }
       if (path === '/api/scenarios/delete') { if (!admin) return json({ error: 'Not allowed' }, 403); await sb.deleteScenario(String(body.id || '')); return json({ ok: true }); }
       if (path === '/api/trainees') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ trainees: await sb.listTrainees() }); }
-      if (path === '/api/trainees/reset-pin') { if (!admin) return json({ error: 'Not allowed' }, 403); await sb.resetPin(String(body.id || '')); return json({ ok: true }); }
       if (path === '/api/trainees/archive') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ trainee: await sb.setArchived(String(body.id || ''), !!body.archived) }); }
       if (path === '/api/stats') {
         if (!admin) return json({ error: 'Not allowed' }, 403);
         const ice = await iceServers(env);
-        return json({ stats: await sb.stats(), setup: { ai: hasAI(env), aiKeys: keyNames(env).length, turn: ice.turn, turnError: ice.error || '', recordings: !!env.LSH_KV, recordingDays: recDays(env), traineeCode: !!env.TRAINEE_CODE } });
+        return json({ stats: await sb.stats(), setup: { ai: hasAI(env), aiKeys: keyNames(env).length, turn: ice.turn, turnError: ice.error || '', recordings: !!env.LSH_KV, recordingDays: recDays(env), portal: portalHome(env), portalSecret: !!String(env.PORTAL_SSO_SECRET || '').trim() } });
       }
       // 📊 How much of the Cloudflare account's monthly request allowance (shared by every LSH site) is used.
 

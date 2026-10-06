@@ -20,12 +20,10 @@
    ========================================================= */
 import { DurableObject } from 'cloudflare:workers';
 import { SCENARIOS, cleanScenario, openCall, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM, weightedScore, DEFAULT_SETTINGS } from './scenarios.js';
-import { hashPin, checkPin } from './auth.js';
 
 const RING_MS = 45000;     // an unanswered call rings out after 45 seconds
 const GRACE_MS = 30000;    // a dropped phone has 30 seconds to reconnect before its call ends
 const MAX_CALL_MS = 2 * 3600 * 1000;
-const PIN_TRIES = 5;       // wrong PINs allowed per trainee in 15 minutes
 const AUDIO_WAIT = 3 * 60000;   // autograding waits this long after a call for its recording …
 const NOTE_WAIT = 10 * 60000;   // … and this long for the trainee to submit the note
 const OPEN = 1;
@@ -52,7 +50,8 @@ export class Switchboard extends DurableObject {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS scenarios (id TEXT PRIMARY KEY, data TEXT, updated_at INTEGER, deleted INTEGER DEFAULT 0)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS usage (id INTEGER PRIMARY KEY AUTOINCREMENT, who TEXT, kind TEXT, at INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT)`);
-    // Each trainee's PIN (a salted hash), set at their first sign-in.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS tickets (sig TEXT PRIMARY KEY, exp INTEGER)`);   // Portal tickets already used
+    // Each trainee's PIN (a salted hash) from when Ring Channel had its own sign-in form (no longer used).
     if (!this.sql.exec(`SELECT name FROM pragma_table_info('trainees') WHERE name = 'pin'`).toArray().length) this.sql.exec('ALTER TABLE trainees ADD COLUMN pin TEXT');
     // Each trainee's desk extension (7001, 7002, …), so the trainer can dial them. The firm's own
     // directory uses 100 to 500, so a trainee's extension never clashes with a transfer.
@@ -423,27 +422,6 @@ export class Switchboard extends DurableObject {
   /* =========================================================
      Called by the Worker (RPC). Identity is already checked there.
      ========================================================= */
-  /* A trainee signs in with their name, batch and PIN. The first sign-in sets the PIN; a trainer can
-     reset it (the next sign-in sets a new one). Five wrong PINs in 15 minutes lock the account for a while. */
-  async traineeSignIn(id, name, batch, pin) {
-    const cur = this.trainee(id);
-    if (cur && cur.archived) return { error: 'This account is archived. Ask your trainer to restore it.', status: 403 };
-    // An account the Portal made has no PIN: it signs in from the Portal, so nobody can claim it here by choosing a PIN.
-    if (cur && !cur.pin && cur.portal) return { error: 'You sign in to Ring Channel from the LSH Training Portal: open it from the Portal (Training Directory → ☎ LSH Ring Channel).', status: 403, portal: true };
-    if (!/^\d{4,8}$/.test(String(pin || ''))) return { error: cur && cur.pin ? 'Enter your PIN (4 to 8 digits).' : 'Choose a PIN of 4 to 8 digits. You\'ll use it every time you sign in.', status: 400, needPin: true, firstTime: !(cur && cur.pin) };
-    if (cur && cur.pin) {
-      if (this.countUsage(id, 'pinfail', 15 * 60000) >= PIN_TRIES) return { error: 'Too many wrong PINs. Wait 15 minutes, or ask your trainer to reset your PIN.', status: 429 };
-      if (!(await checkPin(pin, cur.pin))) { this.logUsage(id, 'pinfail'); return { error: 'That PIN isn\'t right. Forgot it? Ask your trainer to reset it.', status: 401, needPin: true }; }
-      this.sql.exec('UPDATE trainees SET last_seen = ? WHERE id = ?', now(), id);
-    } else if (cur) {
-      this.sql.exec('UPDATE trainees SET pin = ?, last_seen = ? WHERE id = ?', await hashPin(pin), now(), id);
-    } else {
-      this.sql.exec('INSERT INTO trainees (id, name, batch, created_at, last_seen, pin) VALUES (?, ?, ?, ?, ?, ?)', id, name, batch, now(), now(), await hashPin(pin));
-      this.giveExt(id);
-    }
-    const t = this.trainee(id);
-    return { trainee: { id: t.id, name: t.name, batch: t.batch, ext: t.ext || '' } };
-  }
   // A trainee the LSH Training Portal signed in (its ticket, src/portal.js): the Portal checked who they are, so no PIN.
   traineePortalSignIn(id, name, batch) {
     const cur = this.trainee(id);
@@ -453,10 +431,18 @@ export class Switchboard extends DurableObject {
     const t = this.trainee(id);
     return { trainee: { id: t.id, name: t.name, batch: t.batch, ext: t.ext || '' } };
   }
-  resetPin(id) { this.sql.exec('UPDATE trainees SET pin = NULL WHERE id = ?', id); return true; }
+  // Each Portal ticket signs someone in once: a ticket copied from the address bar or history is no use.
+  claimTicket(sig, exp) {
+    if (!sig) return false;
+    const t = now();
+    this.sql.exec('DELETE FROM tickets WHERE exp < ?', t - 60000);
+    if (this.sql.exec('SELECT sig FROM tickets WHERE sig = ?', sig).toArray().length) return false;
+    this.sql.exec('INSERT INTO tickets (sig, exp) VALUES (?, ?)', sig, Math.max(Number(exp) || 0, t + 60000));
+    return true;
+  }
   getTrainee(id) { const t = this.trainee(id); if (t) delete t.pin; return t; }
   listTrainees() {
-    return this.sql.exec(`SELECT t.id, t.name, t.batch, t.ext, t.created_at, t.last_seen, t.archived, (t.pin IS NOT NULL) AS hasPin, t.portal,
+    return this.sql.exec(`SELECT t.id, t.name, t.batch, t.ext, t.created_at, t.last_seen, t.archived,
       (SELECT COUNT(*) FROM calls c WHERE c.trainee_id = t.id AND c.status = 'ended' AND c.mode = 'live') AS calls,
       (SELECT COUNT(*) FROM calls c WHERE c.trainee_id = t.id AND c.status = 'ended' AND c.mode = 'ai') AS practice,
       (SELECT AVG(score) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'live' AND c.reviewed = 1 AND c.score IS NOT NULL) AS avg,

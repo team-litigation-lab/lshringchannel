@@ -6,6 +6,7 @@
 // Numbering: the cover is "Cover" (★), the slides 1 to n on the contents buttons, the counter, the slide's heading and
 // footer, and the PDF's page footers; the last slide is "n / n", as its button, and nothing ever says n + 1.
 const { chromium } = require('playwright');
+const Portal = require('./portal-ticket');
 const fs = require('fs'); const path = require('path'); const zlib = require('zlib');
 const B = process.env.BASE || 'http://127.0.0.1:8787';
 const JSPDF = fs.readFileSync(path.join(path.dirname(require.resolve('jspdf')), 'jspdf.umd.min.js'));
@@ -68,9 +69,7 @@ async function walk(page, label) {
 
   // ---- a trainee ----
   let te = await mk({ width: 1366, height: 768 });
-  await te.goto(B + '/');
-  await te.fill('#tn', 'Blue Print'); await te.fill('#tb', 'B093026'); await te.fill('#tp', '1357');
-  await te.click('#fTrainee button'); await te.waitForSelector('#device .lcd');
+  await te.goto(Portal.trainee(B, 'Blue Print', 'B093026')); await te.waitForSelector('#device .lcd');
   await te.waitForSelector('#lbp-open-btn', { timeout: 5000 }).catch(() => fail('a trainee has no 🧭 Blueprint button'));
   await te.click('#lbp-open-btn'); await te.waitForTimeout(300);
   const t = await te.evaluate(() => ({ deck: document.getElementById('lbp-slide').dataset.deck, tabs: !!document.getElementById('lbp-tabs').offsetParent }));
@@ -97,9 +96,7 @@ async function walk(page, label) {
 
   // ---- a trainer, on a laptop and on a phone ----
   let tr = await mk({ width: 1366, height: 768 });
-  await tr.goto(B + '/');
-  await tr.fill('#an', 'Coach Print'); await tr.fill('#ap', 'test-pass');
-  await tr.click('#fTrainer button'); await tr.waitForSelector('#roster');
+  await tr.goto(Portal.trainer(B, 'Coach Print')); await tr.waitForSelector('#roster');
   await tr.click('#lbp-open-btn'); await tr.waitForTimeout(300);
   const a = await tr.evaluate(() => ({ deck: document.getElementById('lbp-slide').dataset.deck, tabs: [...document.querySelectorAll('#lbp-tabs button')].filter(b => b.offsetParent).map(b => b.textContent.trim()) }));
   if (a.deck !== 'trainer' || a.tabs.join() !== 'Trainer blueprint,Trainee blueprint') fail(`a trainer should get both decks: ${JSON.stringify(a)}`);

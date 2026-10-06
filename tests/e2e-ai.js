@@ -1,5 +1,6 @@
 // AI practice: voice call over (mock) Gemini Live, hold, hang up, note, AI scorecard; typed call; trainer AI draft from a recording.
 const { chromium } = require('playwright');
+const Portal = require('./portal-ticket');
 const B = process.env.BASE || 'http://127.0.0.1:8787';
 const OUT = process.env.OUT || '.';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -13,9 +14,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   });
   const mk = async () => { const c = await browser.newContext({ permissions: ['microphone'], viewport: { width: 1360, height: 900 } }); const p = await c.newPage(); p.on('pageerror', (e) => console.log('PAGE ERROR', e.message)); return p; };
   const te = await mk();
-  await te.goto(B + '/');
-  await te.fill('#tn', 'Riley Santos'); await te.fill('#tb', 'B093026'); await te.fill('#tp', '2468');
-  await te.click('#fTrainee button');
+  await te.goto(Portal.trainee(B, 'Riley Santos', 'B093026'));
   await te.waitForSelector('#device .lcd');
 
   // Voice practice call
@@ -68,9 +67,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
 
   // Trainer drafts a scorecard with AI from a live call's recording (the call from the live test)
   const tr = await mk();
-  await tr.goto(B + '/');
-  await tr.fill('#an', 'Coach Ana'); await tr.fill('#ap', 'test-pass');
-  await tr.click('#fTrainer button');
+  await tr.goto(Portal.trainer(B, 'Coach Ana'));
   await tr.waitForSelector('#roster');
   await tr.click('a[href="#/calls"]');
   await tr.selectOption('#fMode', 'live');

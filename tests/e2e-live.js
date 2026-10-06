@@ -1,5 +1,6 @@
 // End-to-end: a trainer rings a trainee, live WebRTC audio, hold, transfer, coaching, note, hang-up, recording, scoring, reload mid-call.
 const { chromium } = require('playwright');
+const Portal = require('./portal-ticket');
 const B = process.env.BASE || 'http://127.0.0.1:8787';
 const OUT = process.env.OUT || '.';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -14,33 +15,27 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   const mk = async () => { const c = await browser.newContext({ permissions: ['microphone'], viewport: { width: 1360, height: 900 } }); const p = await c.newPage(); p.on('pageerror', (e) => console.log('PAGE ERROR', e.message)); p.on('console', (m) => { if (m.type() === 'error') console.log('console error:', m.text()); }); return p; };
   const tr = await mk(), te = await mk();
 
-  // Sign in
-  await te.goto(B + '/');
-  await te.fill('#tn', 'Jamie Cruz'); await te.fill('#tb', 'B093026'); await te.fill('#tp', '4321');
-  await te.click('#fTrainee button');
+  // Both open Ring Channel from the LSH Training Portal: no sign-in form
+  await te.goto(Portal.trainee(B, 'Jamie Cruz', 'B093026'));
   await te.waitForSelector('#device .lcd');
-  ok('Trainee signed in (first time: chose a PIN), phone is showing');
+  ok('Trainee opened Ring Channel from the Portal: signed in, phone is showing');
 
-  // Someone else can't sign in as Jamie without the PIN
+  // Ring Channel's own link has no sign-in form for anyone to guess at
   const other = await mk();
   await other.goto(B + '/');
-  await other.fill('#tn', 'Jamie Cruz'); await other.fill('#tb', 'B093026'); await other.fill('#tp', '0000');
-  await other.click('#fTrainee button');
-  await other.waitForSelector('#tErr:not(.hidden)');
-  const why = await other.textContent('#tErr');
-  if (!/PIN isn't right/.test(why)) throw new Error('Wrong PIN not refused: ' + why);
-  const live = await other.evaluate(async () => { const r = await fetch('/api/auth/trainee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Jamie Cruz', batch: 'B093026' }) }); return r.status; });
-  if (live !== 400) throw new Error('Sign-in without a PIN not refused: ' + live);
+  await other.waitForSelector('#toPortal');
+  if (await other.$('#fTrainee, #tn, #tp')) throw new Error('A trainee sign-in form is still there');
+  const live = await other.evaluate(async () => (await fetch('/api/auth/trainee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Jamie Cruz', batch: 'B093026', pin: '0000' }) })).status);
+  if (live !== 401 && live !== 404) throw new Error('The old trainee sign-in still answers: ' + live);
   await other.close();
-  ok('Signing in as another trainee with a wrong PIN (or none) is refused');
-  await tr.goto(B + '/');
-  await tr.fill('#an', 'Coach Ana'); await tr.fill('#ap', 'test-pass');
-  await tr.click('#fTrainer button');
+  ok('Ring Channel\'s own link shows the way to the Portal, with no trainee sign-in form (and the old sign-in is gone)');
+  await tr.goto(Portal.trainer(B, 'Coach Ana'));
   await tr.waitForSelector('#roster .tr[data-tid]');
   const ext = (await tr.textContent('#roster .tr[data-tid] .bt')).match(/ext (\d+)/);
   if (!ext || ext[1] !== '7001') throw new Error('The trainee should have desk extension 7001: ' + (await tr.textContent('#roster .tr[data-tid] .bt')));
   if (!/ext 7001/.test(await te.textContent('#device .dev-head'))) throw new Error('The trainee\'s phone should show its extension');
-  ok('Trainer signed in; trainee appears on the switchboard with desk extension 7001 (also on their phone)');
+  if ((await tr.evaluate(() => App.me.name)) !== 'Coach Ana') throw new Error('The trainer should be signed in under their Portal name');
+  ok('Trainer opened Ring Channel from the Portal (on the console, as Coach Ana); trainee appears on the switchboard with desk extension 7001 (also on their phone)');
 
   // Trainee raises a hand
   await te.click('[data-act="hand"]');

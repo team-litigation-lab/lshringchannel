@@ -493,21 +493,15 @@
       const show = App.showArchived;
       const list = ts.filter((x) => !!x.archived === !!show);
       app.innerHTML = `<div class="card"><div class="card-head"><h2>👥 Trainees</h2><span class="spacer"></span><label class="check small"><input type="checkbox" id="arch" ${show ? 'checked' : ''}> Show archived</label></div>
-        <p class="small muted">Trainees appear here the first time they sign in with their name, batch and a PIN they choose. Forgot a PIN? <b>Reset PIN</b>: their next sign-in sets a new one. The live average counts reviewed live calls only; practice scores are the AI's.</p>
+        <p class="small muted">Trainees appear here the first time they open Ring Channel from the LSH Training Portal (as their Portal name and batch). The live average counts reviewed live calls only; practice scores are the AI's.</p>
         <div class="table-wrap"><table class="list"><thead><tr><th>Trainee</th><th>Batch</th><th>Ext</th><th>Last seen</th><th>Live calls</th><th>Live average</th><th>Practice</th><th></th></tr></thead><tbody>
         ${list.map((x) => `<tr><td><span class="led ${online.has(x.id) ? 'available' : ''}" style="display:inline-block;margin-right:8px"></span><b>${esc(x.name)}</b></td><td>${esc(x.batch)}</td><td class="mono">${esc(x.ext || '')}</td><td>${online.has(x.id) ? '<span class="badge green">Online</span>' : U.when(x.last_seen)}</td>
           <td>${x.calls || 0}</td><td>${x.avg != null ? `<b>${Math.round(x.avg)}%</b>` : '–'}</td><td class="small">${x.practice || 0} call${x.practice === 1 ? '' : 's'}${x.practiceAvg != null ? ' · ' + Math.round(x.practiceAvg) + '%' : ''}</td>
-          <td class="row" style="justify-content:flex-end"><button class="btn btn-sm" data-calls="${esc(x.id)}">🗂 Calls</button>${x.hasPin ? `<button class="btn btn-sm" data-pin="${esc(x.id)}" data-name="${esc(x.name)}">🔑 Reset PIN</button>` : x.portal ? '<span class="badge" title="Signs in from the LSH Training Portal">🏠 Portal sign-in</span>' : '<span class="badge">No PIN yet</span>'}<button class="btn btn-sm" data-arch="${esc(x.id)}" data-v="${x.archived ? 0 : 1}">${x.archived ? 'Restore' : 'Archive'}</button></td></tr>`).join('') || `<tr><td colspan="8" class="empty">${show ? 'No archived trainees.' : 'No trainees yet.'}</td></tr>`}
+          <td class="row" style="justify-content:flex-end"><button class="btn btn-sm" data-calls="${esc(x.id)}">🗂 Calls</button><button class="btn btn-sm" data-arch="${esc(x.id)}" data-v="${x.archived ? 0 : 1}">${x.archived ? 'Restore' : 'Archive'}</button></td></tr>`).join('') || `<tr><td colspan="8" class="empty">${show ? 'No archived trainees.' : 'No trainees yet.'}</td></tr>`}
         </tbody></table></div></div>`;
       U.$('#arch').onchange = (e) => { App.showArchived = e.target.checked; App.views.trainees.render(); };
       app.onclick = async (e) => {
         const c = e.target.closest('[data-calls]'); if (c) { F.traineeId = c.dataset.calls; F.batch = ''; location.hash = '#/calls'; return; }
-        const pin = e.target.closest('[data-pin]');
-        if (pin) {
-          if (!confirm(`Reset ${pin.dataset.name}'s PIN? Their next sign-in sets a new one.`)) return;
-          try { await API.post('/api/trainees/reset-pin', { id: pin.dataset.pin }); U.toast('PIN reset. Ask them to sign in again and choose a new PIN.', 'ok'); App.views.trainees.render(); } catch (err) { U.toast(err.message, 'error'); }
-          return;
-        }
         const a = e.target.closest('[data-arch]');
         if (a) { try { await API.post('/api/trainees/archive', { id: a.dataset.arch, archived: a.dataset.v === '1' }); App.views.trainees.render(); } catch (err) { U.toast(err.message, 'error'); } }
       };
@@ -565,7 +559,7 @@
           ${item(su.turn, 'TURN relay (Cloudflare Realtime)', su.turn ? 'Calls connect even on networks that block direct audio.' : `Not set${su.turnError ? ' (' + esc(su.turnError) + ')' : ''}: most calls still connect, but some trainees on strict home routers, mobile data or office networks won't get audio. Add TURN_KEY_ID and TURN_KEY_API_TOKEN (see the README).`)}
           ${item(su.recordings, 'Recordings', su.recordings ? `Kept ${su.recordingDays} days in LSH_KV, then deleted automatically.` : 'The LSH_KV binding is missing: calls aren\'t recorded.')}
           ${item(su.ai, 'AI practice callers and AI scoring', su.ai ? `${su.aiKeys} Gemini key${su.aiKeys > 1 ? 's' : ''} in the pool.` : 'No GEMINI_API_KEY5 … secrets: live calls work, practice and AI drafts are off.')}
-          ${item(true, 'Trainee access code', su.traineeCode ? 'On: trainees need TRAINEE_CODE to sign in.' : 'Off: anyone with the link can sign in as a trainee. Set TRAINEE_CODE to require a code.')}
+          ${item(true, 'Sign-in', `From the LSH Training Portal (<a href="${esc(su.portal || '')}" target="_blank" rel="noopener">Training Directory</a>): its tickets ${su.portalSecret ? 'are checked here with PORTAL_SSO_SECRET' : 'are checked by the Portal (no PORTAL_SSO_SECRET here)'}. No sign-in form; the trainer passphrase is only the fallback.`)}
         </div>
         <div class="card" id="gradeSet" style="grid-column:1 / -1"></div>
         <div class="card"><h2>🧪 Test this computer</h2>

@@ -10,8 +10,10 @@
      • with PORTAL_SSO_SECRET, when it's set on this Worker (the same secret as the Portal's);
      • otherwise by asking the Portal itself (POST /api/verify-ticket), as the CMS does, so it
        works with no secret to copy.
-   A trainee's ticket signs them in (their Ring Channel id is name--batch, as on every LSH
-   platform). An administrator's never does: they type the trainer passphrase here.
+   A trainee's ticket signs them in as a trainee (their Ring Channel id is name--batch, as on
+   every LSH platform); an administrator's signs them in as a trainer, under their Portal name
+   ({ r: 'a', n: name }: the Portal makes those for Ring Channel only). There's no sign-in form:
+   Ring Channel opens from the Portal. Each ticket works once (the Switchboard keeps the used ones).
    ========================================================= */
 export const PORTAL_URL = 'https://cm-training-activity.pages.dev';
 const MAX_AHEAD_MS = 10 * 60 * 1000;
@@ -33,7 +35,7 @@ function same(a, b) {
 }
 function who(t) {
   if (t.r === 's') return { ok: true, system: true };
-  if (t.r === 'a') return { ok: true, admin: true };
+  if (t.r === 'a') return { ok: true, admin: true, name: String(t.n || '').trim().replace(/\s+/g, ' ').slice(0, 60) };
   const first = String(t.first || '').trim(), last = String(t.last || '').trim(), batch = String(t.b != null ? t.b : t.batch || '').trim();
   if (!first || !last) return { ok: false, code: 'format' };
   return { ok: true, first, last, batch };
@@ -49,7 +51,11 @@ export async function verifyLocal(secret, ticket, now = Date.now()) {
   try { t = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(parts[0].replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)))); } catch (e) { return { ok: false, code: 'format' }; }
   const exp = Number(t && t.exp);
   if (!exp || now > exp || exp - now > MAX_AHEAD_MS) return { ok: false, code: 'expired' };
-  return who(t);
+  return Object.assign(who(t), { sig: parts[1], exp });
+}
+// The ticket's own expiry (to keep a used ticket on file until then), read without trusting it.
+function expOf(payload) {
+  try { return Number(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(payload.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)))).exp) || 0; } catch (e) { return 0; }
 }
 
 export async function readPortalTicket(env, ticket) {
@@ -62,7 +68,8 @@ export async function readPortalTicket(env, ticket) {
     const r = await fetch(portalUrl(env) + '/api/verify-ticket', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket: t }) });
     const j = await r.json().catch(() => null);
     if (!j || !j.ok) return { ok: false, code: j && j.code === 'expired' ? 'expired' : 'refused' };   // the Portal didn't sign it, or not for now
-    return who({ r: j.system ? 's' : j.admin ? 'a' : undefined, first: j.first, last: j.last, b: j.batch });
+    const [payload, sig] = t.split('.');
+    return Object.assign(who({ r: j.system ? 's' : j.admin ? 'a' : undefined, n: j.name, first: j.first, last: j.last, b: j.batch }), { sig: sig || '', exp: expOf(payload || '') || Date.now() + MAX_AHEAD_MS });
   } catch (e) {
     return { ok: false, code: 'unreachable' };
   }

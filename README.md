@@ -18,18 +18,20 @@ Everything runs in the browser; there are no phone numbers and no phone bills. I
 
 Ring Channel opens from the **LSH Training Portal** (`cm-training-activity.pages.dev`, the Training-Portal repo), like the CMS and the Knowledge Base: **☎ LSH Ring Channel** is on the Training Directory, on the home page's Simulators, on **🛠 Simulators**, and in the admin menu. Each opens `/api/launch?tool=ringchannel`.
 
-- **Trainees** arrive signed in. The Portal sends them here with a signed ticket that's good for 5 minutes (`?ticket=…`), and Ring Channel signs them in as their Portal name and batch (the same `name--batch` id as every LSH platform). They get no form and no PIN.
-  - An account made this way signs in from the Portal only, so nobody can claim it on the sign-in form by choosing a PIN. 👥 Trainees marks it **🏠 Portal sign-in**.
-  - Trainees who signed in here before (with a PIN) are the same account when they come from the Portal.
-- **Administrators** are never signed in by a ticket, as on every LSH platform. They land on the trainer sign-in and type the trainer passphrase. Trainers get a **🏠** button back to the Portal's Training Directory.
+There's **no sign-in form**: everyone comes in from the Portal, signed in there.
+
+- **Trainees** land on their phone, signed in as their Portal name and batch (the same `name--batch` id as every LSH platform). The Portal sends them with a signed ticket that's good for 5 minutes (`?ticket=…`).
+- **Administrators** land on the console, as trainers, under their Portal name. The Portal makes these admin tickets for Ring Channel only; the other platforms still ask admins for their password.
+- **Each ticket works once** (the Switchboard keeps the used ones until they expire), and it leaves the address bar at once, so a link from history or another browser is no use.
 - **The ticket check:** with `PORTAL_SSO_SECRET` set on this Worker (the same value as the Portal's), Ring Channel checks the ticket itself. Without it, it asks the Portal (`POST /api/verify-ticket`), as the CMS does, so it works with no secret to copy. `PORTAL_URL` changes which Portal it asks (default `https://cm-training-activity.pages.dev`).
-- The sign-in form stays for anyone who opens Ring Channel's own link, with a **🏠 Sign in through the LSH Training Portal** button on top.
+- **Opening Ring Channel's own link**, or signing out, shows **🏠 Open Ring Channel from the LSH Training Portal** with a button there. Trainers get a **🏠** button in the top bar back to the Portal's Training Directory.
+- **If the Portal is down**, *Trainer: is the Portal down?* (folded away on that page) opens the console with the trainer passphrase (`ADMIN_PASSPHRASE`). Trainees wait for the Portal.
 
 ## How a live mock call works
 
 **Trainee** (📞 My phone)
-1. Signs in with their full name and batch (the same as on the LSH training platform) and their **PIN**. The first sign-in sets the PIN (4 to 8 digits), so nobody else can sign in as them. Five wrong PINs lock the account for 15 minutes; a trainer can **🔑 Reset PIN** in 👥 Trainees. They keep **My phone** open with a headset on. **🎧 Audio check** tests the microphone, the headset and the speaker.
-   Each trainee gets a **desk extension** (7001, 7002, … in sign-up order), shown on their phone; it's the number the trainer dials.
+1. Opens **☎ LSH Ring Channel** from the LSH Training Portal and lands on **My phone**, signed in (see *On the LSH Training Portal*). They keep it open with a headset on. **🎧 Audio check** tests the microphone, the headset and the speaker.
+   Each trainee gets a **desk extension** (7001, 7002, … in the order they first open Ring Channel), shown on their phone; it's the number the trainer dials.
 2. Sets **● Available** (or **◌ Away**). **✋ Ask for a call** raises a hand on the trainer's switchboard.
 3. When the phone rings, it shows the line (Main Line or Intake Line) and the caller ID. The trainee answers within 3 rings.
 4. During the call, beside the phone:
@@ -41,7 +43,7 @@ Ring Channel opens from the **LSH Training Portal** (`cm-training-activity.pages
 6. After the call, the trainee finishes the note and **submits** it. The trainer's review appears in **🗂 My calls**.
 
 **Trainer** (🎛 Console)
-1. Signs in with their name and the trainer passphrase.
+1. Opens **☎ LSH Ring Channel** from the Portal (Training Directory or Master Control) and lands on the console, signed in under their Portal name.
 2. **☎ Switchboard** (left) shows every trainee online, by batch, with their extension: available, away, on a call, or ✋ asking for a call. It works as the phone's contact list: clicking a trainee puts their extension on the dialer.
 3. The **☎ dialer** is a desk phone on screen:
    - **Dial the trainee's extension** on the keypad (or type it; Backspace deletes, Esc clears). The screen says who it reaches: *Ready to call* with the trainee's name, *Not signed in*, a firm extension (201 is Atty. Reyes), or *No such extension*.
@@ -201,8 +203,8 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
 ## 🧭 Blueprint (how Ring Channel works, for trainees and for trainers)
 
 **🧭** in the header (next to the name and Log out; its name shows on hover) opens the Blueprint, a full-screen slide deck.
-- **Trainee blueprint** (a cover and 9 slides), for trainees: what Ring Channel is, signing in, My phone, answering a call, the tools during a call, the phone's keys (Mute, Speaker, Hold, Transfer, Hang up), after the call, practice with an AI caller, and when the class is listening.
-- **Trainer blueprint** (trainers only; a cover and 9 slides): signing in, the Switchboard and the dialer, on the call, transfers and coaching time-outs, Class view in Meet, graded calls and autograding, the Call log and Trainees, Scenarios, and Setup and AI practice.
+- **Trainee blueprint** (a cover and 9 slides), for trainees: what Ring Channel is, opening it from the Portal, My phone, answering a call, the tools during a call, the phone's keys (Mute, Speaker, Hold, Transfer, Hang up), after the call, practice with an AI caller, and when the class is listening.
+- **Trainer blueprint** (trainers only; a cover and 9 slides): opening the console from the Portal, the Switchboard and the dialer, on the call, transfers and coaching time-outs, Class view in Meet, graded calls and autograding, the Call log and Trainees, Scenarios, and Setup and AI practice.
 - Trainers get both decks as tabs; trainees only ever get the Trainee blueprint. Neither shows in the 📺 Class view.
 - **Moving around:** ◀ ▶, the ← → keys or the contents strip. Esc closes it.
 - **Numbering:** the cover is ★ Cover (the counter says "Cover · 9 slides"); the slides are 1 to 9 everywhere: the contents strip, the counter ("9 / 9" on the last), the slide's heading and footer, and the PDF's page footers.
@@ -218,10 +220,9 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
 
    | Secret | What it does |
    |---|---|
-   | `ADMIN_PASSPHRASE` | **Required.** The trainer sign-in. Nobody can sign in until it's set. |
-   | `SESSION_SECRET` | Optional. Signs sign-in tokens (defaults to `ADMIN_PASSPHRASE`; changing it signs everyone out). |
+   | `ADMIN_PASSPHRASE` | **Required.** Signs the sign-in tokens, and opens the console when the Portal is down (the trainers' fallback). |
+   | `SESSION_SECRET` | Optional. Signs the sign-in tokens instead of `ADMIN_PASSPHRASE` (changing it signs everyone out). |
    | `PORTAL_SSO_SECRET` | Optional. The LSH Training Portal's sign-in secret: Ring Channel then checks the Portal's tickets itself instead of asking the Portal (see *On the LSH Training Portal*). |
-   | `TRAINEE_CODE` | Optional. A code trainees must enter to sign in. Without it, anyone with the link can create a trainee account (their own PIN still protects everyone else's). |
    | `TURN_KEY_ID`, `TURN_KEY_API_TOKEN` | **Recommended.** Cloudflare's TURN relay (step 3). |
    | `GEMINI_API_KEY5` … `GEMINI_API_KEY9` | Optional. AI practice callers and autograding. |
 
@@ -229,7 +230,7 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
    - Without it, most calls still connect directly. Trainees on strict home routers, mobile data or office networks may get no audio: their phone says "Still connecting the audio…".
    - The relay is paid by traffic, with a free monthly allowance; a voice call uses well under 1 MB a minute.
    - **⚙️ Setup → 🌐 Network test** shows whether a computer gets relay candidates.
-4. **Check the setup:** sign in as a trainer and open **⚙️ Setup**. It shows the TURN relay, recordings, AI keys and the access code, plus an audio check and a network test.
+4. **Check the setup:** open Ring Channel from the Portal as an administrator and go to **⚙️ Setup**. It shows the TURN relay, recordings, AI keys and the Portal sign-in, plus an audio check and a network test.
 
 **Browsers:** Chrome or Edge on a computer, with a headset (that's what the tests run on). Other current browsers with WebRTC should work but aren't tested. Pages must be served over https, which Cloudflare does; browsers only allow the microphone on https.
 
@@ -239,11 +240,13 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
 
 ```
 npm install
-cp .dev.vars.example .dev.vars      # ADMIN_PASSPHRASE for local sign-in
+cp .dev.vars.example .dev.vars      # ADMIN_PASSPHRASE, and PORTAL_SSO_SECRET=portal-test-secret for local sign-in links
 npx wrangler dev                    # http://localhost:8787
+node tests/portal-ticket.js trainee "Jamie Cruz" B093026   # prints a one-time sign-in link, as the Portal makes
+node tests/portal-ticket.js trainer "Coach Ana"
 ```
 
-Open it in two browser windows (or one normal and one private window): sign in as a trainee in one and as a trainer in the other, and ring the trainee. `localhost` counts as secure, so the microphone works.
+Open the two links in two browser windows (or one normal and one private window), and ring the trainee. `localhost` counts as secure, so the microphone works.
 
 **Tests** (`tests/`): two headless Chrome windows with fake microphones run through a local `wrangler dev` with a stand-in for Google's Gemini API (`tests/mock-gemini.js`).
 
@@ -257,7 +260,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - 🔊 Speaker on the dialer and on the trainee's phone (the call keeps playing), and the audio check's output choices;
   - the ✋ request, the live note, hold with hold music, a transfer answered "no answer", a coaching time-out;
   - the 📺 Class view: it plays the call (the console goes quiet), the trainee is told the class is listening, it shows the live note and hold but never the script, and closing it brings the audio back to the console;
-  - signing in as another trainee with a wrong PIN, or none, is refused;
+  - both open Ring Channel from the Portal (tickets); its own link has no sign-in form;
   - a second trainer tab opened mid-call leaves the call alone;
   - a reload of the trainee's page and of the trainer's console mid-call (both reconnect);
   - a 📋 graded call: hang up, the recording and its grading copy uploaded, the note submitted, then the call autograded from the recording with no clicks (all 14 Reception metrics, the transcript);
@@ -269,11 +272,12 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - dialing on the keyboard (201 is a firm extension, Esc clears, 7001 + Enter rings) and a declined call.
 - `blueprint.cjs`: the 🧭 Blueprint. A trainee gets the trainee deck only and a trainer both; every slide fits on a laptop and on a phone; both PDFs have a page per slide; the numbers match everywhere (Cover, then 1 to n, never n + 1).
 - `e2e-portal.js`: opening Ring Channel from the LSH Training Portal (`mock-gemini.js` stands in for the Portal's `/api/verify-ticket`). It checks that:
-  - a trainee's ticket signs them straight in, and the ticket leaves the address;
-  - their account can't be claimed on the sign-in form with a PIN;
-  - expired and forged tickets are refused;
-  - administrators land on the trainer passphrase, and the trainer's 🏠 goes back to the Portal;
-  - 👥 Trainees marks the account.
+  - a trainee's ticket lands them on their phone, and the ticket leaves the address;
+  - a used ticket signs nobody in, and expired and forged tickets are refused;
+  - signed out, the page shows the way to the Portal, with no sign-in form;
+  - an administrator's ticket lands them on the console under their Portal name, and 🏠 goes back to the Portal;
+  - the trainees are on the switchboard and in 👥 Trainees;
+  - the trainers' passphrase fallback still opens the console.
 - `portal-unit.mjs`: the Portal's ticket checked with the shared secret (a trainee, an administrator, the wrong secret, expired, too long, tampered).
 - `e2e-ai.js`: a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, autograding, a typed practice call, the trainer's **Grade again with AI**, and a live-only call that can't be practiced.
 
@@ -290,7 +294,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `src/prompts.js` | The AI caller's instructions and the grader's (the metrics, the facilitator's voice). |
 | `src/gemini.js` | The Gemini key pool, text and audio scoring, and Gemini Live tokens. |
 | `src/portal.js` | The LSH Training Portal's sign-in: checks its ticket (with the shared secret, or by asking the Portal). |
-| `src/auth.js` | Sign-in tokens, trainee ids (the same shapes as the other LSH platforms) and PIN hashing. |
+| `src/auth.js` | Sign-in tokens and trainee ids (the same shapes as the other LSH platforms). |
 | `public/index.html`, `public/css/app.css` | The app shell and its look (LSH navy and orange, IBM Plex). |
 | `public/_headers` | Response headers for the app's files (microphone allowed on this site only, no caching of the page). |
 | `public/js/phone.js` | The VOIP engine: the Switchboard connection, the WebRTC call (with ICE restart), the call recorder, the mic, and the 🔊 speaker key (which audio output the call plays on). |
@@ -307,7 +311,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `.github/workflows/checks.yml` | The checks GitHub runs on every pull request and push to `main`. |
 
 **Data:**
-- Durable Object SQLite: trainees (with a salted hash of each PIN), calls (timings, the note, the transcript, the AI's grade and the reviews), written scenarios, grading settings, usage counts for the AI and sign-in limits, and the Grader's queue.
+- Durable Object SQLite: trainees (with their desk extensions), the Portal tickets already used, calls (timings, the note, the transcript, the AI's grade and the reviews), written scenarios, grading settings, usage counts for the AI and sign-in limits, and the Grader's queue.
 - KV (`LSH_KV`, prefix `voip:`): recordings, and their grading copies.
 
 Trainee ids match the other LSH platforms (`name--batch`). Trainers can archive trainees in **👥 Trainees**.

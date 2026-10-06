@@ -10,7 +10,7 @@ const sign = (body, secret = SECRET) => {
 const soon = Date.now() + 4 * 60000;
 const cases = [
   ['a trainee\'s ticket', sign({ first: 'Ana María', last: 'Lopez', b: 'B100626', exp: soon }), (r) => r.ok && r.first === 'Ana María' && r.last === 'Lopez' && r.batch === 'B100626'],
-  ['an administrator\'s ticket', sign({ r: 'a', exp: soon }), (r) => r.ok && r.admin],
+  ['an administrator\'s ticket', sign({ r: 'a', n: 'Coach Ana', exp: soon }), (r) => r.ok && r.admin && r.name === 'Coach Ana' && r.sig && r.exp === soon],
   ['another secret', sign({ first: 'A', last: 'B', b: 'B1', exp: soon }, 'other'), (r) => !r.ok && r.code === 'signature'],
   ['an expired ticket', sign({ first: 'A', last: 'B', b: 'B1', exp: Date.now() - 1000 }), (r) => !r.ok && r.code === 'expired'],
   ['a ticket good for too long', sign({ first: 'A', last: 'B', b: 'B1', exp: Date.now() + 3600000 }), (r) => !r.ok && r.code === 'expired'],
