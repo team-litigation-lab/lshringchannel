@@ -14,6 +14,17 @@ When no trainer is free, trainees can **practice** the same calls with an **AI c
 
 Everything runs in the browser; there are no phone numbers and no phone bills. It's a Cloudflare Worker with two Durable Objects: the Switchboard and the Grader. The audio goes straight between the two browsers over WebRTC, through a TURN relay when a network blocks direct audio.
 
+## On the LSH Training Portal
+
+Ring Channel opens from the **LSH Training Portal** (`cm-training-activity.pages.dev`, the Training-Portal repo), like the CMS and the Knowledge Base: **☎ LSH Ring Channel** is on the Training Directory, on the home page's Simulators, on **🛠 Simulators**, and in the admin menu. Each opens `/api/launch?tool=ringchannel`.
+
+- **Trainees** arrive signed in. The Portal sends them here with a signed ticket that's good for 5 minutes (`?ticket=…`), and Ring Channel signs them in as their Portal name and batch (the same `name--batch` id as every LSH platform). They get no form and no PIN.
+  - An account made this way signs in from the Portal only, so nobody can claim it on the sign-in form by choosing a PIN. 👥 Trainees marks it **🏠 Portal sign-in**.
+  - Trainees who signed in here before (with a PIN) are the same account when they come from the Portal.
+- **Administrators** are never signed in by a ticket, as on every LSH platform. They land on the trainer sign-in and type the trainer passphrase. Trainers get a **🏠** button back to the Portal's Training Directory.
+- **The ticket check:** with `PORTAL_SSO_SECRET` set on this Worker (the same value as the Portal's), Ring Channel checks the ticket itself. Without it, it asks the Portal (`POST /api/verify-ticket`), as the CMS does, so it works with no secret to copy. `PORTAL_URL` changes which Portal it asks (default `https://cm-training-activity.pages.dev`).
+- The sign-in form stays for anyone who opens Ring Channel's own link, with a **🏠 Sign in through the LSH Training Portal** button on top.
+
 ## How a live mock call works
 
 **Trainee** (📞 My phone)
@@ -209,6 +220,7 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
    |---|---|
    | `ADMIN_PASSPHRASE` | **Required.** The trainer sign-in. Nobody can sign in until it's set. |
    | `SESSION_SECRET` | Optional. Signs sign-in tokens (defaults to `ADMIN_PASSPHRASE`; changing it signs everyone out). |
+   | `PORTAL_SSO_SECRET` | Optional. The LSH Training Portal's sign-in secret: Ring Channel then checks the Portal's tickets itself instead of asking the Portal (see *On the LSH Training Portal*). |
    | `TRAINEE_CODE` | Optional. A code trainees must enter to sign in. Without it, anyone with the link can create a trainee account (their own PIN still protects everyone else's). |
    | `TURN_KEY_ID`, `TURN_KEY_API_TOKEN` | **Recommended.** Cloudflare's TURN relay (step 3). |
    | `GEMINI_API_KEY5` … `GEMINI_API_KEY9` | Optional. AI practice callers and autograding. |
@@ -239,7 +251,7 @@ Open it in two browser windows (or one normal and one private window): sign in a
 npm test        # or: cd tests && npm install && npx playwright install chromium && bash run.sh
 ```
 
-`SHOTS=<folder>` keeps the screenshots the tests take; `LIVE_ONLY=1` runs only the live-call test; `PORT=<port>` if 8799 is taken. Google Meet itself can't be driven in a test: the tests check that the Class view plays the call's audio, which is what Meet's "share tab audio" sends.
+`SHOTS=<folder>` keeps the screenshots the tests take; `LIVE_ONLY=1` runs only the live-call test; `ONLY=<test file>` runs just that one (e.g. `ONLY=e2e-portal.js`); `PORT=<port>` if 8799 is taken. Google Meet itself can't be driven in a test: the tests check that the Class view plays the call's audio, which is what Meet's "share tab audio" sends.
 
 - `e2e-live.js`: the trainer dials the trainee's extension (7001) on the dialer's keypad and rings, the trainee answers, and audio flows both ways. Then it runs:
   - 🔊 Speaker on the dialer and on the trainee's phone (the call keeps playing), and the audio check's output choices;
@@ -256,6 +268,13 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - an open call with no script on the Intake line (WIRELESS CALLER on the Intake Line, the open-call card with the case files, the Intake note);
   - dialing on the keyboard (201 is a firm extension, Esc clears, 7001 + Enter rings) and a declined call.
 - `blueprint.cjs`: the 🧭 Blueprint. A trainee gets the trainee deck only and a trainer both; every slide fits on a laptop and on a phone; both PDFs have a page per slide; the numbers match everywhere (Cover, then 1 to n, never n + 1).
+- `e2e-portal.js`: opening Ring Channel from the LSH Training Portal (`mock-gemini.js` stands in for the Portal's `/api/verify-ticket`). It checks that:
+  - a trainee's ticket signs them straight in, and the ticket leaves the address;
+  - their account can't be claimed on the sign-in form with a PIN;
+  - expired and forged tickets are refused;
+  - administrators land on the trainer passphrase, and the trainer's 🏠 goes back to the Portal;
+  - 👥 Trainees marks the account.
+- `portal-unit.mjs`: the Portal's ticket checked with the shared secret (a trainee, an administrator, the wrong secret, expired, too long, tampered).
 - `e2e-ai.js`: a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, autograding, a typed practice call, the trainer's **Grade again with AI**, and a live-only call that can't be practiced.
 
 **Checks on GitHub** (`.github/workflows/checks.yml`): every pull request and every push to `main` builds the Worker without deploying (`npm run check`) and runs all of the tests above (`tests/run.sh`). A red **Checks** status means something broke; the log says which step.
@@ -270,6 +289,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `src/scenarios.js` | The firm (directory, rules), the case files, the note forms, the Mock Calls Metrics, and the 24 calls. |
 | `src/prompts.js` | The AI caller's instructions and the grader's (the metrics, the facilitator's voice). |
 | `src/gemini.js` | The Gemini key pool, text and audio scoring, and Gemini Live tokens. |
+| `src/portal.js` | The LSH Training Portal's sign-in: checks its ticket (with the shared secret, or by asking the Portal). |
 | `src/auth.js` | Sign-in tokens, trainee ids (the same shapes as the other LSH platforms) and PIN hashing. |
 | `public/index.html`, `public/css/app.css` | The app shell and its look (LSH navy and orange, IBM Plex). |
 | `public/_headers` | Response headers for the app's files (microphone allowed on this site only, no caching of the page). |

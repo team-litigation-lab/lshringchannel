@@ -24,6 +24,7 @@ import { makeToken, readToken, readTokenString, safeEqual, traineeId } from './a
 import { FIRM, CASES, TRACKS, NOTE_FORMS, LINES, LEVELS, CMS_URL, traineeView, openCall } from './scenarios.js';
 import { hasAI, keyNames, generate, liveToken } from './gemini.js';
 import { callerPrompt, liveSetup } from './prompts.js';
+import { readPortalTicket, portalHome } from './portal.js';
 
 export { Switchboard, Grader };
 
@@ -106,7 +107,7 @@ export default {
 
       /* ---------- sign-in ---------- */
       if (path === '/api/auth/status') {
-        return json({ configured: !!env.ADMIN_PASSPHRASE, traineeCode: !!env.TRAINEE_CODE, ai: hasAI(env), turn: !!(env.TURN_KEY_ID && env.TURN_KEY_API_TOKEN), recordings: !!env.LSH_KV, firm: FIRM.name });
+        return json({ configured: !!env.ADMIN_PASSPHRASE, traineeCode: !!env.TRAINEE_CODE, ai: hasAI(env), turn: !!(env.TURN_KEY_ID && env.TURN_KEY_API_TOKEN), recordings: !!env.LSH_KV, firm: FIRM.name, portal: portalHome(env) });
       }
       if (path === '/api/auth/admin') {
         if (!env.ADMIN_PASSPHRASE) return json({ error: 'Trainer sign-in isn\'t set up yet: add the ADMIN_PASSPHRASE secret in Cloudflare.' }, 501);
@@ -115,6 +116,24 @@ export default {
         if (!safeEqual(String(passphrase || ''), env.ADMIN_PASSPHRASE)) return json({ error: 'Incorrect passphrase' }, 401);
         const who = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 40) || 'Trainer';
         return json({ token: await makeToken(env, 'a', who, 12), role: 'a', id: who, name: who });
+      }
+      // 🏠 Opened from the LSH Training Portal: its short-lived ticket signs a trainee in (src/portal.js).
+      if (path === '/api/auth/portal') {
+        if (!env.ADMIN_PASSPHRASE) return json({ error: 'Sign-in isn\'t set up yet: the trainer needs to add the ADMIN_PASSPHRASE secret in Cloudflare.', code: 'not-configured' }, 501);
+        const { ticket } = await request.json().catch(() => ({}));
+        const v = await readPortalTicket(env, ticket);
+        if (!v.ok) {
+          const why = { expired: 'This link from the LSH Training Portal has expired. Open Ring Channel from the Portal again.',
+            unreachable: 'Couldn\'t reach the LSH Training Portal to check your sign-in. Try again in a moment.',
+            signature: 'The LSH Training Portal\'s sign-in couldn\'t be verified here (PORTAL_SSO_SECRET differs from the Portal\'s). Please tell your administrator.' }[v.code];
+          return json({ error: why || 'The LSH Training Portal didn\'t confirm this sign-in. Open Ring Channel from the Portal again.', code: v.code }, 401);
+        }
+        if (v.admin || v.system) return json({ error: 'Trainers sign in here with the trainer passphrase.', code: 'admin-password' }, 403);
+        const n = `${v.first} ${v.last}`.replace(/\s+/g, ' ').slice(0, 60), b = v.batch.replace(/\s+/g, ' ').slice(0, 30);
+        const id = traineeId(n, b);
+        const res = await board(env).traineePortalSignIn(id, n, b);
+        if (res.error) return json({ error: res.error }, res.status || 400);
+        return json({ token: await makeToken(env, 't', id, 24 * 30), role: 't', id, name: res.trainee.name, batch: res.trainee.batch, portal: true });
       }
       if (path === '/api/auth/trainee') {
         if (!env.ADMIN_PASSPHRASE) return json({ error: 'Sign-in isn\'t set up yet: the trainer needs to add the ADMIN_PASSPHRASE secret in Cloudflare.' }, 501);
@@ -127,7 +146,7 @@ export default {
         }
         const id = traineeId(n, b);
         const res = await board(env).traineeSignIn(id, n, b, String(pin || '').trim());
-        if (res.error) return json({ error: res.error, needPin: !!res.needPin, firstTime: !!res.firstTime }, res.status || 400);
+        if (res.error) return json({ error: res.error, needPin: !!res.needPin, firstTime: !!res.firstTime, portal: !!res.portal }, res.status || 400);
         const rec = res.trainee;
         return json({ token: await makeToken(env, 't', id, 24 * 30), role: 't', id, name: rec.name, batch: rec.batch });
       }
@@ -150,7 +169,7 @@ export default {
         const all = await sb.listScenarios();
         const st = await sb.getSettings();
         return json({
-          me, firm: FIRM, cases: CASES, tracks: TRACKS, forms: NOTE_FORMS, lines: LINES, levels: LEVELS, cms: CMS_URL, openCaller: openCall('reception').caller,
+          me, firm: FIRM, cases: CASES, tracks: TRACKS, forms: NOTE_FORMS, lines: LINES, levels: LEVELS, cms: CMS_URL, portal: portalHome(env), openCaller: openCall('reception').caller,
           scenarios: admin ? all : all.map(traineeView),
           features: { ai: hasAI(env), recordings: !!env.LSH_KV, aiMinutes: aiMinutes(env) },
           settings: admin ? st : { weights: st.weights, passMark: st.passMark }

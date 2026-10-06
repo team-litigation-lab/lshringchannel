@@ -2,6 +2,7 @@
 const http = require('http');
 const { WebSocketServer } = require('ws');
 const log = [];
+const PORTAL_TEST_SECRET = 'portal-test-secret';
 const server = http.createServer((req, res) => {
   let body = '';
   req.on('data', (c) => (body += c));
@@ -9,6 +10,17 @@ const server = http.createServer((req, res) => {
     const j = (() => { try { return JSON.parse(body); } catch (e) { return {}; } })();
     log.push({ url: req.url, key: req.headers['x-goog-api-key'], size: body.length });
     if (req.url === '/log') { res.end(JSON.stringify(log)); return; }
+    // A stand-in for the LSH Training Portal's /api/verify-ticket (functions/api/verify-ticket.js in Training-Portal):
+    // the tests sign tickets with PORTAL_TEST_SECRET, as the Portal signs them with PORTAL_SSO_SECRET.
+    if (req.url === '/api/verify-ticket') {
+      const parts = String(j.ticket || '').split('.');
+      const good = parts.length === 2 && require('crypto').createHmac('sha256', 'portal-sso:' + PORTAL_TEST_SECRET).update(parts[0]).digest('base64url') === parts[1];
+      if (!good) { res.statusCode = 401; res.end(JSON.stringify({ ok: false, code: 'signature' })); return; }
+      const t = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
+      if (!(t.exp > Date.now())) { res.statusCode = 401; res.end(JSON.stringify({ ok: false, code: 'expired' })); return; }
+      res.end(JSON.stringify(t.r === 'a' ? { ok: true, admin: true } : { ok: true, first: t.first, last: t.last, batch: t.b }));
+      return;
+    }
     if (req.url.startsWith('/v1beta/auth_tokens')) {
       const sys = JSON.stringify(j.bidiGenerateContentSetup || {});
       res.end(JSON.stringify({ name: 'auth_tokens/fake-' + (/Greg Hollis|Maria Santos|Derek/.test(sys) ? 'ok' : 'other') }));

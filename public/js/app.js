@@ -24,8 +24,30 @@
   // while a second tab only offers to move the call to itself.
   App.ownCall = (id) => { try { if (id === undefined) return sessionStorage.getItem('mcv_call'); if (id) sessionStorage.setItem('mcv_call', id); else sessionStorage.removeItem('mcv_call'); } catch (e) { return null; } };
 
+  // 🏠 Opened from the LSH Training Portal: ?ticket=… signs the trainee in (the Worker checks it, src/portal.js);
+  // ?admin=1 is a trainer, who signs in here with the trainer passphrase. Both leave the address at once.
+  function fromPortal() {
+    let ticket = '', admin = false;
+    try {
+      const u = new URL(location.href);
+      ticket = u.searchParams.get('ticket') || ''; admin = u.searchParams.get('admin') === '1';
+      if (ticket || u.searchParams.has('admin')) { u.searchParams.delete('ticket'); u.searchParams.delete('admin'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); }
+    } catch (e) { /* an odd address: nothing to take */ }
+    return { ticket, admin };
+  }
+
   App.boot = async function () {
     window.addEventListener('hashchange', () => App.go());
+    const portal = fromPortal();
+    if (portal.ticket) {
+      try {
+        const res = await API.post('/api/auth/portal', { ticket: portal.ticket });
+        API.signIn(res);
+        if (!/^#\/(phone|practice|calls|call\/)/.test(location.hash)) history.replaceState(history.state, '', location.pathname + location.search + '#/phone');
+      } catch (e) {
+        return App.showLogin(e.code === 'admin-password' ? { trainer: true, notice: 'Trainers sign in with the trainer passphrase.' } : { notice: e.message, error: true });
+      }
+    } else if (portal.admin && !(API.me && API.me.role === 'a')) return App.showLogin({ trainer: true, notice: 'Trainers sign in with the trainer passphrase.' });
     if (!API.token) return App.showLogin();
     try { App.cfg = await API.post('/api/config'); }
     catch (e) {
@@ -52,7 +74,7 @@
     const nav = document.getElementById('nav'), who = document.getElementById('who');
     if (!App.me) { nav.innerHTML = ''; who.innerHTML = ''; return; }
     nav.innerHTML = App.navItems().map(([k, l]) => `<a href="#/${k}" class="${App.route.name === k ? 'on' : ''}">${l}${k === 'calls' && App.unread ? '<span class="dot"></span>' : ''}</a>`).join('');
-    who.innerHTML = `<span class="chip">${App.trainer() ? '🎓 Trainer' : '🎧 Trainee'} · ${esc(App.me.name)}${App.me.batch ? ' · ' + esc(App.me.batch) : ''}</span><button type="button" title="Signed in as ${esc(App.me.name)}" onclick="App.logout()">Log out</button>`;
+    who.innerHTML = `${App.trainer() && App.cfg && App.cfg.portal ? `<a class="hdr-btn" href="${esc(App.cfg.portal)}" title="LSH Training Portal (Training Directory)" aria-label="LSH Training Portal">🏠</a>` : ''}<span class="chip">${App.trainer() ? '🎓 Trainer' : '🎧 Trainee'} · ${esc(App.me.name)}${App.me.batch ? ' · ' + esc(App.me.batch) : ''}</span><button type="button" title="Signed in as ${esc(App.me.name)}" onclick="App.logout()">Log out</button>`;
   };
 
   App.go = function () {
@@ -82,19 +104,23 @@
   };
 
   /* ---------- sign-in ---------- */
-  App.showLogin = async function () {
+  App.showLogin = async function (opts) {
+    opts = opts || {};
     App.me = null; App.header();
     const app = document.getElementById('app');
     let st = {};
     try { st = await API.post('/api/auth/status'); } catch (e) { st = {}; }
+    const portal = st.portal || 'https://cm-training-activity.pages.dev/programs.html';
     app.innerHTML = `<div class="login">
       <div class="login-hero"><div class="big">☎</div><h1>LSH Ring Channel</h1>
         <p>The training phone system for Receptionist and Intake mock calls. Your trainer rings your phone here and plays the caller, live; you answer, handle the call and take the note, and get scored.</p></div>
+      ${opts.notice ? `<div class="${opts.error ? 'err-box' : 'note-box'}" id="loginNotice" style="margin-bottom:16px">${esc(opts.notice)}</div>` : ''}
       ${st.configured === false ? `<div class="warn-box" style="margin-bottom:16px">Sign-in isn't set up yet. The trainer adds the <b>ADMIN_PASSPHRASE</b> secret in Cloudflare (see the README).</div>` : ''}
       <div class="grid2">
         <form class="card" id="fTrainee" autocomplete="on">
           <h2>🎧 Trainee</h2>
-          <p class="muted small">Use the same full name and batch as on your LSH training platform. The first time, choose a PIN: it keeps your calls and scores yours.</p>
+          <a class="btn btn-primary" id="tPortal" href="${esc(portal)}" style="width:100%;justify-content:center;margin-bottom:12px">🏠 Sign in through the LSH Training Portal</a>
+          <p class="muted small">On the Portal, open <b>☎ LSH Ring Channel</b> from the Training Directory: you're signed in here with your Portal account. Or sign in below with the same full name and batch as on your LSH training platform; the first time, choose a PIN: it keeps your calls and scores yours.</p>
           <div class="field"><label class="f" for="tn">Full name</label><input class="input" id="tn" name="name" autocomplete="name" required></div>
           <div class="field"><label class="f" for="tb">Batch</label><input class="input" id="tb" name="batch" placeholder="e.g. B082826" required></div>
           <div class="field"><label class="f" for="tp">PIN <span class="muted" style="font-weight:400">(first time? choose 4 to 8 digits)</span></label><input class="input" id="tp" name="pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" autocomplete="current-password" required></div>
@@ -111,9 +137,10 @@
           <div class="err-box hidden" id="aErr" style="margin-top:10px"></div>
         </form>
       </div>
-      <p class="muted small" style="text-align:center;margin-top:18px">Use Chrome or Edge on a computer with a headset. The caller, the firm and every case are fictional.</p>
+      <p class="muted small" style="text-align:center;margin-top:18px"><a href="${esc(portal)}">← Back to the LSH Training Portal</a> · Use Chrome or Edge on a computer with a headset. The caller, the firm and every case are fictional.</p>
     </div>`;
     const fail = (id, e) => { const el = document.getElementById(id); el.textContent = e.message; el.classList.remove('hidden'); };
+    if (opts.trainer) { const f = U.$('#an'); if (f) { f.closest('form').classList.add('pick'); f.focus(); } }
     document.getElementById('fTrainee').onsubmit = async (ev) => {
       ev.preventDefault();
       try {
