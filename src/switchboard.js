@@ -54,6 +54,11 @@ export class Switchboard extends DurableObject {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT)`);
     // Each trainee's PIN (a salted hash), set at their first sign-in.
     if (!this.sql.exec(`SELECT name FROM pragma_table_info('trainees') WHERE name = 'pin'`).toArray().length) this.sql.exec('ALTER TABLE trainees ADD COLUMN pin TEXT');
+    // Each trainee's desk extension (7001, 7002, …), so the trainer can dial them. The firm's own
+    // directory uses 100 to 500, so a trainee's extension never clashes with a transfer.
+    if (!this.sql.exec(`SELECT name FROM pragma_table_info('trainees') WHERE name = 'ext'`).toArray().length) this.sql.exec('ALTER TABLE trainees ADD COLUMN ext TEXT');
+    this.sql.exec('CREATE UNIQUE INDEX IF NOT EXISTS trainees_by_ext ON trainees (ext)');
+    for (const t of this.sql.exec('SELECT id FROM trainees WHERE ext IS NULL ORDER BY created_at').toArray()) this.giveExt(t.id);
     // Phones ping every 20 seconds; this answers without waking the object.
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
   }
@@ -72,6 +77,12 @@ export class Switchboard extends DurableObject {
     r.created_at, r.answered_at || null, r.ended_at || null, r.reviewed ? 1 : 0, r.score == null ? null : r.score, JSON.stringify(r.data || {}));
   }
   trainee(id) { return this.sql.exec('SELECT * FROM trainees WHERE id = ?', id).toArray()[0] || null; }
+  giveExt(id) {
+    const top = this.sql.exec('SELECT MAX(CAST(ext AS INTEGER)) AS n FROM trainees').toArray()[0].n;
+    const ext = String(Math.max(7000, Number(top) || 0) + 1);
+    this.sql.exec('UPDATE trainees SET ext = ? WHERE id = ? AND ext IS NULL', ext, id);
+    return ext;
+  }
   scenario(id) {
     const c = this.sql.exec('SELECT data FROM scenarios WHERE id = ? AND deleted = 0', id).toArray()[0];
     if (c) return JSON.parse(c.data);
@@ -95,7 +106,7 @@ export class Switchboard extends DurableObject {
     const [client, server] = Object.values(pair);
     const cid = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
     this.ctx.acceptWebSocket(server, ['c:' + cid, 'u:' + who.id, 'r:' + who.role]);
-    const me = { cid, role: who.role, id: who.id, name: prof ? prof.name : who.id, batch: prof ? prof.batch : '', status: who.role === 't' ? 'available' : 'online', hand: false, handAt: 0, call: null, at: now() };
+    const me = { cid, role: who.role, id: who.id, name: prof ? prof.name : who.id, batch: prof ? prof.batch : '', ext: prof ? prof.ext || '' : '', status: who.role === 't' ? 'available' : 'online', hand: false, handAt: 0, call: null, at: now() };
     server.serializeAttachment(me);
     if (prof) this.sql.exec('UPDATE trainees SET last_seen = ? WHERE id = ?', now(), who.id);
     // A phone that reconnects mid-call is told about it, so it can resume.
@@ -114,7 +125,7 @@ export class Switchboard extends DurableObject {
     const b = { callId: r.id, status: r.status, line, lineLabel: LINES[line].label, lineNumber: LINES[line].number, track: s.track,
       callerId: r.data.withheld ? { name: 'PRIVATE CALLER', number: 'Unknown' } : { name: s.caller.idName, number: s.caller.number },
       createdAt: r.created_at, answeredAt: r.answered_at || null, recording: !!r.data.record, trainer: r.trainer, live: r.data.live || {} };
-    if (role === 'a') Object.assign(b, { scenario: s, graded: !!r.data.graded, trainee: { id: r.trainee_id, name: r.trainee_name, batch: r.batch }, note: r.data.note || {}, ticks: r.data.ticks || [], metrics: r.data.metrics || {}, traineeCid: r.data.traineeCid || null });
+    if (role === 'a') Object.assign(b, { scenario: s, graded: !!r.data.graded, trainee: { id: r.trainee_id, name: r.trainee_name, batch: r.batch, ext: (this.trainee(r.trainee_id) || {}).ext || '' }, note: r.data.note || {}, ticks: r.data.ticks || [], metrics: r.data.metrics || {}, traineeCid: r.data.traineeCid || null });
     else Object.assign(b, { trainerCid: r.data.trainerCid || null, note: r.data.note || {}, hideCases: s.hideCases || [], caseId: null });
     return b;
   }
@@ -125,7 +136,7 @@ export class Switchboard extends DurableObject {
     const byId = new Map();
     for (const [, a] of all) {
       if (a.role !== 't') continue;
-      const cur = byId.get(a.id) || { id: a.id, name: a.name, batch: a.batch, status: 'away', hand: false, handAt: 0, call: null, tabs: 0 };
+      const cur = byId.get(a.id) || { id: a.id, name: a.name, batch: a.batch, ext: a.ext || '', status: 'away', hand: false, handAt: 0, call: null, tabs: 0 };
       cur.tabs++;
       if (a.status === 'available') cur.status = 'available';
       if (a.hand) { cur.hand = true; cur.handAt = Math.max(cur.handAt, a.handAt || 0); }
@@ -422,14 +433,15 @@ export class Switchboard extends DurableObject {
       this.sql.exec('UPDATE trainees SET pin = ?, last_seen = ? WHERE id = ?', await hashPin(pin), now(), id);
     } else {
       this.sql.exec('INSERT INTO trainees (id, name, batch, created_at, last_seen, pin) VALUES (?, ?, ?, ?, ?, ?)', id, name, batch, now(), now(), await hashPin(pin));
+      this.giveExt(id);
     }
     const t = this.trainee(id);
-    return { trainee: { id: t.id, name: t.name, batch: t.batch } };
+    return { trainee: { id: t.id, name: t.name, batch: t.batch, ext: t.ext || '' } };
   }
   resetPin(id) { this.sql.exec('UPDATE trainees SET pin = NULL WHERE id = ?', id); return true; }
   getTrainee(id) { const t = this.trainee(id); if (t) delete t.pin; return t; }
   listTrainees() {
-    return this.sql.exec(`SELECT t.id, t.name, t.batch, t.created_at, t.last_seen, t.archived, (t.pin IS NOT NULL) AS hasPin,
+    return this.sql.exec(`SELECT t.id, t.name, t.batch, t.ext, t.created_at, t.last_seen, t.archived, (t.pin IS NOT NULL) AS hasPin,
       (SELECT COUNT(*) FROM calls c WHERE c.trainee_id = t.id AND c.status = 'ended' AND c.mode = 'live') AS calls,
       (SELECT COUNT(*) FROM calls c WHERE c.trainee_id = t.id AND c.status = 'ended' AND c.mode = 'ai') AS practice,
       (SELECT AVG(score) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'live' AND c.reviewed = 1 AND c.score IS NOT NULL) AS avg,

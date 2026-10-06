@@ -37,7 +37,10 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.fill('#an', 'Coach Ana'); await tr.fill('#ap', 'test-pass');
   await tr.click('#fTrainer button');
   await tr.waitForSelector('#roster .tr[data-tid]');
-  ok('Trainer signed in; trainee appears on the switchboard');
+  const ext = (await tr.textContent('#roster .tr[data-tid] .bt')).match(/ext (\d+)/);
+  if (!ext || ext[1] !== '7001') throw new Error('The trainee should have desk extension 7001: ' + (await tr.textContent('#roster .tr[data-tid] .bt')));
+  if (!/ext 7001/.test(await te.textContent('#device .dev-head'))) throw new Error('The trainee\'s phone should show its extension');
+  ok('Trainer signed in; trainee appears on the switchboard with desk extension 7001 (also on their phone)');
 
   // Trainee raises a hand
   await te.click('[data-act="hand"]');
@@ -45,11 +48,29 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   ok('Trainee "Ask for a call" shows ✋ on the trainer switchboard');
   await te.screenshot({ path: OUT + '/01-trainee-idle.png' });
 
-  // Trainer picks the trainee + a scenario and rings
-  await tr.click('#roster .tr[data-tid]');
+  // Trainer dials the trainee's extension on the dialer's keypad, picks the call to play, and rings
+  for (const d of '7001') await tr.click(`#dialer [data-dk="${d}"]`);
+  await tr.waitForFunction(() => /Ready to call/.test(document.querySelector('#dialer .lcd').textContent) && /Jamie Cruz/.test(document.querySelector('#dialer .lcd').textContent));
+  if ((await tr.textContent('#dlNum')).trim() !== '7001') throw new Error('The dialer shows ' + await tr.textContent('#dlNum'));
   await tr.click('#pkList .scen[data-sid="ft_rc_offer"]');
+  if (!/LIBERTY CREST INS/.test(await tr.textContent('#dialer .lcd-cid'))) throw new Error('The dialer should show the caller ID the trainee will see');
   if (!(await tr.isChecked('#pkGraded'))) throw new Error('New live calls should start as graded mock calls');
+  ok('Dialer: 7001 on the keypad finds Jamie Cruz ("Ready to call"), with the caller ID the trainee will see');
+  // 🔊 Speaker on the dialer: lights up, shows on the screen, sends the call audio to the speaker output
+  await tr.click('#dialer [data-act="speaker"]');
+  await tr.waitForSelector('#dialer .key.spk.on');
+  if (!/SPEAKER/.test(await tr.textContent('#dialer .lcd-badges'))) throw new Error('The dialer screen should show SPEAKER');
+  if (!(await tr.evaluate(() => VoIP.Speaker.on && JSON.parse(localStorage.getItem('mcv_speaker')).on))) throw new Error('Speaker state not kept');
   await tr.screenshot({ path: OUT + '/02-trainer-picker.png', fullPage: true });
+  await tr.click('#dialer [data-act="speaker"]');
+  await tr.waitForSelector('#dialer .key.spk:not(.on)');
+  ok('🔊 Speaker key turns on (lit, SPEAKER on the screen, kept on this computer) and back off');
+  await tr.click('#dialer [data-act="miccheck"]');
+  await tr.waitForSelector('.modal [data-out="speaker"]', { timeout: 10000 });
+  const outs = await tr.$$eval('.modal [data-out="speaker"] option', (o) => o.length);
+  await tr.click('.modal [data-out="test-speaker"]');
+  await tr.click('.modal [data-x]');
+  ok(`🎧 Audio check lists the outputs for the headset and the speaker (${outs} choices) and plays a test tone`);
   await tr.click('[data-act="ring"]');
   await te.waitForSelector('.lcd.ringing');
   const cid = await te.textContent('.lcd-name');
@@ -58,9 +79,10 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await sleep(1500);
   await te.click('[data-act="answer"]');
   await te.waitForSelector('.lcd.live', { timeout: 20000 });
-  await tr.waitForSelector('#callbar .t', { timeout: 20000 });
+  await tr.waitForSelector('#dialer .lcd-timer', { timeout: 20000 });
   ok('Answered: both sides connected over WebRTC');
-  if (!/GRADED/.test(await tr.textContent('#callbar'))) throw new Error('The call bar should show GRADED');
+  if (!/GRADED/.test(await tr.textContent('#dialer'))) throw new Error('The dialer should show GRADED');
+  if (!/Ext 7001/.test(await tr.textContent('#dialer .lcd'))) throw new Error('The dialer should show who is on the line');
 
   // Audio flows both ways
   await sleep(3000);
@@ -74,6 +96,20 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   if (!(a1.bytes > 2000 && a2.bytes > 2000)) throw new Error('No audio: ' + JSON.stringify({ a1, a2 }));
   ok(`Audio both ways: trainee received ${a1.bytes} B (level ${a1.level.toFixed(3)}), trainer received ${a2.bytes} B (level ${a2.level.toFixed(3)})`);
 
+  // 🔊 Speaker on a call: the trainee's phone and the trainer's dialer, and the call keeps playing
+  await te.click('#device [data-act="speaker"]');
+  await te.waitForFunction(() => /SPEAKER/.test(document.querySelector('#device .lcd-badges').textContent) && document.querySelector('#device .key.spk.on'));
+  await tr.click('#dialer [data-act="speaker"]');
+  await tr.waitForFunction(() => /SPEAKER/.test(document.querySelector('#dialer .lcd-badges').textContent));
+  await sleep(1200);
+  const playing = await Promise.all([te, tr].map((p) => p.evaluate(() => { const a = document.getElementById('remoteAudio'); return !!a.srcObject && !a.paused; })));
+  if (!playing.every(Boolean)) throw new Error('The call stopped playing when the speaker came on: ' + playing);
+  await te.click('#device [data-act="speaker"]');
+  await tr.click('#dialer [data-act="speaker"]');
+  await te.waitForFunction(() => !/SPEAKER/.test(document.querySelector('#device .lcd-badges').textContent));
+  await tr.waitForFunction(() => !/SPEAKER/.test(document.querySelector('#dialer .lcd-badges').textContent));
+  ok('🔊 Speaker on the call (trainee phone and trainer dialer): shown on both screens, the call keeps playing, and back to the headset');
+
   // Live note
   await te.fill('[data-k="caller"]', 'Greg Hollis, adjuster at Liberty Crest');
   await te.fill('[data-k="callback"]', '(555) 010-7788');
@@ -81,7 +117,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   ok('Trainer sees the trainee\'s note as it is typed');
 
   // 📺 Class view for Google Meet: plays the trainee's side of the call, shows the note, never the script
-  const [cv] = await Promise.all([tr.context().waitForEvent('page'), tr.click('#callbar [data-act="classview"]')]);
+  const [cv] = await Promise.all([tr.context().waitForEvent('page'), tr.click('#dialer [data-act="classview"]')]);
   cv.on('pageerror', (e) => console.log('CLASS VIEW ERROR', e.message));
   await cv.waitForSelector('#cvStart');
   await cv.click('#cvStart');
@@ -107,13 +143,13 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
 
   // Hold with hold music
   await te.click('[data-act="hold"]');
-  await tr.waitForFunction(() => /ON HOLD/.test(document.querySelector('#callbar').textContent));
+  await tr.waitForFunction(() => /ON HOLD/.test(document.querySelector('#dialer').textContent));
   await cv.waitForFunction(() => /Caller on hold/.test(document.querySelector('#cvBody').textContent), null, { timeout: 5000 });
   await sleep(1500);
   const heldLevel = await inb(tr, 't');
   ok(`Hold: trainer sees "on hold" (hold music level ${heldLevel.level.toFixed(3)})`);
   await te.click('[data-act="hold"]');
-  await tr.waitForFunction(() => !/ON HOLD/.test(document.querySelector('#callbar').textContent));
+  await tr.waitForFunction(() => !/ON HOLD/.test(document.querySelector('#dialer').textContent));
   ok('Resume: hold cleared on the trainer console');
 
   // Transfer → trainer answers "no answer"
@@ -151,7 +187,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await sleep(2500);
   const still = await inb(te, 'p');
   if (!(still.bytes > a1.bytes)) throw new Error('Audio stopped when a second tab opened');
-  const liveBar = await tr.$('#callbar .t');
+  const liveBar = await tr.$('#dialer .lcd-timer');
   if (!liveBar) throw new Error('The first tab lost the call');
   await tr2.close();
   ok('A second trainer tab shows "on a call in another tab" and leaves the call alone');
@@ -168,7 +204,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
 
   // Reload the trainer's console mid-call → it resumes
   await tr.reload();
-  await tr.waitForSelector('#callbar .t', { timeout: 20000 });
+  await tr.waitForSelector('#dialer .lcd-timer', { timeout: 20000 });
   await sleep(4000);
   const a4 = await inb(tr, 't');
   if (!(a4.bytes > 1000)) throw new Error('No audio after trainer reload: ' + JSON.stringify(a4));
@@ -264,13 +300,32 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await te.waitForSelector('#device .lcd');
   await tr.goto(B + '/#/console');
   await tr.waitForSelector('#roster .tr[data-tid]');
-  await tr.click('#roster .tr[data-tid]');
+  // Typing on the keyboard dials too; a firm extension isn't a trainee; Esc clears; Enter rings
   await tr.click('#pkList .scen[data-sid="ft_rc_appt"]');
-  await tr.click('[data-act="ring"]');
+  await tr.keyboard.type('201');
+  await tr.waitForFunction(() => /Firm extension/.test(document.querySelector('#dialer .lcd').textContent) && /Marcus Reyes/.test(document.querySelector('#dialer .lcd').textContent));
+  await tr.keyboard.press('Escape');
+  await tr.waitForFunction(() => document.querySelector('#dlNum').textContent.trim() === '');
+  await tr.keyboard.type('7001');
+  await tr.waitForFunction(() => /Ready to call/.test(document.querySelector('#dialer .lcd').textContent));
+  await tr.keyboard.press('Enter');
   await te.waitForSelector('.lcd.ringing');
+  ok('Keyboard dialing: 201 shows the firm\'s Atty. Reyes (not a trainee), Esc clears, 7001 + Enter rings');
   await te.click('[data-act="decline"]');
-  await tr.waitForFunction(() => !document.querySelector('#callbar'));
-  ok('Declined call: the trainer is told and the console resets');
+  await tr.waitForSelector('#dialer .dialpad');
+  ok('Declined call: the trainer is told and the dialer is ready for the next call');
+  for (const w of [1024, 390]) {
+    await tr.setViewportSize({ width: w, height: 844 });
+    await sleep(300);
+    const over = await tr.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    if (over > 1) {
+      const wide = await tr.evaluate(() => [...document.querySelectorAll('#app *')].filter((e) => e.getBoundingClientRect().right > innerWidth + 1)
+        .filter((e) => ![...e.children].some((c) => c.getBoundingClientRect().right > innerWidth + 1)).slice(0, 6).map((e) => `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}.${[...e.classList].join('.')} (${Math.round(e.getBoundingClientRect().right)}px)`));
+      throw new Error(`The console is ${over}px too wide at ${w}px: ${wide.join(', ')}`);
+    }
+    await tr.screenshot({ path: `${OUT}/14-dialer-${w}.png`, fullPage: true });
+  }
+  ok('The console and its dialer fit a tablet (1024 px) and a phone (390 px) without sideways scrolling');
 
   await browser.close();
   console.log('\nALL PASSED');

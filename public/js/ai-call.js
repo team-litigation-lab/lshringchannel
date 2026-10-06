@@ -45,6 +45,7 @@
     if (opts.forceText || !voiceSupported()) return startText(call, opts.forceText ? '' : 'This browser can\'t do voice calls, so this call is typed.');
     try {
       call.ctx = new Ctx();
+      if (window.VoIP && VoIP.Speaker) VoIP.Speaker.register(call.ctx);   // 🔊 the caller's voice follows the speaker key
       if (call.ctx.state === 'suspended') call.ctx.resume().catch(() => {});
       call.mic = await VoIP.Mic.open();
     } catch (e) { return startText(call, e.message + ' This call is typed instead.'); }
@@ -160,7 +161,7 @@
   /* ---------- text mode ---------- */
   async function startText(call, why) {
     call.mode = 'text';
-    if (call.ctx) { try { call.ctx.close(); } catch (e) {} call.ctx = null; }
+    if (call.ctx) { if (window.VoIP && VoIP.Speaker) VoIP.Speaker.unregister(call.ctx); try { call.ctx.close(); } catch (e) {} call.ctx = null; }
     if (why) call.opts.onNotice && call.opts.onNotice(why);
     call.opts.onState && call.opts.onState('live');
     call.maxSeconds = call.maxSeconds || 0;
@@ -232,7 +233,7 @@
     C = null;
     finish(call);
     const transcript = call.transcript.map((x) => ({ who: x.who, text: x.text })).filter((x) => x.text);
-    const closeCtx = () => { try { if (call.ctx && call.ctx.state !== 'closed') call.ctx.close(); } catch (e) {} };
+    const closeCtx = () => { if (window.VoIP && VoIP.Speaker) VoIP.Speaker.unregister(call.ctx); try { if (call.ctx && call.ctx.state !== 'closed') call.ctx.close(); } catch (e) {} };
     return new Promise((resolve) => {
       const done = (recording) => { closeCtx(); if (!silent && call.opts.onState) call.opts.onState('ended'); resolve({ transcript, recording, mode: call.mode, endedBy: call.endedBy || 'trainee' }); };
       if (!call.rec || call.rec.state === 'inactive') return done(null);

@@ -134,7 +134,7 @@
   App.connect = function () {
     const b = App.board = new VoIP.Board();
     const net = document.getElementById('netbar');
-    b.on('up', (m) => { net.classList.add('hidden'); App.connected = true; (App.trainer() ? Console : Trainee).onUp(m); });
+    b.on('up', (m) => { net.classList.add('hidden'); App.connected = true; App.myExt = (m.me && m.me.ext) || ''; (App.trainer() ? Console : Trainee).onUp(m); });
     b.on('down', () => { App.connected = false; setTimeout(() => { if (!App.connected) net.classList.remove('hidden'); }, 2500); });
     b.on('presence', (m) => {
       if (App.trainer()) { App.presence = { trainees: m.trainees || [], trainers: m.trainers || [] }; Console.onPresence(); }
@@ -180,20 +180,56 @@
     return { el: back, close };
   };
 
-  // Microphone check: level meter, and a beep to test the headset.
+  // 🎧 Audio check: the microphone's level, and where the call plays (headset, or the speaker key's speakers), each with a test tone.
   App.micCheck = async function () {
-    const m = App.modal({ title: '🎙 Microphone and headset check', body: `<p class="small muted">Say a few words: the bar should move. Then play the beep and check you hear it in your headset.</p>
+    const Sp = VoIP.Speaker;
+    const m = App.modal({ title: '🎧 Audio check', body: `<p class="small muted">Say a few words: the bar should move. Then test the headset and the speaker.</p>
       <div class="meter"><i id="mcLevel"></i></div><p class="small" id="mcMsg" style="margin-top:10px">Opening the microphone…</p>
-      <button class="btn btn-sm" id="mcBeep">🔊 Play a beep</button>`, onClose: () => { stopMeter && stopMeter(); if (!busy()) VoIP.Mic.close(); } });
-    const busy = () => (App.p && ['connecting', 'live'].includes(App.p.status)) || (App.t && ['connecting', 'live'].includes(App.t.status));
+      <div id="mcOut"></div>`, onClose: () => { stopMeter && stopMeter(); if (!busy()) VoIP.Mic.close(); } });
+    const busy = () => (App.p && ['connecting', 'live'].includes(App.p.status)) || (App.t && ['ringing', 'connecting', 'live'].includes(App.t.status));
     let stopMeter = null;
-    m.el.querySelector('#mcBeep').onclick = () => Sounds.beep();
     try {
       const s = await VoIP.Mic.open();
       const label = (s.getAudioTracks()[0] || {}).label || 'microphone';
-      m.el.querySelector('#mcMsg').innerHTML = `✅ Using <b>${esc(label)}</b>.`;
+      m.el.querySelector('#mcMsg').innerHTML = `✅ Microphone: <b>${esc(label)}</b>.`;
       stopMeter = VoIP.meter(s, (lv) => { const el = m.el.querySelector('#mcLevel'); if (el) el.style.width = Math.round(lv * 100) + '%'; });
     } catch (e) { m.el.querySelector('#mcMsg').innerHTML = `<span class="err-box" style="display:block">${esc(e.message)}</span>`; }
+    // The outputs (their names show once the microphone is allowed).
+    const box = m.el.querySelector('#mcOut');
+    const draw = async () => {
+      const r = await Sp.route();
+      const opts = (sel, auto) => (auto ? `<option value="">Automatic (${esc(auto)})</option>` : '') + r.list.filter((d) => d.deviceId !== 'communications').map((d) => `<option value="${esc(d.deviceId)}" ${d.deviceId === sel ? 'selected' : ''}>${esc(d.deviceId === 'default' ? 'The computer\'s default output' + (d.label ? ` (${d.label.replace(/^Default - /, '')})` : '') : d.label || 'Audio output')}</option>`).join('');
+      box.innerHTML = !Sp.supported() ? '<p class="small warn-box" style="margin-top:12px">This browser plays every sound on the computer\'s default output, so the 🔊 Speaker key can\'t switch it: use Chrome or Edge. <button class="btn btn-sm" data-out="test-default">🔊 Play a test tone</button></p>'
+        : `<div class="out-row"><label class="f">🎧 Headset <span class="muted">(speaker off)</span></label><select class="input" data-out="headset">${opts(Sp.headset || 'default')}</select><button class="btn btn-sm" data-out="test-headset">▶ Test</button></div>
+           <div class="out-row"><label class="f">🔊 Speaker <span class="muted">(speaker on)</span></label><select class="input" data-out="speaker">${opts(Sp.speaker, r.speakerName)}</select><button class="btn btn-sm" data-out="test-speaker">▶ Test</button></div>
+           <p class="small muted">${r.separate ? `The 🔊 Speaker key moves the call from <b>${esc(r.headsetName)}</b> to <b>${esc(r.speakerName)}</b>.` : 'The headset and the speaker are the same output here: plug in a headset, or choose the speaker above.'} Speaker is <b>${Sp.on ? 'on' : 'off'}</b>.</p>`;
+    };
+    const test = async (id) => {
+      try {
+        const c = new (window.AudioContext || window.webkitAudioContext)();
+        if (id && c.setSinkId) await c.setSinkId(id === 'default' ? '' : id);
+        const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 660; g.gain.value = 0.06;
+        o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + 0.5);
+        setTimeout(() => c.close().catch(() => {}), 900);
+      } catch (e) { U.toast('Couldn\'t play on that output: ' + e.message, 'error'); }
+    };
+    box.addEventListener('change', async (e) => {
+      const k = e.target.dataset.out; if (k !== 'headset' && k !== 'speaker') return;
+      Sp[k] = e.target.value === 'default' && k === 'headset' ? '' : e.target.value; Sp.store(); await Sp.apply(); draw();
+    });
+    box.addEventListener('click', async (e) => {
+      const k = e.target.closest('[data-out]') && e.target.closest('[data-out]').dataset.out; if (!k || !k.startsWith('test-')) return;
+      const r = await Sp.route();
+      test(k === 'test-speaker' ? r.speaker : k === 'test-headset' ? r.headset : '');
+    });
+    draw();
+  };
+
+  // 🔊 The speaker key (both phones): the call moves between the headset and the speakers.
+  App.toggleSpeaker = async function (redraw) {
+    const r = await VoIP.Speaker.toggle();
+    if (r.note) U.toast(r.note, r.on ? '' : 'error');
+    if (redraw) redraw();
   };
 
   /* ---------- the phone's screen (trainee side, live and practice) ---------- */
@@ -217,18 +253,20 @@
       if (p.quality) badges.push(`<span class="lb" title="${p.quality.rtt != null ? p.quality.rtt + ' ms' : ''}${p.quality.relay ? ' · via relay' : ''}"><span class="bars q${p.quality.bars}"><i></i><i></i><i></i><i></i></span></span>`);
       if (p.mode === 'ai') badges.push(`<span class="lb">${p.voice === 'text' ? 'TYPED' : 'AI CALLER'}</span>`);
     }
+    if (p && ['ringing', 'connecting', 'live'].includes(status) && VoIP.Speaker.on) badges.push('<span class="lb spk">🔊 SPEAKER</span>');
     return `<div class="lcd ${status}"><div class="lcd-top"><span>${esc(lineLabel)} ${esc(lineNo)}</span><span data-clock></span></div><div class="lcd-main">${main}</div><div class="lcd-badges">${badges.join('')}</div></div>`;
   };
 
-  // The keys under the screen. `acts` is the page's handler object (answer, decline, hangup, mute, hold, transfer…).
+  // The keys under the screen: Answer / Decline while it rings; Mute, 🔊 Speaker, Hold, Transfer and Hang up on a call.
   App.keysHTML = function (p, idleKeys) {
     const status = p ? p.status : 'idle';
     if (status === 'ringing') return `<div class="dev-keys"><button class="key answer pulse wide" data-act="answer"><span class="ic">📞</span>Answer</button><button class="key hang wide" data-act="decline"><span class="ic">✖</span>Decline</button></div>`;
     if (status === 'connecting' || status === 'live') {
       const dis = status !== 'live' ? 'disabled' : '';
       const xfer = p.transfer && p.transfer.state === 'ringing' && p.mode === 'ai';
-      return `<div class="dev-keys">
+      return `<div class="dev-keys four">
         <button class="key mute ${p.muted ? 'on' : ''}" data-act="mute" ${dis}><span class="ic">${p.muted ? '🔇' : '🎙'}</span>${p.muted ? 'Unmute' : 'Mute'}</button>
+        <button class="key spk ${VoIP.Speaker.on ? 'on' : ''}" data-act="speaker" aria-pressed="${VoIP.Speaker.on}" title="🔊 Speaker: ${VoIP.Speaker.on ? 'on: the call plays on the speakers' : 'off: the call plays in your headset'}"><span class="ic">${VoIP.Speaker.on ? '🔊' : '🔈'}</span>Speaker</button>
         <button class="key ${p.held ? 'on' : ''}" data-act="hold" ${dis || (xfer ? 'disabled' : '')}><span class="ic">⏸</span>${p.held ? 'Resume' : 'Hold'}</button>
         <button class="key" data-act="transfer" ${dis || (xfer || (p.transfer && p.transfer.state === 'ringing') ? 'disabled' : '')}><span class="ic">↪</span>Transfer</button>
         <button class="key hang wide" data-act="hangup"><span class="ic">☎</span>Hang up</button></div>`;

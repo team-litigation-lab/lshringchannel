@@ -271,5 +271,68 @@
     return () => { cancelAnimationFrame(raf); try { c.close(); } catch (e) {} };
   }
 
-  window.VoIP = { Board, Mic, RtcCall, Recorder, ice, toWav8k, uploadForGrading, meter, iceInfo: () => iceCache };
+  /* 🔊 Speaker: where the call is heard, like a desk phone's speaker key.
+     Off: the headset (the computer's default audio output). On: the speakers, so a room can listen.
+     The call audio, the phone's sounds (ringing, ringback, keypad tones) and the AI caller all follow it.
+     Chrome and Edge can send audio to a chosen output (setSinkId); the speaker is found by its name
+     ("Speakers", "Built-in", "Realtek"…) unless the audio check sets one. Kept on this computer. */
+  const SPK_KEY = 'mcv_speaker';
+  const SPK_NAME = /speaker|built-?in|internal|realtek|lautsprecher|altavoz|haut-parleur|alto-falante|altoparlant/i;
+  const NOT_SPK = /headset|headphone|earphone|earbud|airpods|buds|hands-?free|bluetooth/i;
+  const Speaker = {
+    on: false, headset: '', speaker: '', targets: new Set(), listeners: new Set(), last: null,
+    load() { try { Object.assign(this, JSON.parse(localStorage.getItem(SPK_KEY) || '{}')); } catch (e) {} return this; },
+    store() { try { localStorage.setItem(SPK_KEY, JSON.stringify({ on: this.on, headset: this.headset, speaker: this.speaker })); } catch (e) {} },
+    supported() { return !!(window.HTMLMediaElement && 'setSinkId' in HTMLMediaElement.prototype); },
+    async outputs() {
+      try { return (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audiooutput'); } catch (e) { return []; }
+    },
+    // The outputs to use: { headset, speaker } device ids, their names, and whether the speaker is a different output.
+    async route() {
+      const list = await this.outputs();
+      const real = list.filter((d) => !['default', 'communications', ''].includes(d.deviceId));
+      const def = list.find((d) => d.deviceId === 'default') || real[0] || null;
+      const has = (id) => id && list.some((d) => d.deviceId === id);
+      const headset = has(this.headset) ? this.headset : 'default';
+      let speaker = has(this.speaker) ? list.find((d) => d.deviceId === this.speaker) : null;
+      if (!speaker) {
+        const other = real.filter((d) => !def || d.groupId !== def.groupId);
+        speaker = other.find((d) => SPK_NAME.test(d.label) && !NOT_SPK.test(d.label))
+          || (def && SPK_NAME.test(def.label) && !NOT_SPK.test(def.label) ? def : null)
+          || other.find((d) => !NOT_SPK.test(d.label)) || null;
+      }
+      const name = (id) => { const d = list.find((x) => x.deviceId === id); return d ? d.label.replace(/^(Default|Communications) - /, '') : ''; };
+      const speakerId = speaker ? speaker.deviceId : headset;
+      const same = (a, b) => { const x = list.find((d) => d.deviceId === a), y = list.find((d) => d.deviceId === b); return a === b || (x && y && x.groupId && x.groupId === y.groupId); };
+      return { list, headset, speaker: speakerId, headsetName: name(headset) || 'the computer\'s sound', speakerName: name(speakerId) || 'the computer\'s sound', separate: !same(headset, speakerId) };
+    },
+    async sinkId() { const r = this.last = await this.route(); return this.on ? r.speaker : r.headset; },
+    // A <audio> element or an AudioContext that plays call audio.
+    async register(target) { if (!target) return; this.targets.add(target); try { await this.applyTo(target, await this.sinkId()); } catch (e) {} },
+    unregister(target) { this.targets.delete(target); },
+    async applyTo(t, id) {
+      if (!t || typeof t.setSinkId !== 'function' || (t.state === 'closed')) return;
+      const want = id === 'default' ? '' : id;
+      if ((t.sinkId || '') === want || (t.sinkId && t.sinkId.type === 'none')) return;
+      try { await t.setSinkId(want); } catch (e) { console.warn('setSinkId', e && e.message); }
+    },
+    async apply() { const id = await this.sinkId(); await Promise.all([...this.targets].map((t) => this.applyTo(t, id))); return id; },
+    // Turn the speaker on or off. Returns a note when there's nothing to switch to.
+    async set(on) {
+      this.on = !!on; this.store();
+      await this.apply();
+      const r = this.last || {};
+      let note = '';
+      if (!this.supported()) note = 'This browser can\'t choose where sound plays: use Chrome or Edge.';
+      else if (this.on && !r.separate) note = (r.list || []).length > 1 || (r.list || []).some((d) => d.label) ? `There's no separate speaker: the call plays on ${r.speakerName}. Choose one in 🎧 Audio check.` : 'Allow the microphone (🎧 Audio check) so the phone can find your speakers.';
+      this.listeners.forEach((f) => { try { f(this.on); } catch (e) {} });
+      return { on: this.on, note, name: this.on ? r.speakerName : r.headsetName };
+    },
+    toggle() { return this.set(!this.on); },
+    onChange(f) { this.listeners.add(f); }
+  }.load();
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => { Speaker.apply().catch(() => {}); });
+  document.addEventListener('DOMContentLoaded', () => Speaker.register(document.getElementById('remoteAudio')));
+
+  window.VoIP = { Board, Mic, RtcCall, Recorder, ice, toWav8k, uploadForGrading, meter, Speaker, iceInfo: () => iceCache };
 })();

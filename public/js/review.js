@@ -493,10 +493,10 @@
       const list = ts.filter((x) => !!x.archived === !!show);
       app.innerHTML = `<div class="card"><div class="card-head"><h2>👥 Trainees</h2><span class="spacer"></span><label class="check small"><input type="checkbox" id="arch" ${show ? 'checked' : ''}> Show archived</label></div>
         <p class="small muted">Trainees appear here the first time they sign in with their name, batch and a PIN they choose. Forgot a PIN? <b>Reset PIN</b>: their next sign-in sets a new one. The live average counts reviewed live calls only; practice scores are the AI's.</p>
-        <div class="table-wrap"><table class="list"><thead><tr><th>Trainee</th><th>Batch</th><th>Last seen</th><th>Live calls</th><th>Live average</th><th>Practice</th><th></th></tr></thead><tbody>
-        ${list.map((x) => `<tr><td><span class="led ${online.has(x.id) ? 'available' : ''}" style="display:inline-block;margin-right:8px"></span><b>${esc(x.name)}</b></td><td>${esc(x.batch)}</td><td>${online.has(x.id) ? '<span class="badge green">Online</span>' : U.when(x.last_seen)}</td>
+        <div class="table-wrap"><table class="list"><thead><tr><th>Trainee</th><th>Batch</th><th>Ext</th><th>Last seen</th><th>Live calls</th><th>Live average</th><th>Practice</th><th></th></tr></thead><tbody>
+        ${list.map((x) => `<tr><td><span class="led ${online.has(x.id) ? 'available' : ''}" style="display:inline-block;margin-right:8px"></span><b>${esc(x.name)}</b></td><td>${esc(x.batch)}</td><td class="mono">${esc(x.ext || '')}</td><td>${online.has(x.id) ? '<span class="badge green">Online</span>' : U.when(x.last_seen)}</td>
           <td>${x.calls || 0}</td><td>${x.avg != null ? `<b>${Math.round(x.avg)}%</b>` : '–'}</td><td class="small">${x.practice || 0} call${x.practice === 1 ? '' : 's'}${x.practiceAvg != null ? ' · ' + Math.round(x.practiceAvg) + '%' : ''}</td>
-          <td class="row" style="justify-content:flex-end"><button class="btn btn-sm" data-calls="${esc(x.id)}">🗂 Calls</button>${x.hasPin ? `<button class="btn btn-sm" data-pin="${esc(x.id)}" data-name="${esc(x.name)}">🔑 Reset PIN</button>` : '<span class="badge">No PIN yet</span>'}<button class="btn btn-sm" data-arch="${esc(x.id)}" data-v="${x.archived ? 0 : 1}">${x.archived ? 'Restore' : 'Archive'}</button></td></tr>`).join('') || `<tr><td colspan="7" class="empty">${show ? 'No archived trainees.' : 'No trainees yet.'}</td></tr>`}
+          <td class="row" style="justify-content:flex-end"><button class="btn btn-sm" data-calls="${esc(x.id)}">🗂 Calls</button>${x.hasPin ? `<button class="btn btn-sm" data-pin="${esc(x.id)}" data-name="${esc(x.name)}">🔑 Reset PIN</button>` : '<span class="badge">No PIN yet</span>'}<button class="btn btn-sm" data-arch="${esc(x.id)}" data-v="${x.archived ? 0 : 1}">${x.archived ? 'Restore' : 'Archive'}</button></td></tr>`).join('') || `<tr><td colspan="8" class="empty">${show ? 'No archived trainees.' : 'No trainees yet.'}</td></tr>`}
         </tbody></table></div></div>`;
       U.$('#arch').onchange = (e) => { App.showArchived = e.target.checked; App.views.trainees.render(); };
       app.onclick = async (e) => {
@@ -568,8 +568,8 @@
         </div>
         <div class="card" id="gradeSet" style="grid-column:1 / -1"></div>
         <div class="card"><h2>🧪 Test this computer</h2>
-          <p class="small muted">Checks the microphone, and which ways this network can carry a call: direct (host), through the router (srflx) or through the TURN relay (relay). Trainees can run the mic check from their phone.</p>
-          <div class="row"><button class="btn" id="tMic">🎙 Mic check</button><button class="btn" id="tNet">🌐 Network test</button></div><div id="netOut" class="small" style="margin-top:12px"></div></div></div>`;
+          <p class="small muted">Checks the microphone, the headset and the speaker, and which ways this network can carry a call: direct (host), through the router (srflx) or through the TURN relay (relay). Trainees can run the mic check from their phone.</p>
+          <div class="row"><button class="btn" id="tMic">🎧 Audio check</button><button class="btn" id="tNet">🌐 Network test</button></div><div id="netOut" class="small" style="margin-top:12px"></div></div></div>`;
       drawGradeSettings();
       U.$('#tMic').onclick = () => App.micCheck();
       U.$('#tNet').onclick = async () => {

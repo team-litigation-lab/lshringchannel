@@ -21,6 +21,7 @@
      Switchboard messages
      ========================================================= */
   T.onUp = function (m) {
+    if (T.ext !== App.myExt) { T.ext = App.myExt; if (!(App.p && active(App.p))) renderAll(); }   // the desk extension, on the phone
     App.board.send({ t: 'status', status: App.status });
     if (App.hand) App.board.send({ t: 'hand', up: true });
     const a = m.active, p = App.p;
@@ -389,7 +390,7 @@
       return { state: 'Practice', title: 'Pick a practice call', sub: 'An AI caller will ring this phone.' };
     }
     return App.status === 'away' ? { state: 'Away', title: 'Away', sub: 'Your trainer sees you as away.' }
-      : { state: 'Ready', title: 'Waiting for a call', sub: App.hand ? '✋ Your trainer can see you asked for a mock call.' : 'Your trainer will ring this phone.' };
+      : { state: 'Ready', title: 'Waiting for a call', sub: App.hand ? '✋ Your trainer can see you asked for a mock call.' : `Your trainer will ring this phone${App.myExt ? ` (ext ${esc(App.myExt)})` : ''}.` };
   }
 
   function renderDevice() {
@@ -400,9 +401,9 @@
     const led = !App.connected && mode === 'live' ? 'offline' : status === 'ringing' ? 'ringing' : ['connecting', 'live'].includes(status) ? 'live' : mode === 'live' ? App.status : 'available';
     const idleKeys = mode === 'live'
       ? `<div class="dev-keys"><button class="key hand ${App.hand ? 'on' : ''}" data-act="hand"><span class="ic">✋</span>${App.hand ? 'Asked' : 'Ask for a call'}</button>
-         <button class="key" data-act="miccheck"><span class="ic">🎙</span>Mic check</button><a class="key" href="#/practice" style="text-decoration:none"><span class="ic">🎧</span>Practice</a></div>
+         <button class="key" data-act="miccheck"><span class="ic">🎧</span>Audio check</button><a class="key" href="#/practice" style="text-decoration:none"><span class="ic">🎧</span>Practice</a></div>
          <div class="dev-status"><button class="${App.status === 'available' ? 'on' : ''}" data-act="available">● Available</button><button class="${App.status === 'away' ? 'on away' : ''}" data-act="away">◌ Away</button></div>`
-      : `<div class="dev-keys"><button class="key" data-act="miccheck"><span class="ic">🎙</span>Mic check</button></div>`;
+      : `<div class="dev-keys"><button class="key" data-act="miccheck"><span class="ic">🎧</span>Audio check</button></div>`;
     let msg = '';
     if (p && p.needRejoin) msg = p.elsewhere ? `<div class="dev-msg lost">You're on this call in another tab or window. <button class="btn btn-sm btn-green" data-act="rejoin" style="margin-top:6px">📞 Move the call here</button></div>`
       : `<div class="dev-msg lost">This page reloaded during your call. <button class="btn btn-sm btn-green" data-act="rejoin" style="margin-top:6px">🔊 Reconnect the call</button></div>`;
@@ -418,7 +419,7 @@
     else if (p && p.classOn && p.status === 'live') msg = `<div class="dev-msg coach">🎧 <b>Your class is listening in Google Meet.</b> If you're in the Meet too, mute your Meet mic and the Meet tab (right-click the tab → Mute site) until the call ends, so there's no echo.</div>`;
     else if (p && p.rec && p.status === 'ringing') msg = `<div class="dev-msg">● This call will be recorded for your review.</div>`;
     const head = mode === 'live'
-      ? `<span class="led ${led}"></span><b>My phone</b><span class="spacer"></span><span id="trOnline">${trainerLine()}</span>`
+      ? `<span class="led ${led}"></span><b>My phone</b>${App.myExt ? ` <span class="mono" title="Your desk extension: your trainer dials it to ring you">ext ${esc(App.myExt)}</span>` : ''}<span class="spacer"></span><span id="trOnline">${trainerLine()}</span>`
       : `<span class="led ${led}"></span><b>Practice phone</b><span class="spacer"></span><span>AI caller</span>`;
     el.innerHTML = `<div class="dev-head">${head}</div>
       ${App.lcdHTML(p && p.status !== 'waiting' ? p : null, idleInfo(mode))}
@@ -523,6 +524,7 @@
       else if (act === 'decline') decline();
       else if (act === 'hangup') hangup();
       else if (act === 'mute') toggleMute();
+      else if (act === 'speaker') App.toggleSpeaker(renderDevice);
       else if (act === 'hold') toggleHold();
       else if (act === 'transfer') App.pickTransfer(doTransfer);
       else if (act === 'transfer-to') doTransfer(b.dataset.ext);

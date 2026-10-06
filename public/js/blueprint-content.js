@@ -18,11 +18,11 @@
           'Sign in with your full name and batch, the same as on your training platform, and your PIN.',
           'Your first sign-in sets your PIN (4 to 8 digits), so nobody else can sign in as you.',
           'Five wrong PINs lock the account for 15 minutes; your trainer can reset your PIN.',
-          '🎙 Mic check tests your headset before the first call.'],
-        where: 'The sign-in screen · 📞 My phone → 🎙 Mic check.',
+          '🎧 Audio check tests your microphone, headset and speaker before the first call.'],
+        where: 'The sign-in screen · 📞 My phone → 🎧 Audio check.',
         tip: 'Pick a PIN you\'ll remember: your trainer can reset it, but it takes a moment of class time.' },
       { icon: '📞', title: 'My phone', points: [
-          'Keep 📞 My phone open with your headset on.',
+          'Keep 📞 My phone open with your headset on. It shows your desk extension (ext 7001…): the number your trainer dials.',
           'Set ● Available when you\'re ready for a call, or ◌ Away when you step out.',
           '✋ Ask for a call raises your hand on your trainer\'s switchboard.'],
         where: 'Top bar → 📞 My phone.',
@@ -40,8 +40,8 @@
           '📘 Rules: the front-desk rules and the line\'s reminders.'],
         where: 'Beside the phone, while you\'re on a call.',
         tip: 'Verify the caller before you share anything from the file.' },
-      { icon: '⏸', title: 'Mute, Hold, Transfer and Hang up', points: [
-          'Mute: the caller can\'t hear you.',
+      { icon: '⏸', title: 'The phone\'s keys', points: [
+          'Mute: the caller can\'t hear you. 🔊 Speaker: the call plays on your speakers instead of your headset.',
           'Hold: the caller hears hold music. The phone times every hold for your scorecard.',
           'Transfer: pick an extension; the caller is held while it rings, and it may not be answered.',
           'Hang up when the call is done.'],
@@ -78,17 +78,17 @@
           'Trainees sign in with their name, batch and their own PIN.'],
         where: 'The sign-in screen · the top bar.',
         tip: 'Open ⚙️ Setup once before your first session to check the relay, recordings and AI keys.' },
-      { icon: '☎', title: 'The Switchboard', points: [
-          'Every trainee online, by batch: available, away, on a call, or ✋ asking for a call.',
-          'Pick a trainee and the call to play: Reception, Calendar or Intake, from Beginner to Advanced.',
-          'Choose Record the call (on by default) and whether to withhold the caller ID, then 📞 Ring the trainee.'],
-        where: '🎛 Console → ☎ Switchboard.',
+      { icon: '☎', title: 'The Switchboard and the dialer', points: [
+          'The Switchboard: every trainee online, by batch, with their extension; ✋ shows who asked for a call.',
+          'Dial the trainee\'s extension on the dialer (or click them on the Switchboard), and pick the call to play.',
+          'The soft keys: 📋 Graded, Record and Hide ID. Then 📞 rings the trainee.'],
+        where: '🎛 Console → ☎ Switchboard and the dialer.',
         tip: 'Start with trainees who have their hand up.' },
       { icon: '🎭', title: 'On the call', points: [
           '🎭 You are the caller: the opening line, what the caller knows and how they act, the situation, who is out.',
           '✅ Live checklist: the call\'s goals, ticked as they happen.',
           '📝 The trainee\'s note, as they type it.',
-          'The call bar: timer, REC, the trainee\'s hold and mute, and the connection quality.'],
+          'The dialer: the timer, REC, the trainee\'s hold and mute, the connection; Mute, 🔊 Speaker and End call.'],
         where: '🎛 Console, during a call.',
         tip: 'Stay in character: the script says what the caller knows and doesn\'t.' },
       { icon: '🔀', title: 'Transfers and coaching time-outs', points: [

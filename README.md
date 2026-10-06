@@ -17,7 +17,8 @@ Everything runs in the browser; there are no phone numbers and no phone bills. I
 ## How a live mock call works
 
 **Trainee** (📞 My phone)
-1. Signs in with their full name and batch (the same as on the LSH training platform) and their **PIN**. The first sign-in sets the PIN (4 to 8 digits), so nobody else can sign in as them. Five wrong PINs lock the account for 15 minutes; a trainer can **🔑 Reset PIN** in 👥 Trainees. They keep **My phone** open with a headset on. **🎙 Mic check** tests the headset.
+1. Signs in with their full name and batch (the same as on the LSH training platform) and their **PIN**. The first sign-in sets the PIN (4 to 8 digits), so nobody else can sign in as them. Five wrong PINs lock the account for 15 minutes; a trainer can **🔑 Reset PIN** in 👥 Trainees. They keep **My phone** open with a headset on. **🎧 Audio check** tests the microphone, the headset and the speaker.
+   Each trainee gets a **desk extension** (7001, 7002, … in sign-up order), shown on their phone; it's the number the trainer dials.
 2. Sets **● Available** (or **◌ Away**). **✋ Ask for a call** raises a hand on the trainer's switchboard.
 3. When the phone rings, it shows the line (Main Line or Intake Line) and the caller ID. The trainee answers within 3 rings.
 4. During the call, beside the phone:
@@ -25,23 +26,21 @@ Everything runs in the browser; there are no phone numbers and no phone bills. I
    - **🔎 Case lookup**: the CMS Training Library case files, searched by name, phone, DOB or MC number (nothing shows until you search, like the real front desk);
    - **📇 Directory**: the firm's extensions, with Transfer buttons;
    - **📘 Rules**: the front-desk rules and the line's reminders.
-5. The phone keys are **Mute**, **Hold** (hold music plays to the caller), **Transfer** (pick an extension; the caller is held while it rings) and **Hang up**.
+5. The phone keys are **Mute**, **🔊 Speaker** (see *The speaker key*), **Hold** (hold music plays to the caller), **Transfer** (pick an extension; the caller is held while it rings) and **Hang up**.
 6. After the call, the trainee finishes the note and **submits** it. The trainer's review appears in **🗂 My calls**.
 
 **Trainer** (🎛 Console)
 1. Signs in with their name and the trainer passphrase.
-2. **☎ Switchboard** (left) shows every trainee online, by batch: available, away, on a call, or ✋ asking for a call.
-3. Picks a trainee and the call to play (Reception, Calendar or Intake; Beginner to Advanced), then chooses:
-   - **📋 Graded mock call** (on by default; see *Graded mock calls and autograding*). A graded call is always recorded;
-   - **Record the call** (on by default);
-   - **Withhold the caller ID**.
-
-   Then **📞 Ring the trainee**. The trainer hears the ringback.
-4. On the call, the console shows:
+2. **☎ Switchboard** (left) shows every trainee online, by batch, with their extension: available, away, on a call, or ✋ asking for a call. It works as the phone's contact list: clicking a trainee puts their extension on the dialer.
+3. The **☎ dialer** is a desk phone on screen:
+   - **Dial the trainee's extension** on the keypad (or type it; Backspace deletes, Esc clears). The screen says who it reaches: *Ready to call* with the trainee's name, *Not signed in*, a firm extension (201 is Atty. Reyes), or *No such extension*.
+   - Pick **🎭 the call to play** beside it (Reception, Calendar or Intake; Beginner to Advanced). The dialer's screen shows the caller ID the trainee will see and the line it rings on.
+   - The soft keys under the keypad: **📋 Graded** (on by default; see *Graded mock calls and autograding*; a graded call is always recorded), **Record** (on by default) and **🙈 Hide ID** (the trainee sees PRIVATE CALLER).
+   - **📞** (or Enter) rings the trainee. The trainer hears the ringback.
+4. On the call, the dialer shows who's on the line, the timer, 📋 GRADED, REC, the trainee's hold / mute, the connection quality (and whether it's going through the relay), and 🔊 SPEAKER. Its keys are **Mute**, **🔊 Speaker**, **⏸ Coaching time-out**, **📺 Class view** and **End call**. Beside it:
    - **🎭 You are the caller**: the opening line, what the caller knows and how they act, the situation, who is out of the office;
    - **✅ Live checklist**: the call's goals, ticked as they happen;
-   - **📝 The trainee's note**, live;
-   - the call bar: timer, REC, the trainee's hold / mute, connection quality (and whether it's going through the relay).
+   - **📝 The trainee's note**, live.
 5. When the trainee transfers, a panel asks what happens: **Picks up** (the call is handed over and ends), **No answer** or **Voicemail**. The scenario says who is out.
 6. **⏸ Coaching time-out** pauses the role-play so the trainer can coach as themselves; the trainee's phone shows it. **▶ Resume** goes back to the role-play.
    **📺 Class view** opens a tab to present in Google Meet, so the batch can listen (see *In a Google Meet class*).
@@ -51,6 +50,15 @@ Everything runs in the browser; there are no phone numbers and no phone bills. I
    - a verdict, a summary and "next time" tips.
 
    When the AI's grade is in, the scorecard holds it: **✅ Approve the AI grade & send**, or change any score or feedback and **📨 Send to the trainee**. **✨ Grade again with AI** re-grades the call.
+
+## The speaker key
+
+**🔊 Speaker**, on the trainer's dialer and on the trainee's phone, works like a desk phone's speaker key: the call moves from the headset to the computer's speakers (so a training room can listen), and back when pressed again.
+- Everything on the phone follows it: the call, the ringing and ringback, the keypad tones, and the AI practice caller. The screen shows 🔊 SPEAKER while it's on.
+- The phone finds the speakers by their name ("Speakers", "Built-in", "Realtek"…). **🎧 Audio check** lists the outputs: choose the headset and the speaker there, and play a test tone on each.
+- The setting is kept on that computer.
+- It needs Chrome or Edge (they can choose where sound plays) and the microphone allowed, so the phone can see the outputs' names. If the computer has only one output, the screen says the call already plays there.
+- On speaker, the microphone hears the room: Chrome's echo cancellation removes the call's own sound, but a headset is still best for graded calls.
 
 ## In a Google Meet class
 
@@ -96,7 +104,7 @@ Trainer-facilitated mock calls are graded on the program's **Mock Calls Metrics*
 The grade is the **weighted average** of the scored metrics (n/a doesn't count), shown out of 5 and as a percentage (average × 20).
 
 **How a graded call goes:**
-1. The trainer ticks **📋 Graded mock call** on the console (on by default) and rings. The call bar shows 📋 GRADED, and the call is recorded.
+1. The trainer leaves **📋 Graded** on, on the dialer (it's on by default), and rings. The dialer shows 📋 GRADED, and the call is recorded.
 2. When the call ends, the console uploads the recording (to play and download) and a phone-quality copy for grading (8 kHz WAV, both voices, up to 15 minutes, with the dead air the phone measured).
 3. The **Grader** grades the call once the grading copy is in and the trainee has submitted the note. If either never comes, it grades anyway: 3 minutes after the call without the recording, 10 minutes after without the note. The AI listens to the recording and reads:
    - the line's metrics (and, for Calendar, the scheduling rules);
@@ -179,8 +187,8 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
 ## 🧭 Blueprint (how Ring Channel works, for trainees and for trainers)
 
 **🧭** in the header (next to the name and Log out; its name shows on hover) opens the Blueprint, a full-screen slide deck.
-- **Trainee blueprint** (a cover and 9 slides), for trainees: what Ring Channel is, signing in, My phone, answering a call, the tools during a call, Mute, Hold, Transfer and Hang up, after the call, practice with an AI caller, and when the class is listening.
-- **Trainer blueprint** (trainers only; a cover and 9 slides): signing in, the Switchboard, on the call, transfers and coaching time-outs, Class view in Meet, graded calls and autograding, the Call log and Trainees, Scenarios, and Setup and AI practice.
+- **Trainee blueprint** (a cover and 9 slides), for trainees: what Ring Channel is, signing in, My phone, answering a call, the tools during a call, the phone's keys (Mute, Speaker, Hold, Transfer, Hang up), after the call, practice with an AI caller, and when the class is listening.
+- **Trainer blueprint** (trainers only; a cover and 9 slides): signing in, the Switchboard and the dialer, on the call, transfers and coaching time-outs, Class view in Meet, graded calls and autograding, the Call log and Trainees, Scenarios, and Setup and AI practice.
 - Trainers get both decks as tabs; trainees only ever get the Trainee blueprint. Neither shows in the 📺 Class view.
 - **Moving around:** ◀ ▶, the ← → keys or the contents strip. Esc closes it.
 - **Numbering:** the cover is ★ Cover (the counter says "Cover · 9 slides"); the slides are 1 to 9 everywhere: the contents strip, the counter ("9 / 9" on the last), the slide's heading and footer, and the PDF's page footers.
@@ -206,7 +214,7 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
    - Without it, most calls still connect directly. Trainees on strict home routers, mobile data or office networks may get no audio: their phone says "Still connecting the audio…".
    - The relay is paid by traffic, with a free monthly allowance; a voice call uses well under 1 MB a minute.
    - **⚙️ Setup → 🌐 Network test** shows whether a computer gets relay candidates.
-4. **Check the setup:** sign in as a trainer and open **⚙️ Setup**. It shows the TURN relay, recordings, AI keys and the access code, plus a mic check and a network test.
+4. **Check the setup:** sign in as a trainer and open **⚙️ Setup**. It shows the TURN relay, recordings, AI keys and the access code, plus an audio check and a network test.
 
 **Browsers:** Chrome or Edge on a computer, with a headset (that's what the tests run on). Other current browsers with WebRTC should work but aren't tested. Pages must be served over https, which Cloudflare does; browsers only allow the microphone on https.
 
@@ -230,7 +238,8 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 
 `SHOTS=<folder>` keeps the screenshots the tests take; `LIVE_ONLY=1` runs only the live-call test; `PORT=<port>` if 8799 is taken. Google Meet itself can't be driven in a test: the tests check that the Class view plays the call's audio, which is what Meet's "share tab audio" sends.
 
-- `e2e-live.js`: the trainer rings, the trainee answers, and audio flows both ways. Then it runs:
+- `e2e-live.js`: the trainer dials the trainee's extension (7001) on the dialer's keypad and rings, the trainee answers, and audio flows both ways. Then it runs:
+  - 🔊 Speaker on the dialer and on the trainee's phone (the call keeps playing), and the audio check's output choices;
   - the ✋ request, the live note, hold with hold music, a transfer answered "no answer", a coaching time-out;
   - the 📺 Class view: it plays the call (the console goes quiet), the trainee is told the class is listening, it shows the live note and hold but never the script, and closing it brings the audio back to the console;
   - signing in as another trainee with a wrong PIN, or none, is refused;
@@ -241,7 +250,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - "Save draft" after sending keeps the edits from the trainee;
   - 📋 Graded calls and its CSV (every metric's score and feedback);
   - the trainee reads the scorecard and the weighted average (the caller's script and unsent drafts never reach the trainee);
-  - a declined call.
+  - dialing on the keyboard (201 is a firm extension, Esc clears, 7001 + Enter rings) and a declined call.
 - `blueprint.cjs`: the 🧭 Blueprint. A trainee gets the trainee deck only and a trainer both; every slide fits on a laptop and on a phone; both PDFs have a page per slide; the numbers match everywhere (Cover, then 1 to n, never n + 1).
 - `e2e-ai.js`: a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, autograding, a typed practice call, the trainer's **Grade again with AI**, and a live-only call that can't be practiced.
 
@@ -260,12 +269,12 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `src/auth.js` | Sign-in tokens, trainee ids (the same shapes as the other LSH platforms) and PIN hashing. |
 | `public/index.html`, `public/css/app.css` | The app shell and its look (LSH navy and orange, IBM Plex). |
 | `public/_headers` | Response headers for the app's files (microphone allowed on this site only, no caching of the page). |
-| `public/js/phone.js` | The VOIP engine: the Switchboard connection, the WebRTC call (with ICE restart), the call recorder, the mic. |
-| `public/js/sounds.js` | Ringing, ringback, the hang-up tone and hold music, all synthesized. |
+| `public/js/phone.js` | The VOIP engine: the Switchboard connection, the WebRTC call (with ICE restart), the call recorder, the mic, and the 🔊 speaker key (which audio output the call plays on). |
+| `public/js/sounds.js` | Ringing, ringback, the keypad tones, the hang-up tone and hold music, all synthesized. |
 | `public/js/ai-call.js` | The AI practice caller (Gemini Live voice, or typed). |
 | `public/js/app.js` | Sign-in, pages, the phone screen, the note form, case lookup, the directory. |
 | `public/js/trainee.js` | 📞 My phone and 🎧 Practice. |
-| `public/js/console.js` | 🎛 The trainer's console. |
+| `public/js/console.js` | 🎛 The trainer's console: the switchboard, ☎ the dialer, and the call (script, checklist, live note). |
 | `public/js/review.js` | 🗂 Calls, a call's review and scorecard (recording playback and download, approving the AI's grade), 📋 Graded calls (and the CSV), 📚 Scenarios, 👥 Trainees, ⚙️ Setup. |
 | `public/js/classview.js` | 📺 The Class view: a tab to present in Google Meet (plays the call, shows the live note, never the script). |
 | `public/js/blueprint-content.js` | 🧭 The Blueprint's slides: the trainee deck and the trainer deck. |

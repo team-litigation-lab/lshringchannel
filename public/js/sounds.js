@@ -2,6 +2,7 @@
      ring()       the trainee's phone ringing (double ring)
      ringback()   what the trainer hears while it rings (US ringback, 440 + 480 Hz)
      endTone()    three short beeps when a call ends
+     dtmf(key)    a keypad tone (the trainer's dialer)
      holdStream() hold music as a MediaStream track, sent down the line to the caller
    Browsers only play sound after the person has clicked on the page; any click unlocks it. */
 (function () {
@@ -9,7 +10,7 @@
   const Ctx = window.AudioContext || window.webkitAudioContext;
   let ctx = null;
   function ac() {
-    if (!ctx) ctx = new Ctx();
+    if (!ctx) { ctx = new Ctx(); if (window.VoIP && VoIP.Speaker) VoIP.Speaker.register(ctx); }   // 🔊 follows the speaker key
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     return ctx;
   }
@@ -46,6 +47,13 @@
     playing() { return loop ? loop.kind : null; },
     endTone() { try { const c = ac(); for (let i = 0; i < 3; i++) tone([480, 620], c.currentTime + 0.05 + i * 0.5, 0.25, 0.06, c.destination); } catch (e) {} },
     beep() { try { const c = ac(); tone([880], c.currentTime + 0.02, 0.12, 0.05, c.destination); } catch (e) {} },
+    // A keypad tone (DTMF), as a desk phone makes when you press a key.
+    dtmf(key) {
+      const rows = { 1: 697, 2: 697, 3: 697, 4: 770, 5: 770, 6: 770, 7: 852, 8: 852, 9: 852, '*': 941, 0: 941, '#': 941 };
+      const cols = { 1: 1209, 4: 1209, 7: 1209, '*': 1209, 2: 1336, 5: 1336, 8: 1336, 0: 1336, 3: 1477, 6: 1477, 9: 1477, '#': 1477 };
+      if (!rows[key]) return;
+      try { const c = ac(); tone([rows[key], cols[key]], c.currentTime + 0.01, 0.12, 0.035, c.destination); } catch (e) {}
+    },
     // Soft looping hold music (C – Am – F – G, arpeggiated) as a track the phone can send.
     holdStream() {
       const c = ac();

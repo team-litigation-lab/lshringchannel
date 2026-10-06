@@ -6,6 +6,9 @@
    checklist in front of them, sees the trainee's note as it's typed,
    answers the trainee's transfers ("picks up" / "no answer" /
    "voicemail"), can pause the role-play to coach, and records the call.
+   It's laid out as a desk phone: ☎ the dialer (dial the trainee's
+   extension, or pick them on the switchboard; 📞 rings them), with
+   🔊 Speaker, Mute and the coaching time-out on its keys.
    App.t is the call: { status: ringing · connecting · live · ended, … }.
    ========================================================= */
 (function () {
@@ -14,7 +17,7 @@
   const C = window.Console = {};
   const remote = () => document.getElementById('remoteAudio');
   const active = (t) => t && ['ringing', 'connecting', 'live'].includes(t.status);
-  const pick = C.pick = { traineeId: '', scenarioId: '', track: 'reception', record: true, withhold: false, batch: '', graded: null };
+  const pick = C.pick = { dial: '', traineeId: '', scenarioId: '', track: 'reception', record: true, withhold: false, batch: '', graded: null };
   // 📋 Graded mock call: starts as ⚙️ Setup says, then as the trainer last left it (on this computer).
   const gradedPick = () => {
     if (pick.graded === null) { let v = null; try { v = localStorage.getItem('mcv_graded'); } catch (e) {} pick.graded = v === null ? !!(App.cfg.settings && App.cfg.settings.defaultGraded) : v === '1'; }
@@ -48,7 +51,7 @@
     return { traineeHeld: !!lv.held, holdAt: lv.holdAt || 0, traineeMuted: !!lv.traineeMuted, coaching: !!lv.coaching,
       transfer: lv.transfer ? Object.assign({ at: Date.now() }, lv.transfer) : null };
   };
-  C.onPresence = function () { if (App.route.name === 'console') { renderRoster(); if (!active(App.t) && !(App.t && App.t.status === 'ended')) renderPickerTrainee(); } };
+  C.onPresence = function () { if (App.route.name === 'console') { renderRoster(); if (!App.t) { syncDial(); renderDialer(); } } };
 
   const fromBrief = (m) => ({ callId: m.callId, scenario: m.scenario, trainee: m.trainee, line: m.line, lineLabel: m.lineLabel, callerId: m.callerId, record: !!m.recording, graded: !!m.graded,
     ringAt: m.createdAt || Date.now(), note: m.note || {}, ticks: m.ticks || [], metrics: m.metrics || {}, traineeHeld: false, traineeMuted: false, muted: false, transfer: null, coaching: false });
@@ -58,11 +61,12 @@
     const mine = t && t.callId === m.callId;
     switch (m.t) {
       case 'ringing':
+        C.ringSent = 0;
         App.t = Object.assign(fromBrief(m), { status: 'ringing' });
         Sounds.ringback();
         render(); App.onCallBar();
         return;
-      case 'ring-failed': U.toast(m.reason, 'error'); VoIP.Mic.close(); render(); return;
+      case 'ring-failed': C.ringSent = 0; U.toast(m.reason, 'error'); VoIP.Mic.close(); render(); return;
       case 'accepted':
         // Answered just as this console cancelled: end it on the line too.
         if (!mine) { App.board.send({ t: 'hangup', callId: m.callId }); return; }
@@ -102,9 +106,9 @@
         if (!mine) return;
         t.traineeHeld = !!m.on; t.holdAt = m.on ? Date.now() : 0;
         if (!m.on && t.transfer && t.transfer.result) t.transfer = null;
-        renderCallbar();
+        renderDialer();
         return;
-      case 'mute': if (mine) { t.traineeMuted = !!m.on; renderCallbar(); } return;
+      case 'mute': if (mine) { t.traineeMuted = !!m.on; renderDialer(); } return;
       case 'transfer':
         if (!mine) return;
         t.transfer = { to: m.to, ext: m.ext, role: m.role, unavailable: !!m.unavailable, at: Date.now() };
@@ -115,8 +119,8 @@
         if (!mine) return;
         { const before = t.note || {}; t.note = m.note || {}; renderLiveNote(before); }
         return;
-      case 'peer-lost': if (mine) { t.peerLost = true; renderCallbar(); } return;
-      case 'peer-back': if (mine) { t.peerLost = false; renderCallbar(); } return;
+      case 'peer-lost': if (mine) { t.peerLost = true; renderDialer(); } return;
+      case 'peer-back': if (mine) { t.peerLost = false; renderDialer(); } return;
       case 'ended':
         if (!mine) return;
         if (t.status === 'elsewhere') { App.t = null; render(); return; }
@@ -130,9 +134,18 @@
   /* ---------- the call ---------- */
   async function ring() {
     if (active(App.t)) return U.toast('Hang up the current call first.', 'error');
-    if (!pick.traineeId) return U.toast('Pick a trainee on the left.', 'error');
-    if (!pick.scenarioId) return U.toast('Pick the call to play.', 'error');
-    try { await VoIP.Mic.open(); } catch (e) { return U.toast(e.message, 'error'); }
+    if (C.ringSent && Date.now() - C.ringSent < 5000) return;   // already ringing out
+    if (pick.dial) syncDial();
+    if (!pick.traineeId) {
+      const d = dialed();
+      return U.toast(!d ? 'Dial the trainee\'s extension, or pick them on the switchboard.'
+        : d.kind === 'offline' ? `${d.t.name}'s phone isn't open: they sign in to 📞 My phone to take calls.`
+          : d.kind === 'dir' ? `Ext ${pick.dial} is ${d.dir.name}, in the firm's directory. Trainees' desks are 7001 and up.`
+            : `No trainee answers at ext ${pick.dial}.`, 'error');
+    }
+    if (!pick.scenarioId) return U.toast('Pick the call to play, beside the dialer.', 'error');
+    C.ringSent = Date.now();
+    try { await VoIP.Mic.open(); } catch (e) { C.ringSent = 0; return U.toast(e.message, 'error'); }
     VoIP.ice();   // warm up the TURN credentials
     App.t = null;
     const graded = gradedPick();
@@ -156,13 +169,13 @@
         if (App.t !== t) return;
         t.net = st;
         if (st === 'connected' && t.status === 'connecting') { t.status = 'live'; render(); }
-        renderCallbar();
+        renderDialer();
       },
-      onQuality: (q) => { if (App.t === t) { t.quality = q; renderCallbar(); } }
+      onQuality: (q) => { if (App.t === t) { t.quality = q; renderDialBadges(); } }
     });
     t.rtc.start();
     clearTimeout(t.slowTimer);
-    t.slowTimer = setTimeout(() => { if (App.t === t && t.status === 'connecting') { t.slow = true; renderCallbar(); } }, 12000);
+    t.slowTimer = setTimeout(() => { if (App.t === t && t.status === 'connecting') { t.slow = true; renderDialer(); } }, 12000);
   }
 
   function hangup() {
@@ -211,13 +224,13 @@
     t.muted = !t.muted;
     const tr = VoIP.Mic.track(); if (tr) tr.enabled = !t.muted;
     App.board.send({ t: 'mute', callId: t.callId, on: t.muted });
-    renderCallbar();
+    renderDialer();
   }
   function toggleCoach() {
     const t = App.t; if (!t || t.status !== 'live') return;
     t.coaching = !t.coaching;
     App.board.send({ t: 'timeout', callId: t.callId, on: t.coaching });
-    renderCallbar();
+    renderDialer();
   }
   function transferResult(result) {
     const t = App.t; if (!t || !t.transfer) return;
@@ -253,75 +266,147 @@
       <select class="input" id="batchSel" style="margin-bottom:10px"><option value="">All batches</option>${batches.map((b) => `<option ${b === pick.batch ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>
       ${shown.map((x) => `<div class="tr ${x.id === pick.traineeId ? 'sel' : ''}" data-tid="${esc(x.id)}">
           <span class="led ${x.call ? 'ringing' : x.status}"></span>
-          <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)} ${x.hand ? '<span class="hand-wave" title="Asked for a mock call">✋</span>' : ''}</div><div class="bt">${esc(x.batch)} · ${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}${x.tabs > 1 ? ` · ${x.tabs} tabs` : ''}</div></div>
+          <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)} ${x.hand ? '<span class="hand-wave" title="Asked for a mock call">✋</span>' : ''}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''} · ${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}${x.tabs > 1 ? ` · ${x.tabs} tabs` : ''}</div></div>
           <button class="btn btn-sm ${x.call ? '' : 'btn-green'}" data-ring="${esc(x.id)}" ${x.call || active(App.t) ? 'disabled' : ''}>📞</button></div>`).join('') || '<div class="empty small">Nobody is online. Trainees open <b>📞 My phone</b> to take calls.</div>'}
-      ${offline.length ? `<details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">${offline.length} offline</summary>${offline.map((x) => `<div class="tr" style="cursor:default"><span class="led"></span><div><div class="nm" style="font-weight:500">${esc(x.name)}</div><div class="bt">${esc(x.batch)}${x.last_seen ? ' · seen ' + U.when(x.last_seen) : ''}</div></div></div>`).join('')}</details>` : ''}`;
+      ${offline.length ? `<details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">${offline.length} offline</summary>${offline.map((x) => `<div class="tr" style="cursor:default"><span class="led"></span><div><div class="nm" style="font-weight:500">${esc(x.name)}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''}${x.last_seen ? ' · seen ' + U.when(x.last_seen) : ''}</div></div></div>`).join('')}</details>` : ''}`;
   }
 
+  // The stage: ☎ the dialer on the left; beside it the call to play (before a call), the script,
+  // checklist and live note (during it), or the scorecard link (after it).
   function renderStage() {
     const el = U.$('#stage'); if (!el) return;
     const t = App.t;
-    if (!t) return renderPicker(el);
-    if (t.status === 'ended') return renderEndedStage(el);
-    if (t.status === 'elsewhere') {
+    if (t && t.status === 'elsewhere') {
       el.innerHTML = `<div class="card warn-box"><h3>📞 You're on a call in another tab</h3><p>With <b>${esc(t.trainee.name)}</b>: ${esc(t.scenario.title)}. Keep using that tab, or move the call here.</p>
         <button class="btn btn-green" data-act="takehere">📞 Take the call here</button></div>`;
       return;
     }
+    el.innerHTML = `<div class="dial-stage"><div class="device dialer" id="dialer"></div><div class="dial-side" id="dialSide"></div></div>`;
+    const side = U.$('#dialSide');
+    if (!t) { renderCallers(side); renderDialer(); return; }
+    if (t.status === 'ended') { renderEndedSide(side); renderDialer(); return; }
     const s = t.scenario;
-    el.innerHTML = `<div class="callbar" id="callbar"></div>
-      <div id="xfer"></div>
-      <div class="stage-live">
-        <div>
-          <div class="card script-card">
-            <div class="card-head"><h3>🎭 You are the caller</h3><span class="spacer"></span>${App.trackBadge(s.track)}${App.levelBadge(s.level)}</div>
-            <h2 style="margin-bottom:2px">${esc(s.caller.name)}</h2>
-            <div class="muted small">${esc(s.caller.role)} · caller ID the trainee sees: <b class="mono">${esc(t.callerId.name)} ${esc(t.callerId.number)}</b> on the ${esc(t.lineLabel)}</div>
-            <div class="small muted" style="margin-top:10px">Open with:</div>
-            <div class="opening">${esc(s.opening)}</div>
-            <h4>What you know and how you act</h4>
-            <div class="persona">${esc(s.hidden)}</div>
-            <h4 style="margin-top:12px">The situation</h4>
-            <p class="small">${esc(s.facts)}</p>
-            ${(s.unavailable || []).length ? `<p class="small">🚫 Not available for transfers: ${s.unavailable.map((x) => { const d = App.dirEntry(x); return d ? `<b>${esc(d.name)}</b> (${esc(x)})` : esc(x); }).join(', ')}</p>` : ''}
-            ${s.caseId ? `<details><summary class="small" style="cursor:pointer">📁 Case file ${esc(s.caseId)}${(s.hideCases || []).includes(s.caseId) ? ' (not on file for the trainee: a first call)' : ''}</summary><pre class="case">${esc((App.cfg.cases[s.caseId] || {}).text || '')}</pre></details>` : ''}
-          </div>
+    side.innerHTML = `<div id="xfer"></div>
+      <div class="card script-card">
+        <div class="card-head"><h3>🎭 You are the caller</h3><span class="spacer"></span>${App.trackBadge(s.track)}${App.levelBadge(s.level)}</div>
+        <h2 style="margin-bottom:2px">${esc(s.caller.name)}</h2>
+        <div class="muted small">${esc(s.caller.role)} · caller ID the trainee sees: <b class="mono">${esc(t.callerId.name)} ${esc(t.callerId.number)}</b> on the ${esc(t.lineLabel)}</div>
+        <div class="small muted" style="margin-top:10px">Open with:</div>
+        <div class="opening">${esc(s.opening)}</div>
+        <h4>What you know and how you act</h4>
+        <div class="persona">${esc(s.hidden)}</div>
+        <h4 style="margin-top:12px">The situation</h4>
+        <p class="small">${esc(s.facts)}</p>
+        ${(s.unavailable || []).length ? `<p class="small">🚫 Not available for transfers: ${s.unavailable.map((x) => { const d = App.dirEntry(x); return d ? `<b>${esc(d.name)}</b> (${esc(x)})` : esc(x); }).join(', ')}</p>` : ''}
+        ${s.caseId ? `<details><summary class="small" style="cursor:pointer">📁 Case file ${esc(s.caseId)}${(s.hideCases || []).includes(s.caseId) ? ' (not on file for the trainee: a first call)' : ''}</summary><pre class="case">${esc((App.cfg.cases[s.caseId] || {}).text || '')}</pre></details>` : ''}
+      </div>
+      <div class="live-cols">
+        <div class="card">
+          <div class="card-head"><h3>✅ Live checklist</h3><span class="spacer"></span><span class="small muted">Tick as it happens</span></div>
+          <div id="goals">${(s.goals || []).map((g, i) => `<label class="goal ${(t.ticks || []).includes(i) ? 'done' : ''}"><input type="checkbox" data-goal="${i}" ${(t.ticks || []).includes(i) ? 'checked' : ''}><span>${esc(g)}</span></label>`).join('')}</div>
         </div>
-        <div>
-          <div class="card">
-            <div class="card-head"><h3>✅ Live checklist</h3><span class="spacer"></span><span class="small muted">Tick as it happens</span></div>
-            <div id="goals">${(s.goals || []).map((g, i) => `<label class="goal ${(t.ticks || []).includes(i) ? 'done' : ''}"><input type="checkbox" data-goal="${i}" ${(t.ticks || []).includes(i) ? 'checked' : ''}><span>${esc(g)}</span></label>`).join('')}</div>
-          </div>
-          <div class="card">
-            <div class="card-head"><h3>📝 The trainee's note</h3><span class="spacer"></span><span class="small muted">Live</span></div>
-            <div class="live-note" id="liveNote"></div>
-          </div>
+        <div class="card">
+          <div class="card-head"><h3>📝 The trainee's note</h3><span class="spacer"></span><span class="small muted">Live</span></div>
+          <div class="live-note" id="liveNote"></div>
         </div>
       </div>`;
-    renderCallbar(); renderTransfer(); renderLiveNote();
+    renderDialer(); renderTransfer(); renderLiveNote();
   }
 
-  function renderCallbar() {
-    const el = U.$('#callbar'); const t = App.t; if (!el || !t || t.status === 'ended') return;
-    const st = t.status === 'ringing' ? `<span class="badge orange">Ringing <span data-rings="${t.ringAt}">${U.ringText(t.ringAt)}</span></span>`
-      : t.status === 'connecting' ? `<span class="badge amber">${t.slow ? 'Still connecting the audio…' : 'Connecting…'}</span>` : '';
-    const flags = [];
-    if (t.status === 'live') {
-      if (t.graded) flags.push('<span class="lb" style="background:#422006;color:#fdba74">📋 GRADED</span>');
-      if (t.record) flags.push('<span class="lb rec">REC</span>');
-      if (t.traineeHeld) flags.push(`<span class="lb hold">YOU'RE ON HOLD <span data-since="${t.holdAt}">${U.since(t.holdAt)}</span></span>`);
-      if (t.traineeMuted) flags.push('<span class="lb mute">TRAINEE MUTED</span>');
-      if (t.coaching) flags.push('<span class="lb coach">⏸ COACHING</span>');
-      if (t.peerLost) flags.push('<span class="lb warn">TRAINEE RECONNECTING</span>');
-      if (t.quality) flags.push(`<span class="lb" title="${t.quality.rtt != null ? t.quality.rtt + ' ms round trip' : ''}${t.quality.loss ? ' · ' + t.quality.loss + '% loss' : ''}${t.quality.relay ? ' · via TURN relay' : ''}"><span class="bars q${t.quality.bars}"><i></i><i></i><i></i><i></i></span>${t.quality.relay ? ' RELAY' : ''}</span>`);
+  /* ---------- ☎ the dialer: the trainer's desk phone ---------- */
+  const PAD = [['1', ''], ['2', 'ABC'], ['3', 'DEF'], ['4', 'GHI'], ['5', 'JKL'], ['6', 'MNO'], ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'], ['*', ''], ['0', '+'], ['#', '']];
+  // Who the number on the screen reaches: a trainee whose phone is open, one whose isn't, a firm extension, or nobody.
+  function dialed() {
+    const d = pick.dial; if (!d) return null;
+    const on = (App.presence.trainees || []).find((x) => x.ext === d);
+    if (on) return { kind: 'online', t: on };
+    const off = (C.roster || []).find((x) => x.ext === d && !x.archived);
+    if (off) return { kind: 'offline', t: off };
+    const dir = App.dirEntry(d);
+    if (dir) return { kind: 'dir', dir };
+    return { kind: 'none' };
+  }
+  function syncDial() { const d = dialed(); pick.traineeId = d && d.kind === 'online' ? d.t.id : ''; }
+  function setDial(v) { pick.dial = v; syncDial(); renderDialer(); renderRoster(); }
+  function press(k) {
+    if (App.t) return;
+    Sounds.dtmf(k);
+    if (pick.dial.length < 6) setDial(pick.dial + k);
+    const b = U.$(`#dialer [data-dk="${k}"]`);
+    if (b) { b.classList.add('press'); setTimeout(() => b.classList.remove('press'), 130); }
+  }
+  const lineOf = (track) => App.cfg.lines[track === 'intake' ? 'intake' : 'main'];
+  const spkTitle = () => `🔊 Speaker: ${VoIP.Speaker.on ? 'on: the call plays on the speakers. Press to go back to the headset' : 'off: the call plays in the headset. Press to put it on the speakers'} (choose them in 🎧 Audio check)`;
+  const spkKey = () => `<button type="button" class="key spk ${VoIP.Speaker.on ? 'on' : ''}" data-act="speaker" title="${esc(spkTitle())}" aria-pressed="${VoIP.Speaker.on}"><span class="ic">${VoIP.Speaker.on ? '🔊' : '🔈'}</span>Speaker</button>`;
+
+  function dialBadges(t) {
+    const f = [];
+    if (t) {
+      if (t.graded) f.push('<span class="lb grd">📋 GRADED</span>');
+      if (t.record && t.status === 'live') f.push('<span class="lb rec">REC</span>');
+      if (t.status === 'live') {
+        if (t.traineeHeld) f.push(`<span class="lb hold">YOU'RE ON HOLD <span data-since="${t.holdAt}">${U.since(t.holdAt)}</span></span>`);
+        if (t.traineeMuted) f.push('<span class="lb mute">TRAINEE MUTED</span>');
+        if (t.muted) f.push('<span class="lb mute">YOU\'RE MUTED</span>');
+        if (t.coaching) f.push('<span class="lb coach">⏸ COACHING</span>');
+        if (t.peerLost) f.push('<span class="lb warn">TRAINEE RECONNECTING</span>');
+        if (t.quality) f.push(`<span class="lb" title="${t.quality.rtt != null ? t.quality.rtt + ' ms round trip' : ''}${t.quality.loss ? ' · ' + t.quality.loss + '% loss' : ''}${t.quality.relay ? ' · via TURN relay' : ''}"><span class="bars q${t.quality.bars}"><i></i><i></i><i></i><i></i></span>${t.quality.relay ? ' RELAY' : ''}</span>`);
+      }
     }
-    el.innerHTML = `<div><div class="who2">📞 ${esc(t.trainee.name)} <span class="small" style="color:#94a3b8">${esc(t.trainee.batch || '')}</span></div><div class="small" style="color:#94a3b8">${esc(t.scenario.title)}</div></div>
-      ${t.status === 'live' ? `<span class="t" data-since="${t.answeredAt}">${U.since(t.answeredAt)}</span>` : st}
-      <div class="row">${flags.join('')}</div><span class="spacer"></span>
-      ${t.status === 'live' ? `<button class="btn btn-sm ${t.muted ? 'on' : ''}" data-act="mute">${t.muted ? '🔇 Unmute' : '🎙 Mute'}</button>
-      <button class="btn btn-sm ${t.coaching ? 'coach-on' : ''}" data-act="coach" title="Pause the role-play to coach the trainee, then resume">${t.coaching ? '▶ Resume role-play' : '⏸ Coaching time-out'}</button>` : ''}
-      <button class="btn btn-sm ${C.classOn() ? 'coach-on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view'}</button>
-      <button class="btn btn-sm btn-red" data-act="hangup">${t.status === 'ringing' ? 'Cancel call' : '☎ End call'}</button>`;
+    if (VoIP.Speaker.on && (!t || t.status !== 'ended')) f.push('<span class="lb spk">🔊 SPEAKER</span>');
+    return f.join('');
+  }
+  function renderDialBadges() { const b = U.$('#dialer .lcd-badges'); if (b) b.innerHTML = dialBadges(App.t); }
+
+  function renderDialer() {
+    const el = U.$('#dialer'); if (!el) return;
+    const t = App.t && App.t.status !== 'elsewhere' ? App.t : null;
+    const status = t ? t.status : 'idle';
+    const led = !App.connected ? 'offline' : status === 'ringing' ? 'ringing' : ['connecting', 'live'].includes(status) ? 'live' : 'available';
+    let main, cid, keys;
+    if (!t) {
+      const d = dialed();
+      const s = App.scen[pick.scenarioId];
+      let st = 'Enter an extension', cls = '', nm = '', sub = 'or pick a trainee on the switchboard';
+      if (d && d.kind === 'online') { st = d.t.call ? 'Busy: on a call' : 'Ready to call'; cls = d.t.call ? 'bad' : 'ok'; nm = d.t.name; sub = `${esc(d.t.batch)} · ${d.t.call ? 'on a call' : d.t.status === 'available' ? 'available' : 'away: they can still answer'}${d.t.hand ? ' · ✋ asked for a call' : ''}`; }
+      else if (d && d.kind === 'offline') { st = 'Not signed in'; cls = 'bad'; nm = d.t.name; sub = `${esc(d.t.batch)} · their phone isn't open`; }
+      else if (d && d.kind === 'dir') { st = 'Firm extension'; nm = d.dir.name; sub = 'Trainees\' desks are 7001 and up'; }
+      else if (d) { st = pick.dial.length >= 4 ? 'No such extension' : 'Dialing…'; cls = pick.dial.length >= 4 ? 'bad' : ''; sub = ''; }
+      main = `<div class="lcd-state ${cls}">${st}</div><div class="lcd-dial" id="dlNum">${esc(pick.dial)}<span class="caret"></span></div><div class="lcd-name sm">${esc(nm)}</div><div class="lcd-sub">${sub}</div>`;
+      cid = s ? `Calls as <b>${esc(pick.withhold ? 'PRIVATE CALLER' : s.caller.idName + ' ' + s.caller.number)}</b> · ${esc(lineOf(s.track).label)}` : 'Pick the call to play →';
+      const graded = gradedPick(), recOk = App.cfg.features.recordings, rec = (pick.record || graded) && recOk;
+      keys = `<div class="dialpad">${PAD.map(([k, l]) => `<button type="button" class="dk" data-dk="${k}" aria-label="${k}"><b>${k}</b><small>${l || '&nbsp;'}</small></button>`).join('')}</div>
+        <div class="dial-row">${spkKey()}<button type="button" class="dial-call" data-act="ring" title="Ring the trainee (Enter)" aria-label="Call">📞</button>
+          <button type="button" class="key" data-act="backspace" title="Delete a digit (Esc clears)" ${pick.dial ? '' : 'disabled'}><span class="ic">⌫</span>Delete</button></div>
+        <div class="soft-keys">
+          <label class="soft ${graded ? 'on' : ''}" title="Graded mock calls are recorded, autograded on the program's Mock Calls Metrics, and listed in 📋 Graded calls"><input type="checkbox" id="pkGraded" ${graded ? 'checked' : ''}><i class="dot"></i>📋 Graded</label>
+          <label class="soft ${rec ? 'on' : ''} ${recOk && !graded ? '' : 'dis'}" title="${recOk ? (graded ? 'Graded calls are always recorded' : 'Record the call (both voices) for the review') : 'Recordings aren\'t set up on this site'}"><input type="checkbox" id="pkRec" ${rec ? 'checked' : ''} ${recOk && !graded ? '' : 'disabled'}><i class="dot"></i>Record</label>
+          <label class="soft ${pick.withhold ? 'on' : ''}" title="The trainee's phone shows PRIVATE CALLER instead of the caller ID"><input type="checkbox" id="pkHide" ${pick.withhold ? 'checked' : ''}><i class="dot"></i>🙈 Hide ID</label>
+        </div>
+        <button type="button" class="dev-btn ${C.classOn() ? 'on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view for Meet'}</button>`;
+    } else if (status === 'ended') {
+      main = `<div class="lcd-state">Call ended</div><div class="lcd-name">${esc(t.trainee.name)}</div><div class="lcd-timer" style="color:#94a3b8">${U.dur(t.endedAt - t.answeredAt)}</div><div class="lcd-sub">${esc(t.endNote || '')}</div>`;
+      cid = `Played <b>${esc(t.scenario.title)}</b>`;
+      keys = `<div class="dev-keys"><button type="button" class="key answer wide" data-act="newcall"><span class="ic">📞</span>New call</button></div>`;
+    } else {
+      const live = status === 'live';
+      const st = status === 'ringing' ? `Calling · <span data-rings="${t.ringAt}">${U.ringText(t.ringAt)}</span>`
+        : status === 'connecting' ? (t.slow ? 'Still connecting the audio…' : 'Connecting…') : t.coaching ? 'Coaching time-out' : t.traineeHeld ? 'You\'re on hold' : 'Connected';
+      main = `<div class="lcd-state ${live ? 'ok' : ''}">${st}</div><div class="lcd-name">${esc(t.trainee.name)}</div><div class="lcd-num">${t.trainee.ext ? 'Ext ' + esc(t.trainee.ext) + ' · ' : ''}${esc(t.trainee.batch || '')}</div>${live ? `<div class="lcd-timer t" data-since="${t.answeredAt}">${U.since(t.answeredAt)}</div>` : ''}`;
+      cid = `As <b>${esc(t.callerId.name)} ${esc(t.callerId.number)}</b> · ${esc(t.lineLabel)}`;
+      keys = `<div class="dev-keys two">
+          <button type="button" class="key mute ${t.muted ? 'on' : ''}" data-act="mute" ${live ? '' : 'disabled'}><span class="ic">${t.muted ? '🔇' : '🎙'}</span>${t.muted ? 'Unmute' : 'Mute'}</button>
+          ${spkKey()}
+          <button type="button" class="key coach ${t.coaching ? 'on' : ''}" data-act="coach" ${live ? '' : 'disabled'} title="Pause the role-play to coach the trainee, then resume"><span class="ic">${t.coaching ? '▶' : '⏸'}</span>${t.coaching ? 'Resume role-play' : 'Coaching time-out'}</button>
+          <button type="button" class="key cls ${C.classOn() ? 'on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script"><span class="ic">📺</span>${C.classOn() ? 'Class view on' : 'Class view'}</button>
+          <button type="button" class="key hang wide" data-act="hangup"><span class="ic">☎</span>${status === 'ringing' ? 'Cancel call' : 'End call'}</button></div>`;
+    }
+    el.innerHTML = `<div class="dev-head"><span class="led ${led}"></span><b>Trainer line</b><span class="spacer"></span><span>${esc(App.me.name)}</span></div>
+      <div class="lcd ${status === 'idle' ? 'idle' : status}"><div class="lcd-top"><span>${esc(App.cfg.firm.name || 'LSH Training Law Group')}</span><span data-clock></span></div>
+        <div class="lcd-main">${main}</div><div class="lcd-badges">${dialBadges(t)}</div><div class="lcd-cid">${cid}</div></div>
+      ${keys}
+      <div class="dev-foot"><span title="Call volume">🔉</span><input type="range" min="0" max="1" step="0.05" value="${App.volume == null ? 1 : App.volume}" data-act="volume" aria-label="Call volume"><button type="button" class="dev-link" data-act="miccheck">🎧 Audio check</button></div>`;
+    App.tick();
   }
 
   function renderTransfer() {
@@ -342,13 +427,13 @@
     setTimeout(() => U.$$('.ln.fresh', el).forEach((x) => x.classList.remove('fresh')), 1600);
   }
 
-  function renderEndedStage(el) {
+  function renderEndedSide(el) {
     const t = App.t;
     el.innerHTML = `<div class="card"><div class="card-head"><h2>Call ended</h2><span class="spacer"></span><span class="badge">${U.dur(t.endedAt - t.answeredAt)}</span></div>
       <p><b>${esc(t.trainee.name)}</b> · ${esc(t.scenario.title)}${t.endNote ? ' · ' + esc(t.endNote) : ''}</p>
       <div id="endedInfo"></div>
-      <div class="row" style="margin-top:12px"><a class="btn btn-orange" id="scoreBtn" href="#/call/${esc(t.callId)}">📋 Score this call →</a><button class="btn" data-act="newcall">📞 Place another call</button></div>
-      <p class="small muted" style="margin-top:12px">The trainee is finishing and submitting their note; you'll see it on the scorecard.</p></div>`;
+      <div class="row" style="margin-top:12px"><a class="btn btn-orange" id="scoreBtn" href="#/call/${esc(t.callId)}">📋 Score this call →</a></div>
+      <p class="small muted" style="margin-top:12px">The trainee is finishing and submitting their note; you'll see it on the scorecard. <b>📞 New call</b> on the dialer places the next one.</p></div>`;
     if (!t.grade && t.graded) t.grade = 'waiting';
     renderEnded();
   }
@@ -370,38 +455,23 @@
   }
 
   // Before a call: who to ring and what to play.
-  function renderPicker(el) {
+  // Before a call: the call to play (the caller the trainer will be), beside the dialer.
+  function renderCallers(el) {
     const list = App.cfg.scenarios.filter((s) => s.track === pick.track);
     const s = App.scen[pick.scenarioId];
     el.innerHTML = `<div class="card">
-      <div class="card-head"><h2>📞 Place a live mock call</h2></div>
-      <div id="pickTrainee"></div>
-      <div class="row" style="margin:14px 0 10px"><div class="pill-tabs" id="pkTrack">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === pick.track ? 'on' : ''}">${t.icon} ${esc(t.label)}</button>`).join('')}</div>
-        <span class="spacer"></span><a class="small" href="#/scenarios">📚 Write your own call</a></div>
-      <div class="scen-grid" id="pkList">${list.map((x) => `<div class="scen ${x.id === pick.scenarioId ? 'sel' : ''}" data-sid="${esc(x.id)}">
-          <div class="meta">${App.levelBadge(x.level)}${x.caseId ? `<span class="badge">${esc(x.caseId)}</span>` : ''}${x.custom ? '<span class="badge blue">Yours</span>' : ''}</div>
-          <h4>${esc(x.title)}</h4><p><b>${esc(x.caller.name)}</b>: ${esc(x.caller.role)}</p></div>`).join('')}</div>
-      <div class="row" style="margin-top:16px">
-        <label class="check" title="Graded mock calls are recorded, autograded on the program's Mock Calls Metrics, and listed in 📋 Graded calls"><input type="checkbox" id="pkGraded" ${gradedPick() ? 'checked' : ''}> <b>📋 Graded mock call</b></label>
-        <label class="check"><input type="checkbox" id="pkRec" ${(pick.record || gradedPick()) && App.cfg.features.recordings ? 'checked' : ''} ${App.cfg.features.recordings && !gradedPick() ? '' : 'disabled'}> Record the call${App.cfg.features.recordings ? (gradedPick() ? ' (always, on graded calls)' : '') : ' (recordings aren\'t set up)'}</label>
-        <label class="check"><input type="checkbox" id="pkHide" ${pick.withhold ? 'checked' : ''}> Withhold the caller ID</label>
-        <span class="spacer"></span>
-        <button class="btn" data-act="miccheck">🎙 Mic check</button>
-        <button class="btn" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view for Meet'}</button>
-        <button class="btn btn-green btn-lg" data-act="ring">📞 Ring the trainee</button>
-      </div></div>
+      <div class="card-head"><h3>🎭 The call to play</h3><span class="spacer"></span><a class="small" href="#/scenarios">📚 Write your own call</a></div>
+      <div class="pill-tabs" id="pkTrack">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === pick.track ? 'on' : ''}">${t.icon} ${esc(t.label)}</button>`).join('')}</div>
+      <div class="callers" id="pkList">${list.map((x) => `<div class="scen ${x.id === pick.scenarioId ? 'sel' : ''}" data-sid="${esc(x.id)}" tabindex="0">
+          <div class="cav">${esc((x.caller.name || '?').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase())}</div>
+          <div class="cbody"><h4>${esc(x.title)}</h4><p><b>${esc(x.caller.name)}</b>: ${esc(x.caller.role)}</p></div>
+          <div class="meta">${App.levelBadge(x.level)}${x.caseId ? `<span class="badge">${esc(x.caseId)}</span>` : ''}${x.custom ? '<span class="badge blue">Yours</span>' : ''}</div></div>`).join('') || '<div class="empty small">No calls on this line yet.</div>'}</div>
+      </div>
       ${s ? `<div class="card script-card"><div class="card-head"><h3>🎭 Preview: ${esc(s.title)}</h3><span class="spacer"></span>${App.levelBadge(s.level)}</div>
-        <p class="small"><b>${esc(s.caller.name)}</b>, ${esc(s.caller.role)} · caller ID <span class="mono">${esc(s.caller.idName)} ${esc(s.caller.number)}</span></p>
+        <p class="small"><b>${esc(s.caller.name)}</b>, ${esc(s.caller.role)} · caller ID <span class="mono">${esc(s.caller.idName)} ${esc(s.caller.number)}</span> on the ${esc(lineOf(s.track).label)}</p>
         <div class="opening">${esc(s.opening)}</div>
         <div class="grid2"><div><h4>What you know and how you act</h4><div class="persona">${esc(s.hidden)}</div></div>
         <div><h4>What a good call does</h4><ul class="small">${(s.goals || []).map((g) => `<li>${esc(g)}</li>`).join('')}</ul><h4>The situation</h4><p class="small">${esc(s.facts)}</p></div></div></div>` : ''}`;
-    renderPickerTrainee();
-  }
-  function renderPickerTrainee() {
-    const el = U.$('#pickTrainee'); if (!el) return;
-    const x = (App.presence.trainees || []).find((y) => y.id === pick.traineeId);
-    el.innerHTML = x ? `<div class="note-box">Calling <b>${esc(x.name)}</b> (${esc(x.batch)}) · ${x.call ? '<span class="badge red">on a call</span>' : x.status === 'available' ? '<span class="badge green">available</span>' : '<span class="badge amber">away: they can still answer</span>'}${x.hand ? ' · ✋ asked for a call' : ''}</div>`
-      : `<div class="note-box">👈 Pick a trainee on the switchboard${pick.traineeId ? ' (the one you picked went offline)' : ''}.</div>`;
   }
 
   /* ---------- 📺 the Class view (a tab to present in Google Meet) ----------
@@ -423,7 +493,7 @@
     remote().muted = on;
     const t = App.t;
     if (t && t.status === 'live' && t.classSent !== on) { t.classSent = on; App.board.send({ t: 'class', callId: t.callId, on }); }
-    if (C._shown !== on) { C._shown = on; renderCallbar(); if (!App.t) renderStage(); }
+    if (C._shown !== on) { C._shown = on; renderDialer(); }
   };
   setInterval(() => { if (C.classWin && C.classWin.closed) { C.classWin = null; C.classAudio = false; } C.syncAudio(); }, 1000);
   // What the class may see: never the caller's script or the goals; the call's title only once it's over.
@@ -450,28 +520,35 @@
     async render() {
       const app = U.$('#app');
       app.innerHTML = `<div class="console"><div class="card roster" id="roster"></div><div id="stage"></div></div>`;
-      App.leave = () => { if (App.t && App.t.status === 'ended' && App.t.upload !== 'saving') App.t = null; };
+      App.leave = () => { document.removeEventListener('keydown', onKey); if (App.t && App.t.status === 'ended' && App.t.upload !== 'saving') App.t = null; };
       app.firstChild.addEventListener('click', onClick);
       app.firstChild.addEventListener('change', onChange);
+      app.firstChild.addEventListener('input', onInput);
+      document.addEventListener('keydown', onKey);
       render();
-      try { C.roster = (await API.post('/api/trainees')).trainees; renderRoster(); } catch (e) {}
+      try { C.roster = (await API.post('/api/trainees')).trainees; renderRoster(); if (!App.t) { syncDial(); renderDialer(); } } catch (e) {}
     }
   });
 
   function onClick(e) {
+    // The switchboard is the phone's contact list: a trainee's row puts their extension on the dialer; 📞 also rings.
     const ringBtn = e.target.closest('[data-ring]');
-    if (ringBtn) { pick.traineeId = ringBtn.dataset.ring; if (!pick.scenarioId) { renderRoster(); renderPickerTrainee(); U.toast('Now pick the call to play, then ring.'); return; } renderRoster(); ring(); return; }
+    if (ringBtn) { if (App.t) return; pickTrainee(ringBtn.dataset.ring); if (!pick.scenarioId) { U.toast('Now pick the call to play, then press 📞.'); return; } ring(); return; }
     const tr = e.target.closest('[data-tid]');
-    if (tr) { pick.traineeId = tr.dataset.tid; renderRoster(); renderPickerTrainee(); return; }
+    if (tr) { if (!App.t) pickTrainee(tr.dataset.tid); return; }
+    const dk = e.target.closest('[data-dk]');
+    if (dk) { press(dk.dataset.dk); return; }
     const trk = e.target.closest('[data-track]');
     if (trk && U.$('#pkTrack') && U.$('#pkTrack').contains(trk)) { pick.track = trk.dataset.track; renderStage(); return; }
     const sc = e.target.closest('[data-sid]');
-    if (sc) { pick.scenarioId = sc.dataset.sid; renderStage(); return; }
+    if (sc) { pickCall(sc.dataset.sid); return; }
     const xf = e.target.closest('[data-xfer]');
     if (xf) { transferResult(xf.dataset.xfer); return; }
     const b = e.target.closest('[data-act]'); if (!b) return;
     const act = b.dataset.act;
     if (act === 'ring') ring();
+    else if (act === 'backspace') setDial(pick.dial.slice(0, -1));
+    else if (act === 'speaker') App.toggleSpeaker(renderDialer);
     else if (act === 'hangup') hangup();
     else if (act === 'mute') toggleMute();
     else if (act === 'coach') toggleCoach();
@@ -480,11 +557,35 @@
     else if (act === 'takehere') takeHere();
     else if (act === 'classview') openClassView();
   }
+  function pickTrainee(id) {
+    const x = (App.presence.trainees || []).find((y) => y.id === id) || (C.roster || []).find((y) => y.id === id);
+    if (x && x.ext) setDial(x.ext);
+    else { pick.dial = ''; pick.traineeId = id; renderDialer(); renderRoster(); }
+  }
+  function pickCall(id) {
+    const list = U.$('#pkList'), top = list ? list.scrollTop : 0;
+    pick.scenarioId = id; renderStage();
+    if (U.$('#pkList')) U.$('#pkList').scrollTop = top;
+  }
+  // Typing on the keyboard dials too: digits, * and #; Backspace deletes, Esc clears, Enter rings.
+  function onKey(e) {
+    if (App.route.name !== 'console' || App.t || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal-back')) return;
+    const tg = e.target;
+    if (tg && tg.closest && tg.closest('textarea, select, [contenteditable], input:not([type=checkbox]):not([type=range])')) return;
+    if (/^[0-9*#]$/.test(e.key)) { e.preventDefault(); press(e.key); }
+    else if (e.key === 'Backspace' && pick.dial) { e.preventDefault(); setDial(pick.dial.slice(0, -1)); }
+    else if (e.key === 'Escape' && pick.dial) setDial('');
+    else if (e.key === 'Enter' && pick.dial && !(tg && tg.closest && tg.closest('button, a, [data-sid]'))) { e.preventDefault(); ring(); }
+    else if (e.key === 'Enter' && tg && tg.dataset && tg.dataset.sid) { e.preventDefault(); pickCall(tg.dataset.sid); }
+  }
+  function onInput(e) {
+    if (e.target.dataset && e.target.dataset.act === 'volume') { App.volume = Number(e.target.value); remote().volume = App.volume; }
+  }
   function onChange(e) {
     if (e.target.id === 'batchSel') { pick.batch = e.target.value; renderRoster(); }
-    else if (e.target.id === 'pkRec') pick.record = e.target.checked;
-    else if (e.target.id === 'pkGraded') { pick.graded = e.target.checked; try { localStorage.setItem('mcv_graded', pick.graded ? '1' : '0'); } catch (err) {} renderStage(); }
-    else if (e.target.id === 'pkHide') pick.withhold = e.target.checked;
+    else if (e.target.id === 'pkRec') { pick.record = e.target.checked; renderDialer(); }
+    else if (e.target.id === 'pkGraded') { pick.graded = e.target.checked; try { localStorage.setItem('mcv_graded', pick.graded ? '1' : '0'); } catch (err) {} renderDialer(); }
+    else if (e.target.id === 'pkHide') { pick.withhold = e.target.checked; renderDialer(); }
     else if (e.target.dataset.goal != null) { tick(Number(e.target.dataset.goal), e.target.checked); e.target.closest('.goal').classList.toggle('done', e.target.checked); }
   }
 })();
