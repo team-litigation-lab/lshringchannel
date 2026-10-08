@@ -78,6 +78,17 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await fb.waitForSelector('#roster');
   ok('The trainers\' fallback (the Portal is down): the passphrase still opens the console');
 
+  // Separate trainer accounts get their own desk extensions (8001 and up), and see each other's
+  const ext = async (p) => p.evaluate(() => App.myExt);
+  await fb.waitForFunction(() => !!App.myExt);
+  const [e1, e2] = [await ext(tr), await ext(fb)];
+  if (!/^80\d\d$/.test(e1) || !/^80\d\d$/.test(e2) || e1 === e2) throw new Error('Each trainer account needs its own extension: ' + JSON.stringify([e1, e2]));
+  await tr.click('a[href="#/console"]');
+  await tr.waitForSelector('#dialer .dev-head');
+  if (!new RegExp('ext ' + e1).test(await tr.textContent('#dialer .dev-head'))) throw new Error('The console should show the trainer\'s own extension');
+  await tr.waitForFunction((n) => /Coach Ben/.test(document.querySelector('#roster').textContent) && new RegExp('ext ' + n).test(document.querySelector('#roster').textContent), e2);
+  ok(`Separate trainer accounts have their own trainer lines (Coach Ana ext ${e1}, Coach Ben ext ${e2}) and see each other on the switchboard`);
+
   await browser.close();
   console.log('\nALL PASSED');
 })().catch(async (e) => { console.error('❌ FAILED at step', step + 1, e.message); process.exit(1); });

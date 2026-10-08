@@ -168,8 +168,9 @@
     b.on('up', (m) => { net.classList.add('hidden'); App.connected = true; App.myExt = (m.me && m.me.ext) || ''; (App.trainer() ? Console : Trainee).onUp(m); });
     b.on('down', () => { App.connected = false; setTimeout(() => { if (!App.connected) net.classList.remove('hidden'); }, 2500); });
     b.on('presence', (m) => {
+      App.desks = m.desks || [];   // the trainers who are on, each with their own extension
       if (App.trainer()) { App.presence = { trainees: m.trainees || [], trainers: m.trainers || [] }; Console.onPresence(); }
-      else { App.trainersOnline = m.trainers || 0; Trainee.onPresence(); }
+      else { App.trainersOnline = m.trainers || 0; App.peers = m.peers || []; Trainee.onPresence(); }
     });
     b.on('error', (m) => U.toast(m.msg, 'error'));
     b.on('trouble', () => { API.post('/api/me').catch(() => {}); });
@@ -197,6 +198,20 @@
     bar.innerHTML = `<span>📞 ${c.status === 'ringing' ? 'Ringing' : 'On a call'}${who ? ' · ' + esc(who) : ''}</span><span data-since="${c.answeredAt || c.ringAt || ''}">${U.since(c.answeredAt || c.ringAt)}</span><a href="#/${home}">Go back to the call →</a>`;
     bar.classList.remove('hidden');
   };
+
+  /* ---------- panels the person can minimize ----------
+     The console's two sidebars and the trainee's switchboard fold away to a thin rail, and stay
+     that way on this computer. */
+  App.folded = function (key, set) {
+    try {
+      if (set === undefined) return localStorage.getItem('mcv_fold_' + key) === '1';
+      localStorage.setItem('mcv_fold_' + key, set ? '1' : '0');
+    } catch (e) {}
+    return !!set;
+  };
+  App.foldKey = (key, label, title) => `<button type="button" class="fold-btn" data-fold="${esc(key)}" title="${esc(title || ('Minimize ' + label))}" aria-label="${esc(title || ('Minimize ' + label))}">${App.folded(key) ? '»' : '«'}</button>`;
+  // The thin rail a folded panel leaves behind: click it to bring the panel back.
+  App.railHTML = (key, label, icon) => `<button type="button" class="rail" data-fold="${esc(key)}" title="Open ${esc(label)}"><span class="rail-ic">${icon}</span><span class="rail-label">${esc(label)}</span></button>`;
 
   /* ---------- dialogs ---------- */
   App.modal = function ({ title, body, foot, wide, onClose }) {
@@ -324,14 +339,41 @@
   };
   App.readNote = (root) => { const o = {}; U.$$('[data-k]', root).forEach((el) => { if (el.value.trim()) o[el.dataset.k] = el.value; }); return o; };
 
-  App.lookupHTML = function () {
+  /* 🔎 Case lookup: the front desk's search of the firm's case files. On a live call it's the first
+     thing on screen: the trainee searches, previews the file, marks the one the call is about (their
+     trainer sees which file they picked, and the grade says whether it was the right one) and can open
+     it in the CMS Training Library signed in as themselves. */
+  App.lookupHTML = function (p) {
+    const picked = p && p.caseId ? App.cfg.cases[p.caseId] : null;
     return `<p class="small muted">Search the firm's case files the way the front desk does: by the caller's name, a phone number, a date of birth or a case number (MC-xx). Nothing shows until you search.</p>
-      <input class="input" id="lkQ" placeholder="🔎 Name, phone, DOB or MC number…" autocomplete="off"><div id="lkHits"></div>`;
+      <input class="input" id="lkQ" placeholder="🔎 Name, phone, DOB or MC number…" autocomplete="off">
+      <div id="lkPicked">${picked ? pickedHTML(picked) : ''}</div><div id="lkHits"></div>`;
   };
-  App.bindLookup = function (root, hide) {
-    const q = U.$('#lkQ', root), out = U.$('#lkHits', root);
+  const pickedHTML = (c) => `<div class="ok-box small" style="margin:10px 0">📁 Working from <b>${esc(c.id)} · ${esc(c.name)}</b> — your trainer can see the file you chose. <button class="btn btn-sm" data-case-clear="1">Choose another</button></div>`;
+
+  // Opens a case file in the CMS Training Library, signed in (a fresh Portal ticket; see src/portal.js).
+  App.openCase = async function (caseId, btn) {
+    const label = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Opening the CMS…'; }
+    // The tab is opened first, so the browser doesn't treat it as a pop-up once the link comes back.
+    const tab = window.open('', '_blank');
+    try {
+      const r = await API.post('/api/cms-link', { caseId });
+      if (tab) tab.location = r.url; else window.open(r.url, '_blank', 'noopener');
+      if (!r.authed) U.toast('The CMS will ask you to come in from the LSH Training Portal (no Portal secret is set on this site).');
+    } catch (e) {
+      if (tab) tab.close();
+      U.toast('Couldn\'t open the case file in the CMS: ' + e.message, 'error');
+    }
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  };
+
+  App.bindLookup = function (root, opts) {
+    const o = Array.isArray(opts) ? { hide: opts } : (opts || {});
+    const hide = o.hide || [], live = !!o.live, onPick = o.onPick;
+    const q = U.$('#lkQ', root), out = U.$('#lkHits', root), picked = U.$('#lkPicked', root);
     if (!q) return;
-    const cases = Object.values(App.cfg.cases).filter((c) => !(hide || []).includes(c.id));
+    const cases = Object.values(App.cfg.cases).filter((c) => !hide.includes(c.id));
     const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
     q.oninput = () => {
       const v = q.value.trim(), n = norm(v);
@@ -340,12 +382,24 @@
       out.innerHTML = hits.length ? hits.map((c) => `<div class="lookup-hit" data-case="${c.id}"><b>${esc(c.id)} · ${esc(c.name)}</b> <span class="muted small">${esc(c.title)}</span></div>`).join('')
         : `<div class="empty small">No case on file matches “${esc(v)}”.</div>`;
     };
+    const setPicked = (id) => {
+      if (onPick) onPick(id);
+      if (picked) picked.innerHTML = id && App.cfg.cases[id] ? pickedHTML(App.cfg.cases[id]) : '';
+      U.$$('[data-case]', out).forEach((x) => x.classList.toggle('mine', x.dataset.case === id));
+    };
+    if (picked) picked.onclick = (e) => { if (e.target.closest('[data-case-clear]')) setPicked(''); };
     out.onclick = (e) => {
+      const cms = e.target.closest('[data-case-open]');
+      if (cms) { App.openCase(cms.dataset.caseOpen, cms); return; }
+      const use = e.target.closest('[data-case-use]');
+      if (use) { setPicked(use.dataset.caseUse); return; }
       const hit = e.target.closest('[data-case]'); if (!hit || hit.classList.contains('open')) return;
       const c = App.cfg.cases[hit.dataset.case];
       U.$$('.lookup-hit.open', out).forEach((x) => { x.classList.remove('open'); const pre = x.querySelector('.case-body'); if (pre) pre.remove(); });
       hit.classList.add('open');
-      hit.insertAdjacentHTML('beforeend', `<div class="case-body"><pre class="case">${esc(c.text)}</pre><a class="small" target="_blank" rel="noopener" href="${App.cfg.cms}?program=reception&mock=${c.id}&from=standard">Open ${c.id} in the CMS Training Library ↗</a></div>`);
+      hit.insertAdjacentHTML('beforeend', `<div class="case-body"><div class="case-head small muted">📁 Preview · case file ${esc(c.id)}</div><pre class="case">${esc(c.text)}</pre>
+        <div class="row">${live ? `<button class="btn btn-sm btn-green" data-case-use="${esc(c.id)}">✅ This is the case file</button>` : ''}
+        <button class="btn btn-sm" data-case-open="${esc(c.id)}" title="Opens ${esc(c.id)} in the CMS Training Library, signed in as you">🗂 Open ${esc(c.id)} in the CMS ↗</button></div></div>`);
     };
   };
 
@@ -397,6 +451,11 @@
     if (!wsum) return null;
     const avg = sum / wsum;
     return { avg: Math.round(avg * 100) / 100, pct: Math.round(avg * 20) };
+  };
+
+  // 🎚 The voice an AI caller speaks with: "to suit the caller" picks one from the caller's gender.
+  App.voiceOptions = function (picked) {
+    return `<option value="">🎚 Voice: to suit the caller</option>${(App.cfg.voices || []).map((v) => `<option value="${esc(v.id)}" ${v.id === picked ? 'selected' : ''}>🎚 ${esc(v.label)} · ${esc(v.desc)} (${v.gender === 'm' ? 'male' : 'female'})</option>`).join('')}`;
   };
 
   App.levelBadge = (l) => `<span class="badge lvl-${esc(l)}">${esc(l)}</span>`;

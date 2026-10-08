@@ -17,7 +17,9 @@
   const C = window.Console = {};
   const remote = () => document.getElementById('remoteAudio');
   const active = (t) => t && ['ringing', 'connecting', 'live'].includes(t.status);
-  const pick = C.pick = { dial: '', traineeId: '', scenarioId: '', track: 'reception', record: true, withhold: false, batch: '', graded: null };
+  const pick = C.pick = { dial: '', traineeId: '', scenarioId: '', track: 'reception', record: true, withhold: false, batch: '', graded: null, voice: '', aiPool: [] };
+  // The two sidebars beside the dialer, each of which the trainer can minimize to a rail.
+  const FOLD_L = 'conL', FOLD_R = 'conR';
   // 📋 Graded mock call: starts as ⚙️ Setup says, then as the trainer last left it (on this computer).
   const gradedPick = () => {
     if (pick.graded === null) { let v = null; try { v = localStorage.getItem('mcv_graded'); } catch (e) {} pick.graded = v === null ? !!(App.cfg.settings && App.cfg.settings.defaultGraded) : v === '1'; }
@@ -59,6 +61,29 @@
   C.onBoard = function (m) {
     const t = App.t;
     const mine = t && t.callId === m.callId;
+    // 👥 Merge calls: the trainees merged into the call on the line each have their own leg.
+    switch (m.t) {
+      case 'conf-ringing':
+        if (!t || m.parent !== t.callId) return;
+        t.legs = (t.legs || []).filter((l) => l.callId !== m.callId);
+        t.legs.push({ callId: m.callId, trainee: m.trainee, status: 'ringing', ringAt: m.createdAt || Date.now() });
+        Sounds.beep();
+        renderConf(); renderDialer();
+        return;
+      case 'conf-failed':
+        U.toast(m.reason, 'error');
+        return;
+      case 'conf-parties': return;   // the trainees' own phones show who else is on the call
+      case 'conf-state': {
+        if (!t || m.callId !== t.callId) return;
+        const keep = new Set((m.legs || []).map((x) => x.callId));
+        (t.legs || []).filter((l) => !keep.has(l.callId)).forEach((l) => legEnd(l));
+        renderConf(); renderDialer();
+        return;
+      }
+    }
+    const leg = t && (t.legs || []).find((l) => l.callId === m.callId);
+    if (leg) return onLeg(leg, m);
     switch (m.t) {
       case 'ai-call': aiUpsert(m.call); return;
       case 'ai-failed': U.toast(m.reason, 'error'); return;
@@ -127,6 +152,12 @@
         if (!mine) return;
         { const before = t.note || {}; t.note = m.note || {}; renderLiveNote(before); }
         return;
+      // 🔎 The case file the trainee opened and is working from.
+      case 'case':
+        if (!mine) return;
+        t.caseOpen = m.caseId ? m : null;
+        renderCase();
+        return;
       case 'peer-lost': if (mine) { t.peerLost = true; renderDialer(); } return;
       case 'peer-back': if (mine) { t.peerLost = false; renderDialer(); } return;
       case 'ended':
@@ -142,6 +173,146 @@
     }
   };
 
+  /* ---------- 👥 Merge calls (a conference) ----------
+     The trainer is already on a call and rings another trainee into it. The extra trainee answers the
+     ordinary way; this browser then mixes the voices (VoIP.Mixer) and sends each person the trainer's
+     microphone plus everyone else, so all three (or four) hear one another. The conference is recorded
+     as one call on the trainer's side; the merged legs aren't graded of their own. */
+  function confPick() {
+    const t = App.t;
+    if (!t || t.status !== 'live') return U.toast('Merge works once a call is connected.', 'error');
+    const on = (t.legs || []).map((l) => l.trainee.id);
+    const list = (App.presence.trainees || []).filter((x) => !x.call && x.id !== t.trainee.id && !on.includes(x.id));
+    const m = App.modal({ title: '👥 Merge another trainee into this call',
+      body: `<p class="small muted">Their phone rings like any call. Once they answer, everyone on the call hears everyone: you (the caller), ${esc(t.trainee.name)}${(t.legs || []).length ? ', ' + (t.legs || []).map((l) => esc(l.trainee.name)).join(', ') : ''} and them. Up to two more trainees.</p>
+        ${list.map((x) => `<div class="dir-row"><span class="ext mono">${esc(x.ext || '')}</span><div style="flex:1"><b>${esc(x.name)}</b><div class="small muted">${esc(x.batch)} · ${x.status === 'available' ? 'available' : 'away'}${x.hand ? ' · ✋ asked for a call' : ''}</div></div>
+          <button class="btn btn-sm btn-green" data-merge="${esc(x.id)}">👥 Merge in</button></div>`).join('') || '<div class="empty small">No other trainee is free right now.</div>'}` });
+    m.el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-merge]'); if (!b) return;
+      App.board.send({ t: 'conf-ring', callId: t.callId, traineeId: b.dataset.merge });
+      m.close();
+    });
+  }
+
+  function onLeg(l, m) {
+    const t = App.t; if (!t) return;
+    switch (m.t) {
+      case 'accepted':
+        l.status = 'connecting'; l.answeredAt = Date.now();
+        legConnect(l, Date.now());
+        renderConf(); renderDialer();
+        return;
+      case 'signal':
+        if (!l.rtc || !m.data) return;
+        if (m.data.rejoin) { legConnect(l, Date.now()); return; }
+        if (m.data.gen != null && m.data.gen !== l.rtc.gen) return;
+        l.rtc.handle(m.data);
+        return;
+      case 'hold': l.held = !!m.on; renderConf(); return;
+      case 'mute': l.muted = !!m.on; renderConf(); return;
+      case 'peer-lost': l.lost = true; renderConf(); return;
+      case 'peer-back': l.lost = false; renderConf(); return;
+      // A merged trainee pressing Transfer: on a conference there's no extension to ring, so it comes
+      // back as no answer and they carry on with everyone on the line.
+      case 'transfer':
+        App.board.send({ t: 'transfer-result', callId: l.callId, result: 'no-answer' });
+        U.toast(`${l.trainee.name} tried to transfer the caller to ${m.to}: on a conference that comes back as no answer.`);
+        return;
+      case 'ended': case 'gone':
+        U.toast(`${l.trainee.name} left the conference.`);
+        legEnd(l);
+        return;
+      default: return;
+    }
+  }
+
+  // The trainer's own ears: each merged trainee plays in their own element (so the mix stays for the line).
+  function legAudio(l) {
+    if (!l.audio) {
+      const a = document.createElement('audio');
+      a.autoplay = true; a.setAttribute('data-leg', l.callId);
+      document.body.appendChild(a);
+      VoIP.Speaker.register(a);
+      l.audio = a;
+    }
+    return l.audio;
+  }
+
+  async function legConnect(l, gen) {
+    const t = App.t; if (!t) return;
+    let stream;
+    try { stream = await VoIP.Mic.open(); } catch (e) { return U.toast(e.message, 'error'); }
+    const servers = await VoIP.ice();
+    if (App.t !== t || !(t.legs || []).includes(l)) return;
+    if (l.rtc) l.rtc.close();
+    l.rtc = new VoIP.RtcCall({
+      board: App.board, callId: l.callId, offerer: true, iceServers: servers, stream, gen,
+      onRemote: (s) => {
+        l.remote = s;
+        const a = legAudio(l);
+        a.srcObject = s; a.volume = App.volume == null ? 1 : App.volume; a.muted = C.classOn();
+        a.play().catch(() => {});
+        if (t.rec) t.rec.add(s);
+        l.status = 'live';
+        confSync(); renderConf(); renderDialer();
+      },
+      onState: (st) => { l.net = st; if (st === 'connected' && l.status === 'connecting') { l.status = 'live'; renderConf(); renderDialer(); } }
+    });
+    l.rtc.start();
+  }
+
+  // Who hears whom. Everyone gets the trainer's microphone and every other voice, never their own.
+  function confSync() {
+    const t = App.t; if (!t) return;
+    const live = (t.legs || []).filter((l) => l.rtc && l.remote);
+    if (!live.length) {
+      if (t.mix) { if (t.rtc) t.rtc.setOutgoing(VoIP.Mic.track()); t.mix.close(); t.mix = null; }
+      return;
+    }
+    if (!t.mix) {
+      const mic = VoIP.Mic.stream; if (!mic) return;
+      t.mix = new VoIP.Mixer(mic);
+    }
+    t.mix.resume();
+    const parties = [{ id: t.callId, stream: (t.rtc && t.rtc.remote) || null, rtc: t.rtc }, ...live.map((l) => ({ id: l.callId, stream: l.remote, rtc: l.rtc }))];
+    [...t.mix.legs.keys()].forEach((id) => { if (!parties.some((p) => p.id === id)) t.mix.remove(id); });
+    parties.forEach((p) => { const track = t.mix.set(p.id, p.stream); if (p.rtc && track) p.rtc.setOutgoing(track); });
+  }
+
+  function legEnd(l) {
+    const t = App.t;
+    if (l.rtc) { l.rtc.close(); l.rtc = null; }
+    if (l.audio) { VoIP.Speaker.unregister(l.audio); l.audio.srcObject = null; l.audio.remove(); l.audio = null; }
+    l.remote = null;
+    if (t) {
+      t.legs = (t.legs || []).filter((x) => x !== l);
+      if (t.mix) t.mix.remove(l.callId);
+      confSync(); renderConf(); renderDialer();
+    }
+  }
+  function legsClose() {
+    const t = App.t; if (!t) return;
+    (t.legs || []).slice().forEach((l) => {
+      if (['ringing', 'connecting', 'live'].includes(l.status)) App.board.send({ t: l.status === 'ringing' ? 'cancel' : 'hangup', callId: l.callId });
+      legEnd(l);
+    });
+    if (t.mix) { t.mix.close(); t.mix = null; }
+  }
+  const confCount = () => (App.t && (App.t.legs || []).filter((l) => l.status === 'live').length) || 0;
+
+  // 👥 Who is on the call, beside the dialer: each merged trainee, and ⏏ to drop them.
+  function renderConf() {
+    const el = U.$('#confBox'); const t = App.t; if (!el) return;
+    const legs = (t && t.legs) || [];
+    if (!legs.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="card conf-card"><div class="card-head"><h3>👥 Conference</h3><span class="spacer"></span><span class="badge green">${legs.filter((l) => l.status === 'live').length + 1} trainees on the line</span></div>
+      <div class="conf-row"><span class="led live"></span><div style="flex:1"><b>${esc(t.trainee.name)}</b><div class="small muted">${esc(t.trainee.batch || '')}${t.trainee.ext ? ' · ext ' + esc(t.trainee.ext) : ''} · took the call</div></div></div>
+      ${legs.map((l) => `<div class="conf-row"><span class="led ${l.status === 'live' ? 'live' : 'ringing'}"></span>
+        <div style="flex:1"><b>${esc(l.trainee.name)}</b><div class="small muted">${esc(l.trainee.batch || '')}${l.trainee.ext ? ' · ext ' + esc(l.trainee.ext) : ''} · ${l.status === 'ringing' ? 'ringing…' : l.status === 'connecting' ? 'connecting…' : 'merged in'}${l.held ? ' · on hold' : ''}${l.muted ? ' · muted' : ''}${l.lost ? ' · reconnecting' : ''}</div></div>
+        <button class="btn btn-sm" data-drop="${esc(l.callId)}" title="Take them off the call">⏏ Drop</button></div>`).join('')}
+      <p class="small muted" style="margin:8px 0 0">Everyone hears everyone: your voice goes to all of them, and their voices to each other. The recording has every voice in it.</p></div>`;
+  }
+
   /* ---------- the call ---------- */
   // The trainee on the dialer, or why there's nobody to ring.
   function dialTarget() {
@@ -150,8 +321,9 @@
     const d = dialed();
     return !d ? 'Dial the trainee\'s extension, or pick them on the switchboard.'
       : d.kind === 'offline' ? `${d.t.name}'s phone isn't open: they open ☎ LSH Ring Channel from the Portal to take calls.`
-        : d.kind === 'dir' ? `Ext ${pick.dial} is ${d.dir.name}, in the firm's directory. Trainees' desks are 7001 and up.`
-          : `No trainee answers at ext ${pick.dial}.`;
+        : d.kind === 'trainer' ? `Ext ${pick.dial} is ${d.desk.name}'s trainer line. Trainers ring trainees, not each other.`
+          : d.kind === 'dir' ? `Ext ${pick.dial} is ${d.dir.name}, in the firm's directory. Trainees' desks are 7001 and up.`
+            : `No trainee answers at ext ${pick.dial}.`;
   }
 
   /* ---------- 🤖 AI calls: the AI plays the caller ----------
@@ -164,9 +336,64 @@
     const why = dialTarget(); if (why) return U.toast(why, 'error');
     const s = App.scen[pick.scenarioId];
     if (s && s.ai === false) return U.toast(`"${s.title}" is live-only: the AI can't play it. Pick another call, or ring it yourself.`, 'error');
-    App.board.send({ t: 'ai-ring', traineeId: pick.traineeId, scenarioId: pick.scenarioId || '', track: pick.track, graded: gradedPick() });
+    App.board.send({ t: 'ai-ring', traineeId: pick.traineeId, scenarioId: pick.scenarioId || '', track: pick.track, graded: gradedPick(), voice: pick.voice || '' });
     U.toast(`🤖 Ringing ${(dialed() || {}).t ? dialed().t.name : 'the trainee'} with an AI caller${s ? ': ' + s.title : ' (a random ' + App.cfg.tracks[pick.track].label + ' call)'}.`, 'ok');
     pick.dial = ''; syncDial(); renderDialer(); renderRoster();
+  }
+
+  /* 🎭 AI caller setup: the trainer chooses which calls the AI may play (one, a few for it to draw
+     from, or any call on the line), the voice it speaks with, whether the calls are graded, and which
+     trainees to ring — several at once, each getting a call drawn from the chosen set. */
+  function aiSetup() {
+    if (!App.cfg.features.ai) return U.toast('AI callers need the Gemini keys (see ⚙️ Setup).', 'error');
+    const online = (App.presence.trainees || []).filter((x) => !x.call);
+    const chosen = new Set(pick.aiPool);
+    const who = new Set(pick.traineeId ? [pick.traineeId] : []);
+    let track = pick.track;
+    const body = () => {
+      const list = App.cfg.scenarios.filter((x) => x.track === track && x.ai !== false);
+      return `<div class="ai-setup">
+        <h4>🎚 The caller's voice</h4>
+        <select class="input" id="asVoice">${App.voiceOptions(pick.voice)}</select>
+        <h4>🎭 The calls the AI may play</h4>
+        <div class="pill-tabs" id="asTrack">${Object.entries(App.cfg.tracks).map(([k, x]) => `<button data-astrack="${k}" class="${k === track ? 'on' : ''}">${x.icon} ${esc(x.label)}</button>`).join('')}</div>
+        <p class="small muted">Tick the calls to draw from. With none ticked, the AI plays any call on the ${esc(lineOf(track).label)}. Each trainee gets one call drawn from what you tick.</p>
+        <div class="pick-list" id="asScens">${list.map((x) => `<label class="pick ${chosen.has(x.id) ? 'on' : ''}"><input type="checkbox" data-asid="${esc(x.id)}" ${chosen.has(x.id) ? 'checked' : ''}>
+          <span><b>${esc(x.title)}</b><br><span class="small muted">${esc(x.caller.name)} · ${esc(x.level)}${x.caseId ? ' · ' + esc(x.caseId) : ''}</span></span></label>`).join('') || '<div class="empty small">No call on this line can be played by the AI.</div>'}</div>
+        <div class="row" style="margin:8px 0"><button class="btn btn-sm" data-asall="1">Tick all ${list.length}</button><button class="btn btn-sm" data-asnone="1">Clear</button></div>
+        <h4>👥 Who to ring</h4>
+        <div class="pick-list" id="asWho">${online.map((x) => `<label class="pick ${who.has(x.id) ? 'on' : ''}"><input type="checkbox" data-aswho="${esc(x.id)}" ${who.has(x.id) ? 'checked' : ''}>
+          <span><b>${esc(x.name)}</b><br><span class="small muted">${esc(x.batch)}${x.ext ? ' · ext ' + esc(x.ext) : ''} · ${x.status === 'available' ? 'available' : 'away'}${x.hand ? ' · ✋ asked for a call' : ''}</span></span></label>`).join('') || '<div class="empty small">Nobody is free: trainees open 📞 My phone to take calls.</div>'}</div>
+        <div class="row" style="margin:8px 0"><button class="btn btn-sm" data-aswhoall="1">Everyone free</button>
+          <span class="spacer"></span><label class="check small"><input type="checkbox" id="asGraded" ${gradedPick() ? 'checked' : ''}> 📋 Graded mock calls</label></div>
+      </div>`;
+    };
+    const m = App.modal({ title: '🎭 Send AI callers', wide: true, body: body(),
+      foot: '<button class="btn btn-primary" data-assend="1">🤖 Ring them</button><button class="btn" data-x>Cancel</button>' });
+    const redraw = () => { U.$('.modal-body', m.el).innerHTML = body(); };
+    m.el.addEventListener('change', (e) => {
+      const s = e.target.dataset.asid, w = e.target.dataset.aswho;
+      if (s) { if (e.target.checked) chosen.add(s); else chosen.delete(s); e.target.closest('.pick').classList.toggle('on', e.target.checked); }
+      if (w) { if (e.target.checked) who.add(w); else who.delete(w); e.target.closest('.pick').classList.toggle('on', e.target.checked); }
+      if (e.target.id === 'asVoice') pick.voice = e.target.value;
+    });
+    m.el.addEventListener('click', (e) => {
+      const tb = e.target.closest('[data-astrack]');
+      if (tb) { track = tb.dataset.astrack; redraw(); return; }
+      if (e.target.closest('[data-asall]')) { App.cfg.scenarios.filter((x) => x.track === track && x.ai !== false).forEach((x) => chosen.add(x.id)); redraw(); return; }
+      if (e.target.closest('[data-asnone]')) { chosen.clear(); redraw(); return; }
+      if (e.target.closest('[data-aswhoall]')) { online.forEach((x) => who.add(x.id)); redraw(); return; }
+      if (!e.target.closest('[data-assend]')) return;
+      if (!who.size) return U.toast('Tick at least one trainee to ring.', 'error');
+      const graded = !!U.$('#asGraded', m.el).checked;
+      pick.graded = graded; try { localStorage.setItem('mcv_graded', graded ? '1' : '0'); } catch (err) {}
+      pick.aiPool = [...chosen]; pick.voice = U.$('#asVoice', m.el).value;
+      const ids = [...chosen];
+      [...who].forEach((traineeId) => App.board.send({ t: 'ai-ring', traineeId, scenarioIds: ids, track, graded, voice: pick.voice }));
+      U.toast(`🤖 Ringing ${who.size} trainee${who.size > 1 ? 's' : ''} with an AI caller${ids.length === 1 ? ': ' + App.scen[ids[0]].title : ids.length ? ' from ' + ids.length + ' calls' : ' (any ' + App.cfg.tracks[track].label + ' call)'}.`, 'ok');
+      m.close();
+      renderDialer();
+    });
   }
   function aiUpsert(c) {
     const cur = C.ai.get(c.callId) || { lines: [] };
@@ -177,12 +404,20 @@
     : c.status === 'live' ? `<span class="badge green">On the call <span data-since="${c.answeredAt}">${U.since(c.answeredAt)}</span></span>`
       : c.status === 'missed' ? '<span class="badge red">Missed</span>' : c.status === 'declined' ? '<span class="badge red">Declined</span>' : c.status === 'cancelled' ? '<span class="badge">Busy</span>'
         : c.score != null ? `<span class="badge blue">🤖 ${c.score}%</span>` : c.grade === 'failed' ? '<span class="badge red">AI couldn\'t review</span>' : '<span class="badge amber">Ended · AI reviewing</span>';
+  // The right sidebar: 🤖 the AI calls on the line, the ones that ended, and their scores.
   function renderAiCalls() {
-    const el = U.$('#aiCalls'); if (!el) return;
+    const side = U.$('#sideR'); if (!side) return;
+    const grid = U.$('#consoleGrid');
+    const folded = App.folded(FOLD_R);
+    if (grid) grid.classList.toggle('r-folded', folded);
+    if (folded) { side.innerHTML = App.railHTML(FOLD_R, 'AI calls', '🤖'); return; }
+    if (!U.$('#aiCalls', side)) side.innerHTML = '<div class="card" id="aiCalls"></div>';
+    const el = U.$('#aiCalls', side); if (!el) return;
     const list = [...C.ai.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
-    el.classList.toggle('hidden', !list.length);
-    el.innerHTML = `<div class="card-head"><h3 title="Calls where the AI plays the caller">🤖 AI calls</h3></div>
-      ${list.map((c) => `<div class="aic"><div class="aic-who"><div class="nm">${esc(c.traineeName)} ${aiLabel(c)}</div><div class="bt">${esc(c.title)}${c.graded ? ' · 📋 graded' : ''}</div></div>
+    el.innerHTML = `<div class="card-head"><h3 title="Calls where the AI plays the caller">🤖 AI calls</h3><span class="spacer"></span>${App.foldKey(FOLD_R, 'the AI calls')}</div>
+      <div class="row" style="margin-bottom:10px"><button class="btn btn-sm btn-primary" data-act="aisetup" ${App.cfg.features.ai ? '' : 'disabled'} title="Choose the calls, the voice and who to ring">🎭 Send AI callers…</button></div>
+      ${list.length ? '' : `<div class="empty small">${App.cfg.features.ai ? 'No AI calls yet. <b>🎭 Send AI callers…</b> rings one or several trainees with an AI caller.' : 'AI callers need the Gemini keys (see ⚙️ Setup).'}</div>`}
+      ${list.map((c) => `<div class="aic"><div class="aic-who"><div class="nm">${esc(c.traineeName)} ${aiLabel(c)}</div><div class="bt">${esc(c.title)}${c.voice ? ' · 🎚 ' + esc(c.voice) : ''}${c.graded ? ' · 📋 graded' : ''}</div></div>
         ${['ringing', 'live'].includes(c.status) ? `<button class="btn btn-sm" data-aifollow="${esc(c.callId)}">👂 Follow</button><button class="btn btn-sm" data-aistop="${esc(c.callId)}" title="End this AI call">⏹</button>`
           : c.status === 'ended' ? `<a class="btn btn-sm" href="#/call/${esc(c.callId)}">📋 Review</a>` : ''}</div>`).join('')}`;
   }
@@ -234,6 +469,7 @@
         const a = remote(); a.srcObject = s; a.volume = App.volume == null ? 1 : App.volume; a.play().catch(() => {});
         C.syncAudio();
         if (t.record) { if (!t.rec) { try { t.rec = new VoIP.Recorder([stream, s]); } catch (e) { console.warn(e); } } else t.rec.add(s); }
+        confSync();
       },
       onState: (st) => {
         if (App.t !== t) return;
@@ -250,6 +486,7 @@
 
   function hangup() {
     const t = App.t; if (!t) return;
+    legsClose();
     if (t.status === 'ringing') App.board.send({ t: 'cancel', callId: t.callId });
     else App.board.send({ t: 'hangup', callId: t.callId });
     endCall({ by: 'trainer', reason: t.status === 'ringing' ? 'cancelled' : 'hangup', status: t.status === 'ringing' ? 'cancelled' : 'ended' });
@@ -258,6 +495,7 @@
   async function endCall(m) {
     const t = App.t; if (!t || t.status === 'ended') return;
     Sounds.stop();
+    legsClose();
     clearTimeout(t.slowTimer);
     if (App.ownCall() === t.callId) App.ownCall(null);
     const answered = t.status !== 'ringing' && t.answeredAt;
@@ -324,15 +562,31 @@
   }
   C.render = render;
 
+  // The left sidebar: the LSH mark, then ☎ the switchboard (every phone that's open, by batch).
   function renderRoster() {
-    const el = U.$('#roster'); if (!el) return;
+    const side = U.$('#sideL'); if (!side) return;
+    const grid = U.$('#consoleGrid');
+    const folded = App.folded(FOLD_L);
+    if (grid) grid.classList.toggle('l-folded', folded);
+    if (folded) { side.innerHTML = App.railHTML(FOLD_L, 'Switchboard', '☎'); return; }
+    if (!U.$('#roster', side)) {
+      side.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="150" height="40">
+        <div class="sb-sub">Ring Channel · Switchboard</div></div><div class="card roster" id="roster"></div>`;
+    }
+    const el = U.$('#roster', side); if (!el) return;
     const all = (App.presence.trainees || []).slice();
     const batches = [...new Set([...all.map((x) => x.batch), ...(C.roster || []).map((x) => x.batch)].filter(Boolean))].sort();
     const shown = all.filter((x) => !pick.batch || x.batch === pick.batch).sort((a, b) => (b.hand - a.hand) || (a.handAt - b.handAt) || (a.status === 'available' ? -1 : 1) - (b.status === 'available' ? -1 : 1) || a.name.localeCompare(b.name));
     const online = new Set(all.map((x) => x.id));
     const offline = (C.roster || []).filter((x) => !online.has(x.id) && !x.archived && (!pick.batch || x.batch === pick.batch));
     const hands = all.filter((x) => x.hand).length;
-    el.innerHTML = `<div class="card-head"><h3>☎ Switchboard</h3><span class="spacer"></span><span class="badge green">${all.length} online</span>${hands ? `<span class="badge orange">✋ ${hands}</span>` : ''}</div>
+    const desks = (App.desks || []).filter((d) => d.name !== App.me.name);
+    el.innerHTML = `<div class="card-head"><h3>☎ Switchboard</h3><span class="spacer"></span><span class="badge green">${all.length} online</span>${hands ? `<span class="badge orange">✋ ${hands}</span>` : ''}${App.foldKey(FOLD_L, 'the switchboard')}</div>
+      <div class="my-line"><div class="small muted">My trainer line</div><div class="nm">🎓 ${esc(App.me.name)}</div>
+        <div class="bt">${App.myExt ? `ext <span class="mono">${esc(App.myExt)}</span> · ` : ''}${active(App.t) ? 'on a call' : 'free'}</div></div>
+      ${desks.length ? `<div class="side-h small muted">Other trainers on</div>${desks.map((d) => `<div class="tr" style="cursor:default"><span class="led ${d.call ? 'ringing' : 'available'}"></span>
+        <div style="flex:1;min-width:0"><div class="nm">🎓 ${esc(d.name)}</div><div class="bt">${d.ext ? `ext <span class="mono">${esc(d.ext)}</span> · ` : ''}${d.call ? 'on a call' : 'free'}</div></div></div>`).join('')}` : ''}
+      <div class="side-h small muted">Trainees</div>
       <select class="input" id="batchSel" style="margin-bottom:10px"><option value="">All batches</option>${batches.map((b) => `<option ${b === pick.batch ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>
       ${shown.map((x) => `<div class="tr ${x.id === pick.traineeId ? 'sel' : ''}" data-tid="${esc(x.id)}">
           <span class="led ${x.call ? 'ringing' : x.status}"></span>
@@ -368,7 +622,7 @@
         <pre class="case hidden" id="ocCaseText"></pre>
         <p class="small muted">The AI grades an open call on the line's Mock Calls Metrics (there's no checklist).</p>
       </div>` : null;
-    side.innerHTML = `<div id="xfer"></div>
+    side.innerHTML = `<div id="xfer"></div><div id="caseBox"></div><div id="confBox"></div>
       ${scriptCard || `<div class="card script-card">
         <div class="card-head"><h3>🎭 You are the caller</h3><span class="spacer"></span>${App.trackBadge(s.track)}${App.levelBadge(s.level)}</div>
         <h2 style="margin-bottom:2px">${esc(s.caller.name)}</h2>
@@ -392,7 +646,7 @@
           <div class="live-note" id="liveNote"></div>
         </div>
       </div>`;
-    renderDialer(); renderTransfer(); renderLiveNote();
+    renderDialer(); renderTransfer(); renderCase(); renderConf(); renderLiveNote();
   }
 
   /* ---------- ☎ the dialer: the trainer's desk phone ---------- */
@@ -404,6 +658,8 @@
     if (on) return { kind: 'online', t: on };
     const off = (C.roster || []).find((x) => x.ext === d && !x.archived);
     if (off) return { kind: 'offline', t: off };
+    const desk = (App.desks || []).find((x) => x.ext === d);
+    if (desk) return { kind: 'trainer', desk };
     const dir = App.dirEntry(d);
     if (dir) return { kind: 'dir', dir };
     return { kind: 'none' };
@@ -431,6 +687,7 @@
         if (t.traineeMuted) f.push('<span class="lb mute">TRAINEE MUTED</span>');
         if (t.muted) f.push('<span class="lb mute">YOU\'RE MUTED</span>');
         if (t.coaching) f.push('<span class="lb coach">⏸ COACHING</span>');
+        if (confCount()) f.push(`<span class="lb conf">👥 CONFERENCE · ${confCount() + 1}</span>`);
         if (t.peerLost) f.push('<span class="lb warn">TRAINEE RECONNECTING</span>');
         if (t.quality) f.push(`<span class="lb" title="${t.quality.rtt != null ? t.quality.rtt + ' ms round trip' : ''}${t.quality.loss ? ' · ' + t.quality.loss + '% loss' : ''}${t.quality.relay ? ' · via TURN relay' : ''}"><span class="bars q${t.quality.bars}"><i></i><i></i><i></i><i></i></span>${t.quality.relay ? ' RELAY' : ''}</span>`);
       }
@@ -452,11 +709,13 @@
       let st = 'Enter an extension', cls = '', nm = '', sub = C.lastDial ? `or pick a trainee on the switchboard · 📞 redials ${esc(C.lastDial)}` : 'or pick a trainee on the switchboard';
       if (d && d.kind === 'online') { st = d.t.call ? 'Busy: on a call' : 'Ready to call'; cls = d.t.call ? 'bad' : 'ok'; nm = d.t.name; sub = `${esc(d.t.batch)} · ${d.t.call ? 'on a call' : d.t.status === 'available' ? 'available' : 'away: they can still answer'}${d.t.hand ? ' · ✋ asked for a call' : ''}`; }
       else if (d && d.kind === 'offline') { st = 'Not signed in'; cls = 'bad'; nm = d.t.name; sub = `${esc(d.t.batch)} · their phone isn't open`; }
+      else if (d && d.kind === 'trainer') { st = 'Trainer line'; nm = d.desk.name; sub = 'Another trainer\'s own desk: trainers ring trainees'; }
       else if (d && d.kind === 'dir') { st = 'Firm extension'; nm = d.dir.name; sub = 'Trainees\' desks are 7001 and up'; }
       else if (d) { st = pick.dial.length >= 4 ? 'No such extension' : 'Dialing…'; cls = pick.dial.length >= 4 ? 'bad' : ''; sub = ''; }
       main = `<div class="lcd-state ${cls}">${st}</div><div class="lcd-dial" id="dlNum">${esc(pick.dial)}<span class="caret"></span></div><div class="lcd-name sm">${esc(nm)}</div><div class="lcd-sub">${sub}</div>`;
       const oc = App.cfg.openCaller || { idName: 'WIRELESS CALLER', number: '' };
-      cid = `Calls as <b>${esc(pick.withhold ? 'PRIVATE CALLER' : s ? s.caller.idName + ' ' + s.caller.number : oc.idName + ' ' + oc.number)}</b> · ${esc(lineOf(pick.track).label)}<br>${s ? `🎭 ${esc(s.title)}` : '🎙 Open call: no script'}`;
+      const vName = (App.cfg.voices || []).find((v) => v.id === pick.voice);
+      cid = `Calls as <b>${esc(pick.withhold ? 'PRIVATE CALLER' : s ? s.caller.idName + ' ' + s.caller.number : oc.idName + ' ' + oc.number)}</b> · ${esc(lineOf(pick.track).label)}<br>${s ? `🎭 ${esc(s.title)}` : '🎙 Open call: no script'}${vName ? ` · 🎚 ${esc(vName.label)}` : ''}`;
       const graded = gradedPick(), recOk = App.cfg.features.recordings, rec = (pick.record || graded) && recOk;
       keys = `<div class="line-keys" role="group" aria-label="Line">${Object.entries(App.cfg.tracks).map(([k, x]) => `<button type="button" class="${k === pick.track ? 'on' : ''}" data-line="${k}" aria-pressed="${k === pick.track}" title="${esc(x.label)} call on the ${esc(lineOf(k).label)}">${x.icon} ${esc(x.label)}</button>`).join('')}</div>
         <div class="dialpad">${PAD.map(([k, l]) => `<button type="button" class="dk" data-dk="${k}" aria-label="${k}"><b>${k}</b><small>${l || '&nbsp;'}</small></button>`).join('')}</div>
@@ -468,7 +727,8 @@
           <label class="soft ${pick.withhold ? 'on' : ''}" title="The trainee's phone shows PRIVATE CALLER instead of the caller ID"><input type="checkbox" id="pkHide" ${pick.withhold ? 'checked' : ''}><i class="dot"></i>🙈 Hide ID</label>
         </div>
         <div class="dev-btns"><button type="button" class="dev-btn ai" data-act="airing" title="Ring the trainee with an AI caller: the AI plays ${s ? 'this call\'s caller' : 'a random caller on this line'}, you follow it live, and the AI reviews it" ${App.cfg.features.ai ? '' : 'disabled'}>🤖 AI caller</button>
-          <button type="button" class="dev-btn ${C.classOn() ? 'on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view'}</button></div>`;
+          <button type="button" class="dev-btn" data-act="aisetup" title="Choose the calls the AI may play, the voice it speaks with, and the trainees to ring (several at once)" ${App.cfg.features.ai ? '' : 'disabled'}>🎭 Choose…</button>
+          <button type="button" class="dev-btn wide ${C.classOn() ? 'on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view'}</button></div>`;
     } else if (status === 'ended') {
       main = `<div class="lcd-state">Call ended</div><div class="lcd-name">${esc(t.trainee.name)}</div><div class="lcd-timer" style="color:#94a3b8">${U.dur(t.endedAt - t.answeredAt)}</div><div class="lcd-sub">${esc(t.endNote || '')}</div>`;
       cid = `Played <b>${esc(t.scenario.title)}</b>`;
@@ -484,9 +744,10 @@
           ${spkKey()}
           <button type="button" class="key coach ${t.coaching ? 'on' : ''}" data-act="coach" ${live ? '' : 'disabled'} title="Pause the role-play to coach the trainee, then resume"><span class="ic">${t.coaching ? '▶' : '⏸'}</span>${t.coaching ? 'Resume role-play' : 'Coaching time-out'}</button>
           <button type="button" class="key cls ${C.classOn() ? 'on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script"><span class="ic">📺</span>${C.classOn() ? 'Class view on' : 'Class view'}</button>
+          <button type="button" class="key conf ${confCount() ? 'on' : ''}" data-act="merge" ${live ? '' : 'disabled'} title="Merge another trainee into this call: their phone rings, and once they answer everyone hears everyone"><span class="ic">👥</span>${confCount() ? 'Merge another' : 'Merge call'}</button>
           <button type="button" class="key hang wide" data-act="hangup"><span class="ic">☎</span>${status === 'ringing' ? 'Cancel call' : 'End call'}</button></div>`;
     }
-    el.innerHTML = `<div class="dev-head"><span class="led ${led}"></span><b>Trainer line</b><span class="spacer"></span><span>${esc(App.me.name)}</span></div>
+    el.innerHTML = `<div class="dev-head"><span class="led ${led}"></span><b>Trainer line</b>${App.myExt ? ` <span class="mono" title="Your own trainer extension on this switchboard">ext ${esc(App.myExt)}</span>` : ''}<span class="spacer"></span><span>${esc(App.me.name)}</span></div>
       <div class="lcd ${status === 'idle' ? 'idle' : status}"><div class="lcd-top"><span>${esc(App.cfg.firm.name || 'LSH Training Law Group')}</span><span data-clock></span></div>
         <div class="lcd-main">${main}</div><div class="lcd-badges">${dialBadges(t)}</div><div class="lcd-cid">${cid}</div></div>
       ${keys}
@@ -501,6 +762,15 @@
     el.innerHTML = `<div class="xfer-panel"><div class="row"><b style="font-size:16px">↪ The trainee is transferring you to ${esc(x.to)} (ext ${esc(x.ext)})</b><span class="spacer"></span><span class="small">${esc(x.role || '')}</span></div>
       <p class="small" style="margin:6px 0 10px">${x.unavailable ? '🚫 The scenario says <b>' + esc(x.to) + ' is not available</b>.' : 'The scenario doesn\'t say this person is out.'} You decide what happens:</p>
       <div class="row"><button class="btn btn-green" data-xfer="connected">✅ Picks up (the call is handed over and ends)</button><button class="btn" data-xfer="no-answer">📵 No answer</button><button class="btn" data-xfer="voicemail">📨 Voicemail</button></div></div>`;
+  }
+
+  // 🔎 The case file the trainee chose in Case lookup: the right one, or not the one this call is about.
+  function renderCase() {
+    const el = U.$('#caseBox'); const t = App.t; if (!el) return;
+    const c = t && t.caseOpen;
+    if (!c) { el.innerHTML = ''; return; }
+    const cls = c.right === false ? 'err-box' : c.right ? 'ok-box' : 'note-box';
+    el.innerHTML = `<div class="${cls}" style="margin-bottom:16px">📁 The trainee is working from <b>${esc(c.caseId)}${c.name ? ' · ' + esc(c.name) : ''}</b>${c.right === false ? ` — this call is about <b>${esc(c.want)}</b>.` : c.right ? ' — the right case file.' : '.'}</div>`;
   }
 
   function renderLiveNote(before) {
@@ -581,6 +851,7 @@
     if (!App.trainer() || App.isClassView) return;
     const on = C.classOn();
     remote().muted = on;
+    ((App.t && App.t.legs) || []).forEach((l) => { if (l.audio) l.audio.muted = on; });
     const t = App.t;
     if (t && t.status === 'live' && t.classSent !== on) { t.classSent = on; App.board.send({ t: 'class', callId: t.callId, on }); }
     if (C._shown !== on) { C._shown = on; renderDialer(); }
@@ -602,14 +873,16 @@
       title: ended ? t.scenario.title : null, caller: ended ? { name: t.scenario.caller.name, role: t.scenario.caller.role } : null
     };
   };
-  C.remoteStream = () => (App.t && App.t.rtc && App.t.rtc.remote) || null;
+  // On a conference the class hears every trainee on the line (the trainer's own voice goes through Meet).
+  C.remoteStream = () => (App.t && App.t.mix ? App.t.mix.voices() : (App.t && App.t.rtc && App.t.rtc.remote) || null);
 
   /* ---------- page ---------- */
   App.register('console', {
     trainer: true,
     async render() {
       const app = U.$('#app');
-      app.innerHTML = `<div class="console"><div class="console-side"><div class="card roster" id="roster"></div><div class="card hidden" id="aiCalls"></div></div><div id="stage"></div></div>`;
+      app.innerHTML = `<div class="console ${App.folded(FOLD_L) ? 'l-folded' : ''} ${App.folded(FOLD_R) ? 'r-folded' : ''}" id="consoleGrid">
+        <aside class="console-side" id="sideL"></aside><div id="stage"></div><aside class="console-side right" id="sideR"></aside></div>`;
       App.leave = () => { document.removeEventListener('keydown', onKey); if (App.t && App.t.status === 'ended' && App.t.upload !== 'saving') App.t = null; };
       app.firstChild.addEventListener('click', onClick);
       app.firstChild.addEventListener('change', onChange);
@@ -622,6 +895,8 @@
   });
 
   function onClick(e) {
+    const fold = e.target.closest('[data-fold]');
+    if (fold) { const k = fold.dataset.fold; App.folded(k, !App.folded(k)); if (k === FOLD_L) renderRoster(); else renderAiCalls(); return; }
     // The switchboard is the phone's contact list: a trainee's row puts their extension on the dialer; 📞 also rings.
     const ringBtn = e.target.closest('[data-ring]');
     if (ringBtn) { if (App.t) return; pickTrainee(ringBtn.dataset.ring); ring(); return; }
@@ -637,6 +912,8 @@
     if (sc) { pickCall(sc.dataset.sid); return; }
     const af = e.target.closest('[data-aifollow]'); if (af) { aiFollow(af.dataset.aifollow); return; }
     const as = e.target.closest('[data-aistop]'); if (as) { if (confirm('End this AI call? The trainee\'s phone hangs up and the call is reviewed as it is.')) App.board.send({ t: 'ai-stop', callId: as.dataset.aistop }); return; }
+    const drop = e.target.closest('[data-drop]');
+    if (drop) { const l = (App.t && (App.t.legs || []).find((x) => x.callId === drop.dataset.drop)); if (l) { App.board.send({ t: l.status === 'ringing' ? 'cancel' : 'hangup', callId: l.callId }); legEnd(l); } return; }
     const xf = e.target.closest('[data-xfer]');
     if (xf) { transferResult(xf.dataset.xfer); return; }
     const b = e.target.closest('[data-act]'); if (!b) return;
@@ -644,10 +921,12 @@
     if (act === 'ring') ring();
     else if (act === 'backspace') setDial(pick.dial.slice(0, -1));
     else if (act === 'airing') aiRing();
+    else if (act === 'aisetup') aiSetup();
     else if (act === 'speaker') App.toggleSpeaker(renderDialer);
     else if (act === 'hangup') hangup();
     else if (act === 'mute') toggleMute();
     else if (act === 'coach') toggleCoach();
+    else if (act === 'merge') confPick();
     else if (act === 'miccheck') App.micCheck();
     else if (act === 'newcall') { App.t = null; pick.dial = ''; syncDial(); render(); }   // the screen clears for the next call
     else if (act === 'takehere') takeHere();
@@ -683,7 +962,11 @@
     else if (e.key === 'Enter' && tg && tg.dataset && tg.dataset.sid != null) { e.preventDefault(); pickCall(tg.dataset.sid); }
   }
   function onInput(e) {
-    if (e.target.dataset && e.target.dataset.act === 'volume') { App.volume = Number(e.target.value); remote().volume = App.volume; }
+    if (e.target.dataset && e.target.dataset.act === 'volume') {
+      App.volume = Number(e.target.value);
+      remote().volume = App.volume;
+      ((App.t && App.t.legs) || []).forEach((l) => { if (l.audio) l.audio.volume = App.volume; });
+    }
   }
   function onChange(e) {
     if (e.target.id === 'batchSel') { pick.batch = e.target.value; renderRoster(); }

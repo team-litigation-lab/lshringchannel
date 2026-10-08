@@ -105,7 +105,24 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.waitForFunction(() => !/SPEAKER/.test(document.querySelector('#dialer .lcd-badges').textContent));
   ok('🔊 Speaker on the call (trainee phone and trainer dialer): shown on both screens, the call keeps playing, and back to the headset');
 
+  // 🔎 Case lookup comes first on a live call: search, preview the file, mark the one the call is
+  // about, and the trainer sees which file the trainee chose.
+  if (!(await te.isVisible('[data-pane="lookup"].on #lkQ'))) throw new Error('🔎 Case lookup should be the first pane on a live call');
+  await te.fill('#lkQ', 'MC-');
+  await te.waitForSelector('#lkHits [data-case]');
+  const caseId = await te.getAttribute('#lkHits [data-case]', 'data-case');
+  await te.click(`#lkHits [data-case="${caseId}"]`);
+  await te.waitForSelector('.case-body [data-case-use]');
+  if (!/Preview/.test(await te.textContent('.case-body'))) throw new Error('The case file should be previewed in the lookup');
+  await te.click('.case-body [data-case-use]');
+  await te.waitForSelector('#lkPicked .ok-box');
+  await tr.waitForFunction((id) => new RegExp(id).test(document.querySelector('#caseBox').textContent), caseId);
+  const cms = await te.evaluate(async (id) => (await API.post('/api/cms-link', { caseId: id })), caseId);
+  if (!/mock=/.test(cms.url) || !/from=ringchannel/.test(cms.url)) throw new Error('The CMS link should open the case file: ' + JSON.stringify(cms));
+  ok(`🔎 Case lookup is the first screen on a live call: ${caseId} previewed, chosen as the case file, shown on the trainer's console, and it opens in the CMS (${cms.authed ? 'signed in with a Portal ticket' : 'plain link: no Portal secret on this test site'})`);
+
   // Live note
+  await te.click('[data-tab="note"]');
   await te.fill('[data-k="caller"]', 'Greg Hollis, adjuster at Liberty Crest');
   await te.fill('[data-k="callback"]', '(555) 010-7788');
   await tr.waitForFunction(() => /Greg Hollis/.test(document.querySelector('#liveNote').textContent) && /010-7788/.test(document.querySelector('#liveNote').textContent));
@@ -146,6 +163,60 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await te.click('[data-act="hold"]');
   await tr.waitForFunction(() => !/ON HOLD/.test(document.querySelector('#dialer').textContent));
   ok('Resume: hold cleared on the trainer console');
+
+  /* 👥 Merge calls (a conference): a second trainee is rung into the call on the line, the trainer's
+     browser mixes the voices, everyone hears everyone, and the trainer can drop them again. */
+  const te2 = await mk();
+  await te2.goto(Portal.trainee(B, 'Riley Santos', 'B093026'));
+  await te2.waitForSelector('#device .lcd');
+  await tr.click('#dialer [data-act="merge"]');
+  await tr.waitForSelector('.modal [data-merge]');
+  await tr.click('.modal [data-merge]');
+  await te2.waitForSelector('.lcd.ringing', { timeout: 20000 });
+  await sleep(800);
+  await te2.click('[data-act="answer"]');
+  await te2.waitForSelector('.lcd.live', { timeout: 20000 });
+  await tr.waitForFunction(() => /CONFERENCE/.test(document.querySelector('#dialer .lcd-badges').textContent), null, { timeout: 20000 });
+  await te2.waitForFunction(() => /Conference call/.test(document.querySelector('#device').textContent));
+  await te.waitForFunction(() => /Conference call/.test(document.querySelector('#device').textContent));
+  await sleep(3500);
+  const mix = await tr.evaluate(() => ({ legs: App.t.mix ? App.t.mix.legs.size : 0, mic: VoIP.Mic.track().id,
+    out: [App.t.rtc.sender.track.id, ...App.t.legs.map((l) => l.rtc.sender.track.id)] }));
+  if (mix.legs !== 2) throw new Error('Both people on the call should be in the mix: ' + JSON.stringify(mix));
+  if (mix.out.some((id) => id === mix.mic) || new Set(mix.out).size !== 2) throw new Error('Each person should get their own mix, not the bare microphone: ' + JSON.stringify(mix));
+  const m1 = await inb(te2, 'p'), m2 = await inb(te, 'p');
+  if (!(m1.bytes > 2000 && m2.bytes > 2000)) throw new Error('No conference audio: ' + JSON.stringify({ m1, m2 }));
+  if (!/Riley Santos/.test(await tr.textContent('#confBox'))) throw new Error('The conference panel should list the merged trainee');
+  ok(`👥 Merged a second trainee into the call: both get their own mix (${m1.bytes} B and ${m2.bytes} B received), and the console lists who is on the line`);
+  await tr.click('#confBox [data-drop]');
+  await te2.waitForFunction(() => !document.querySelector('.lcd.live'), null, { timeout: 20000 });
+  await tr.waitForFunction(() => !/CONFERENCE/.test(document.querySelector('#dialer .lcd-badges').textContent));
+  const back = await tr.evaluate(() => ({ mix: !!App.t.mix, out: App.t.rtc.sender.track.id, mic: VoIP.Mic.track().id, legs: App.t.legs.length }));
+  if (back.mix || back.legs || back.out !== back.mic) throw new Error('Dropping the last merged trainee should put the call back on the microphone: ' + JSON.stringify(back));
+  await sleep(2500);
+  const m3 = await inb(te, 'p');
+  if (!(m3.bytes > m2.bytes)) throw new Error('The first call should carry on after the conference ends: ' + JSON.stringify({ m2, m3 }));
+  ok('⏏ Dropped the merged trainee: their phone hung up and the first call carries on, back on the plain microphone');
+  const legCall = await te2.evaluate(async () => (await API.post('/api/calls', { limit: 5 })).calls[0]);
+  if (!legCall || !legCall.conf) throw new Error('The merged trainee\'s call should be marked as a conference: ' + JSON.stringify(legCall));
+  const queue = await tr.evaluate(async () => (await API.post('/api/calls', { needsReview: true, limit: 100 })).calls.map((c) => c.id));
+  if (queue.includes(legCall.id)) throw new Error('A conference leg should not wait in the trainer\'s "needs review" queue');
+  ok('The merged trainee\'s call log says 👥 Conference (graded with the call they joined), and it never sits in the trainer\'s "needs review" queue');
+
+  // ☎ The trainee's own switchboard panel beside their phone, and the console's two sidebars
+  if (!/Riley Santos|Jamie Cruz/.test(await te.textContent('#tside'))) throw new Error('The trainee switchboard should list their batch');
+  if (!/Coach Ana/.test(await te.textContent('#tside'))) throw new Error('The trainee switchboard should show the trainer who is on');
+  await te.click('#tside [data-fold]');
+  await te.waitForSelector('#tside .rail');
+  await te.click('#tside .rail');
+  await te.waitForSelector('#tside .roster');
+  await tr.click('#roster [data-fold]');
+  await tr.waitForSelector('#sideL .rail');
+  if (!(await tr.evaluate(() => document.querySelector('#consoleGrid').classList.contains('l-folded')))) throw new Error('The console switchboard should fold away');
+  await tr.click('#sideL .rail');
+  await tr.waitForSelector('#roster .tr');
+  ok('☎ The trainee has the switchboard beside their phone (their batch, their line, the trainers on), and both the console sidebars minimize to a rail and back');
+  await te2.close();
 
   // Transfer → trainer answers "no answer"
   await te.click('[data-act="transfer"]');
@@ -206,6 +277,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   ok(`Trainer console reloaded mid-call and resumed (audio ${a4.bytes} B)`);
 
   // Trainee keeps typing, then trainer ends the call
+  await te.click('[data-tab="note"]');
   await te.fill('[data-k="need"]', 'Offer of $65,000 on claim LC-25-99812 (Robert Chen), open until Friday 5:00 PM. Wants to know if the client will accept.');
   await te.selectOption('[data-k="urgency"]', 'Urgent');
   await te.fill('[data-k="routed"]', 'Tried Atty. Reyes (201), no answer. Priority message to Atty. Reyes and Grace Kim (313).');
