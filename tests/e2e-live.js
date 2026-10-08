@@ -197,6 +197,11 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   const m3 = await inb(te, 'p');
   if (!(m3.bytes > m2.bytes)) throw new Error('The first call should carry on after the conference ends: ' + JSON.stringify({ m2, m3 }));
   ok('⏏ Dropped the merged trainee: their phone hung up and the first call carries on, back on the plain microphone');
+  const legCall = await te2.evaluate(async () => (await API.post('/api/calls', { limit: 5 })).calls[0]);
+  if (!legCall || !legCall.conf) throw new Error('The merged trainee\'s call should be marked as a conference: ' + JSON.stringify(legCall));
+  const queue = await tr.evaluate(async () => (await API.post('/api/calls', { needsReview: true, limit: 100 })).calls.map((c) => c.id));
+  if (queue.includes(legCall.id)) throw new Error('A conference leg should not wait in the trainer\'s "needs review" queue');
+  ok('The merged trainee\'s call log says 👥 Conference (graded with the call they joined), and it never sits in the trainer\'s "needs review" queue');
 
   // ☎ The trainee's own switchboard panel beside their phone, and the console's two sidebars
   if (!/Riley Santos|Jamie Cruz/.test(await te.textContent('#tside'))) throw new Error('The trainee switchboard should list their batch');

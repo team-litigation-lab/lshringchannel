@@ -98,6 +98,7 @@ A trainee can take a call where the AI plays the caller, two ways:
 
 - The console lists who is on the line under **👥 Conference**, with **⏏ Drop** to take one off; the dialer's screen shows **👥 CONFERENCE**. Each merged trainee's phone says who else is on the call.
 - The conference is **one call**: it's recorded and graded as the first trainee's call (every voice is in the recording), and a merged leg isn't graded of its own. On a conference there's no extension to ring, so a merged trainee's **Transfer** comes back as no answer.
+- In the call log, a merged trainee's call reads **👥 Conference** (it's graded with the call they joined), and it never waits in the trainer's *Needs review* queue.
 - Ending the call, or dropping the last one merged in, puts the first call back on the plain microphone. A conference ends if the console's page reloads (the trainer is told); the first call carries on.
 
 ## Sound

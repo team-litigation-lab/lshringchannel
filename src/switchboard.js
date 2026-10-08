@@ -662,13 +662,13 @@ export class Switchboard extends DurableObject {
     if (f.mode) { where.push('mode = ?'); args.push(f.mode); }
     if (f.before) { where.push('created_at < ?'); args.push(Number(f.before)); }
     if (f.done) where.push(`status = 'ended'`);
-    if (f.needsReview) where.push(`status = 'ended' AND reviewed = 0`);
+    if (f.needsReview) where.push(`status = 'ended' AND reviewed = 0 AND data NOT LIKE '%"conf":{"parent"%'`);
     const rows = this.sql.exec(`SELECT * FROM calls ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC LIMIT ?`, ...args, Math.max(1, Math.min(Math.floor(Number(f.limit)) || 50, 200))).toArray();
     return rows.map((r) => {
       const d = JSON.parse(r.data || '{}');
       return { id: r.id, mode: r.mode, track: r.track, scenarioId: r.scenario_id, title: r.title, traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, trainer: r.trainer,
         status: r.status, createdAt: r.created_at, answeredAt: r.answered_at, endedAt: r.ended_at, reviewed: !!r.reviewed, score: r.score, draft: !!d.reviewDraft,
-        talkMs: d.metrics && d.metrics.talkMs, ringMs: d.metrics && d.metrics.ringMs, recording: !!d.recording, ai: !!d.ai, noteSubmitted: !!d.noteSubmittedAt, reviewSeen: !!(d.review && d.review.seenAt),
+        talkMs: d.metrics && d.metrics.talkMs, ringMs: d.metrics && d.metrics.ringMs, recording: !!d.recording, ai: !!d.ai, noteSubmitted: !!d.noteSubmittedAt, reviewSeen: !!(d.review && d.review.seenAt), conf: !!d.conf,
         graded: !!d.graded, aiScore: d.aiScore != null ? d.aiScore : null, autograde: (d.autograde && d.autograde.state) || '' };
     });
   }

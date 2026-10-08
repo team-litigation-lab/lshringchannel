@@ -17,6 +17,8 @@
   };
 
   const statusBadge = (c) => {
+    // A call someone was merged into is part of the first trainee's call: it is graded there, not here.
+    if (c.conf && c.status === 'ended') return '<span class="badge">👥 Conference</span>';
     if (c.status === 'missed') return '<span class="badge red">Missed</span>';
     if (c.status === 'declined') return '<span class="badge red">Declined</span>';
     if (c.status === 'cancelled') return '<span class="badge">Cancelled</span>';
@@ -164,6 +166,7 @@
         <div class="row">${App.trackBadge(c.track)}${s.level ? App.levelBadge(s.level) : ''}${c.mode === 'ai' ? (c.assigned ? `<span class="badge violet">🤖 AI caller · sent by ${esc(c.assigned.by || 'the trainer')}</span>` : '<span class="badge">🎧 AI practice</span>') : `<span class="badge orange">📞 Live with ${esc(c.trainer || 'trainer')}</span>`}${gradedBadge(c)}<span id="callStatus">${statusBadge(c)}</span></div>
         <h1 style="margin-top:10px">${esc(c.title)}</h1>
         <p class="muted">${esc(c.traineeName)}${c.batch ? ' · ' + esc(c.batch) : ''} · ${U.when(c.createdAt)}${s.caller && s.caller.name ? ` · Caller: ${esc(s.caller.name)}${s.caller.role ? ' (' + esc(s.caller.role) + ')' : ''}` : ''}</p>
+        ${c.conf ? `<div class="note-box">👥 <b>A conference.</b> ${esc(c.traineeName)} was merged into a call ${esc(c.trainer || 'the trainer')} already had on the line, so there's no grade of its own: the call is recorded and graded as the trainee who took it.</div>` : ''}
         ${c.status === 'ended' ? statsHTML(c) : `<div class="warn-box">This call ${c.status === 'missed' ? 'rang out: nobody answered' : c.status === 'declined' ? 'was declined' : c.status === 'cancelled' ? 'was cancelled before it was answered' : 'is still in progress'}.</div>`}
         ${c.recording ? `<div id="recBox" style="margin-top:12px"><button class="btn btn-sm" data-act="loadrec">▶ Play / ⬇ download the recording (${U.dur(c.recording.durMs || 0)})</button> <span class="tiny muted">Kept until ${new Date(c.recording.expires || Date.now()).toLocaleDateString()}</span></div>` : ''}
       </div>

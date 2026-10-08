@@ -562,7 +562,7 @@
     try {
       const r = await API.post('/api/calls', { limit: 5 });
       const el = U.$('#recent'); if (!el) return;
-      el.innerHTML = r.calls.length ? `<table class="list">${r.calls.map((c) => `<tr class="click" onclick="location.hash='#/call/${esc(c.id)}'"><td>${U.when(c.createdAt)}</td><td><b>${esc(c.title)}</b></td><td>${c.mode === 'ai' ? '<span class="badge">🎧 AI</span>' : '<span class="badge orange">📞 Live</span>'}</td><td>${c.score != null ? `<b>${c.score}%</b>` : c.status === 'ended' ? '<span class="badge amber">Awaiting review</span>' : `<span class="badge">${esc(c.status)}</span>`}</td></tr>`).join('')}</table>` : 'No calls yet.';
+      el.innerHTML = r.calls.length ? `<table class="list">${r.calls.map((c) => `<tr class="click" onclick="location.hash='#/call/${esc(c.id)}'"><td>${U.when(c.createdAt)}</td><td><b>${esc(c.title)}</b></td><td>${c.mode === 'ai' ? '<span class="badge">🎧 AI</span>' : '<span class="badge orange">📞 Live</span>'}</td><td>${c.score != null ? `<b>${c.score}%</b>` : c.conf && c.status === 'ended' ? '<span class="badge">👥 Conference</span>' : c.status === 'ended' ? '<span class="badge amber">Awaiting review</span>' : `<span class="badge">${esc(c.status)}</span>`}</td></tr>`).join('')}</table>` : 'No calls yet.';
     } catch (e) { const el = U.$('#recent'); if (el) el.textContent = ''; }
   }
 
