@@ -68,13 +68,14 @@ A trainee can take a call where the AI plays the caller, two ways:
 
 **Trainer** (🎛 Console)
 1. Opens **☎ LSH Ring Channel** from the Portal (Training Directory or Master Control) and lands on the console, signed in under their Portal name.
-2. The console is the dialer with a sidebar on each side, and **«** on either one folds it away to a rail (it stays folded on that computer):
+2. The console is one desk: **☎ the switchboard** attached to the dialer on the left, **🎭 the calls to play** beside it on the right, and under the dialer the call picked, next to **🤖 the AI calls**. **«** on either sidebar folds it away to a rail (it stays folded on that computer):
    - **☎ Switchboard** (left, under the LSH mark): the trainer's own line with **their own extension** (8001, 8002, … one per trainer account, so a batch with two trainers on sees which line each is calling from), the other trainers who are on, and every trainee online by batch with their extension: available, away, on a call, or ✋ asking for a call. It works as the phone's contact list: clicking a trainee puts their extension on the dialer.
-   - **🤖 AI calls** (right): the AI calls on the line and the ones that ended, with **🎭 Send AI callers…** on top (see *🤖 AI calls*).
+   - **🎭 The call to play** (right): the type of call (Reception, Calendar, Intake) and the calls on that line, one per row.
+   - **🤖 AI calls** (under the dialer, beside the call picked): the AI calls on the line and the ones that ended, with **🎭 Send AI callers…** on top (see *🤖 AI calls*).
 3. The **☎ dialer** is a desk phone on screen:
    - **Dial the trainee's extension** on the keypad (or type it; Backspace deletes, Esc clears). The screen says who it reaches: *Ready to call* with the trainee's name, *Not signed in*, a firm extension (201 is Atty. Reyes), or *No such extension*.
    - The **line keys** under the screen pick the line: Reception, Calendar (both ring the Main Line) or Intake (the Intake Line). The line decides the note the trainee takes and the metrics the call is graded on.
-   - **🎭 The call to play** is optional, in the list under the dialer (Beginner to Advanced, by line). Pick one to play its script, or leave **🎙 Open call: no script** selected and play any caller you like. The dialer's screen shows the caller ID the trainee will see (WIRELESS CALLER on an open call), the line, and the call.
+   - **🎭 The call to play** is optional, in the list beside the dialer (Beginner to Advanced, by line). Pick one to play its script and it's previewed under the dialer — the opening line, what the caller knows and what a good call does — or leave **🎙 Open call: no script** selected and play any caller you like. The dialer's screen shows the caller ID the trainee will see (WIRELESS CALLER on an open call), the line, and the call.
    - The soft keys under the keypad: **📋 Graded** (on by default; see *Graded mock calls and autograding*; a graded call is always recorded), **Record** (on by default) and **🙈 Hide ID** (the trainee sees PRIVATE CALLER).
    - **📞** (or Enter) rings the trainee. The trainer hears the ringback. After a call the screen clears; 📞 on an empty screen brings back the last number (redial).
 4. On the call, the dialer shows who's on the line, the timer, 📋 GRADED, REC, the trainee's hold / mute, the connection quality (and whether it's going through the relay), and 🔊 SPEAKER. Its keys are **Mute**, **🔊 Speaker**, **⏸ Coaching time-out**, **📺 Class view**, **👥 Merge call** (see *👥 Merge calls*) and **End call**. Beside it:

@@ -368,8 +368,18 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.goto(B + '/#/console');
   await tr.waitForSelector('#roster .tr[data-tid]');
   // An open call: no script picked. The line key picks the line (Intake), and the trainer improvises the caller.
-  const top = await tr.evaluate(() => [document.querySelector('#dialer').getBoundingClientRect().top, document.querySelector('#pkList').getBoundingClientRect().top]);
-  if (!(top[1] > top[0] + 400)) throw new Error('The call list should sit under the dialer: ' + top);
+  /* The console as a desk: ☎ the switchboard attached to the dialer on the left, 🎭 the calls to play
+     beside it on the right, and under the dialer the call picked next to 🤖 the AI calls. */
+  const deck = await tr.evaluate(() => {
+    const r = (s) => { const el = document.querySelector(s); return el ? el.getBoundingClientRect() : null; };
+    const d = r('#dialer'), sb = r('#roster'), pk = r('#pkList'), pv = r('#scenPreview'), ai = r('#aiBox');
+    return { gap: d.left - sb.right, pkBeside: pk.left >= d.right && Math.abs(pk.top - d.top) < 400,
+      previewUnder: pv.top > d.top + 300, aiBeside: Math.abs(ai.top - pv.top) < 80 && ai.left >= pv.right };
+  });
+  if (deck.gap > 2) throw new Error('The switchboard should be attached to the dialer, with no gap: ' + deck.gap);
+  if (!deck.pkBeside) throw new Error('🎭 The calls to play should sit beside the dialer, not under it: ' + JSON.stringify(deck));
+  if (!deck.previewUnder || !deck.aiBeside) throw new Error('The call picked should sit under the dialer with 🤖 AI calls beside it: ' + JSON.stringify(deck));
+  ok('The console is one desk: the switchboard attached to the dialer, 🎭 the calls to play beside it, the call picked under it with 🤖 AI calls alongside');
   await tr.click('#pkList .scen.open');
   await tr.click('#dialer [data-line="intake"]');
   await tr.waitForFunction(() => /Open call: no script/.test(document.querySelector('#dialer .lcd-cid').textContent) && /Intake Line/.test(document.querySelector('#dialer .lcd-cid').textContent));

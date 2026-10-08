@@ -224,7 +224,11 @@ table.list tr.click:hover td { background: #f8fafc; }
 .lvl-Beginner { background: #dcfce7; color: #166534; } .lvl-Intermediate { background: var(--blue-soft); color: #1e40af; } .lvl-Advanced { background: #fee2e2; color: #991b1b; }
 
 /* ---------- trainer console ---------- */
-.console { display: grid; grid-template-columns: var(--sl, 290px) minmax(0, 1fr) var(--sr, 290px); gap: 18px; align-items: start; }
+.console { display: grid; grid-template-columns: var(--sl, 290px) minmax(0, 1fr) var(--sr, 290px); column-gap: 0; row-gap: 18px; align-items: start; }
+.console-side.right { margin-left: 18px; }
+/* ☎ the switchboard runs into the dialer: flush edges, so the two read as one desk */
+.console-side .side-brand, .console-side .roster { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.console-side .roster { border-right: 0; }
 .console.l-folded { --sl: 52px; }
 .console.r-folded { --sr: 52px; }
 @media (max-width: 1340px) { .console { --sl: 250px; --sr: 250px; gap: 14px; } }
@@ -326,9 +330,15 @@ table.list tr.click:hover td { background: #f8fafc; }
 .lb.conf { background: #052e16; color: #86efac; }
 .key.conf.on { background: #166534; color: #dcfce7; }
 /* before a call: the dialer on top, the call to play (optional) under it */
-.dial-home { display: flex; justify-content: center; }
+.dial-home { display: flex; justify-content: flex-start; }
 .dial-home .dialer { width: 360px; max-width: 100%; position: static; }
+@media (max-width: 1140px) { .dial-home { justify-content: center; } }
 .dial-bottom { margin-top: 20px; }
+.dial-bottom.two { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; align-items: start; }
+.dial-bottom.two .grid2 { grid-template-columns: minmax(0, 1fr); }
+.dial-bottom.two > * { min-width: 0; }
+@media (max-width: 1140px) { .dial-bottom.two { grid-template-columns: minmax(0, 1fr); } }
+.dial-side #aiBox:not(:empty) { margin-bottom: 16px; }
 .line-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 10px; background: #0a1530; border: 1px solid #1e2d52; border-radius: 11px; padding: 3px; }
 .line-keys button { border: 0; background: transparent; color: #94a3b8; font-weight: 600; font-size: 12px; padding: 6px 2px; border-radius: 8px; cursor: pointer; font-family: inherit; white-space: nowrap; }
 .line-keys button:hover { color: #fff; } .line-keys button.on { background: #22386a; color: #fff; box-shadow: inset 0 -2px 0 var(--orange); }
@@ -342,6 +352,14 @@ table.list tr.click:hover td { background: #f8fafc; }
 .callers .scen .cbody { flex: 1; min-width: 0; }
 .callers .scen h4 { font-size: 14px; } .callers .scen p { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .callers .scen .meta { flex: none; justify-content: flex-end; }
+/* the sidebar list: a line per call, the title and its badges */
+.picker .pill-tabs { flex-wrap: wrap; }
+.callers.compact { grid-template-columns: minmax(0, 1fr); gap: 4px; margin-top: 10px; max-height: calc(100vh - 300px); overflow-y: auto; overflow-x: hidden; }
+.callers.compact .scen { padding: 7px 9px; gap: 9px; }
+.callers.compact .scen .cav { width: 28px; height: 28px; font-size: 11px; }
+.callers.compact .scen h4 { font-size: 13.5px; line-height: 1.25; white-space: normal; }
+.callers.compact .scen p { margin-top: 3px; display: flex; gap: 4px; flex-wrap: wrap; white-space: normal; }
+@media (max-width: 1140px) { .callers.compact { max-height: none; } }
 .dial-side > .card + .card { margin-top: 16px; }
 .live-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
 .live-cols .card { margin: 0; }

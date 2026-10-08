@@ -404,17 +404,13 @@
     : c.status === 'live' ? `<span class="badge green">On the call <span data-since="${c.answeredAt}">${U.since(c.answeredAt)}</span></span>`
       : c.status === 'missed' ? '<span class="badge red">Missed</span>' : c.status === 'declined' ? '<span class="badge red">Declined</span>' : c.status === 'cancelled' ? '<span class="badge">Busy</span>'
         : c.score != null ? `<span class="badge blue">🤖 ${c.score}%</span>` : c.grade === 'failed' ? '<span class="badge red">AI couldn\'t review</span>' : '<span class="badge amber">Ended · AI reviewing</span>';
-  // The right sidebar: 🤖 the AI calls on the line, the ones that ended, and their scores.
+  // 🤖 The AI calls on the line, the ones that ended and their scores: beside the call to play.
   function renderAiCalls() {
-    const side = U.$('#sideR'); if (!side) return;
-    const grid = U.$('#consoleGrid');
-    const folded = App.folded(FOLD_R);
-    if (grid) grid.classList.toggle('r-folded', folded);
-    if (folded) { side.innerHTML = App.railHTML(FOLD_R, 'AI calls', '🤖'); return; }
-    if (!U.$('#aiCalls', side)) side.innerHTML = '<div class="card" id="aiCalls"></div>';
-    const el = U.$('#aiCalls', side); if (!el) return;
+    const box = U.$('#aiBox'); if (!box) return;
+    if (!U.$('#aiCalls', box)) box.innerHTML = '<div class="card" id="aiCalls"></div>';
+    const el = U.$('#aiCalls', box); if (!el) return;
     const list = [...C.ai.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
-    el.innerHTML = `<div class="card-head"><h3 title="Calls where the AI plays the caller">🤖 AI calls</h3><span class="spacer"></span>${App.foldKey(FOLD_R, 'the AI calls')}</div>
+    el.innerHTML = `<div class="card-head"><h3 title="Calls where the AI plays the caller">🤖 AI calls</h3></div>
       <div class="row" style="margin-bottom:10px"><button class="btn btn-sm btn-primary" data-act="aisetup" ${App.cfg.features.ai ? '' : 'disabled'} title="Choose the calls, the voice and who to ring">🎭 Send AI callers…</button></div>
       ${list.length ? '' : `<div class="empty small">${App.cfg.features.ai ? 'No AI calls yet. <b>🎭 Send AI callers…</b> rings one or several trainees with an AI caller.' : 'AI callers need the Gemini keys (see ⚙️ Setup).'}</div>`}
       ${list.map((c) => `<div class="aic"><div class="aic-who"><div class="nm">${esc(c.traineeName)} ${aiLabel(c)}</div><div class="bt">${esc(c.title)}${c.voice ? ' · 🎚 ' + esc(c.voice) : ''}${c.graded ? ' · 📋 graded' : ''}</div></div>
@@ -606,13 +602,15 @@
       return;
     }
     if (!t) {
-      el.innerHTML = `<div class="dial-home"><div class="device dialer" id="dialer"></div></div><div class="dial-bottom" id="callerBox"></div>`;
-      renderDialer(); renderCallers();
+      el.innerHTML = `<div class="dial-home"><div class="device dialer" id="dialer"></div></div>
+        <div class="dial-bottom two" id="callerBox"><div id="scenPreview"></div><div id="aiBox"></div></div>`;
+      renderDialer(); renderPicker(); renderPreview(); renderAiCalls();
       return;
     }
     el.innerHTML = `<div class="dial-stage"><div class="device dialer" id="dialer"></div><div class="dial-side" id="dialSide"></div></div>`;
     const side = U.$('#dialSide');
-    if (t.status === 'ended') { renderEndedSide(side); renderDialer(); return; }
+    renderPicker();
+    if (t.status === 'ended') { renderEndedSide(side); renderDialer(); renderAiCalls(); return; }
     const s = t.scenario;
     const scriptCard = s.open ? `<div class="card script-card">
         <div class="card-head"><h3>🎙 Open call: no script</h3><span class="spacer"></span>${App.trackBadge(s.track)}</div>
@@ -636,6 +634,7 @@
         ${(s.unavailable || []).length ? `<p class="small">🚫 Not available for transfers: ${s.unavailable.map((x) => { const d = App.dirEntry(x); return d ? `<b>${esc(d.name)}</b> (${esc(x)})` : esc(x); }).join(', ')}</p>` : ''}
         ${s.caseId ? `<details><summary class="small" style="cursor:pointer">📁 Case file ${esc(s.caseId)}${(s.hideCases || []).includes(s.caseId) ? ' (not on file for the trainee: a first call)' : ''}</summary><pre class="case">${esc((App.cfg.cases[s.caseId] || {}).text || '')}</pre></details>` : ''}
       </div>`}
+      <div id="aiBox"></div>
       <div class="live-cols">
         <div class="card">
           <div class="card-head"><h3>✅ Live checklist</h3><span class="spacer"></span><span class="small muted">Tick as it happens</span></div>
@@ -788,7 +787,8 @@
       <p><b>${esc(t.trainee.name)}</b> · ${esc(t.scenario.title)}${t.endNote ? ' · ' + esc(t.endNote) : ''}</p>
       <div id="endedInfo"></div>
       <div class="row" style="margin-top:12px"><a class="btn btn-orange" id="scoreBtn" href="#/call/${esc(t.callId)}">📋 Score this call →</a></div>
-      <p class="small muted" style="margin-top:12px">The trainee is finishing and submitting their note; you'll see it on the scorecard. <b>📞 New call</b> on the dialer places the next one.</p></div>`;
+      <p class="small muted" style="margin-top:12px">The trainee is finishing and submitting their note; you'll see it on the scorecard. <b>📞 New call</b> on the dialer places the next one.</p></div>
+      <div id="aiBox"></div>`;
     if (!t.grade && t.graded) t.grade = 'waiting';
     renderEnded();
   }
@@ -809,29 +809,47 @@
     el.innerHTML = rec + ai;
   }
 
-  // Before a call: who to ring and what to play.
-  // Under the dialer: the call to play. Optional: with none picked, the trainer rings an open call (no script).
-  function renderCallers() {
-    const el = U.$('#callerBox'); if (!el) return;
+  /* ---------- 🎭 the calls to play (the right sidebar) ----------
+     The type of call (Reception, Calendar, Intake) and the calls on that line, beside the dialer.
+     Picking one is optional: with none picked the trainer rings an open call and plays any caller.
+     The one picked is previewed under the dialer, next to 🤖 the AI calls. */
+  function renderPicker() {
+    const side = U.$('#sideR'); if (!side) return;
+    const grid = U.$('#consoleGrid');
+    const folded = App.folded(FOLD_R);
+    if (grid) grid.classList.toggle('r-folded', folded);
+    if (folded) { side.innerHTML = App.railHTML(FOLD_R, 'Calls to play', '🎭'); return; }
     const list = App.cfg.scenarios.filter((x) => x.track === pick.track);
     const s = App.scen[pick.scenarioId];
     const line = lineOf(pick.track).label;
-    el.innerHTML = `<div class="card">
-      <div class="card-head"><h3>🎭 The call to play <span class="muted small" style="font-weight:500">(optional)</span></h3><span class="spacer"></span><a class="small" href="#/scenarios">📚 Write your own call</a></div>
-      <div class="pill-tabs" id="pkTrack">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === pick.track ? 'on' : ''}">${t.icon} ${esc(t.label)}</button>`).join('')}</div>
-      <div class="callers" id="pkList">
+    side.innerHTML = `<div class="card picker">
+      <div class="card-head"><h3>🎭 The call to play</h3><span class="spacer"></span>${App.foldKey(FOLD_R, 'the calls to play')}</div>
+      <div class="pill-tabs" id="pkTrack">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === pick.track ? 'on' : ''}" title="${esc(t.label)} calls, on the ${esc(lineOf(k).label)}">${t.icon} ${esc(t.label)}</button>`).join('')}</div>
+      <div class="callers compact" id="pkList">
         <div class="scen open ${s ? '' : 'sel'}" data-sid="" tabindex="0"><div class="cav">🎙</div>
-          <div class="cbody"><h4>Open call: no script</h4><p>Play any caller you like, on the ${esc(line)}</p></div><div class="meta"><span class="badge">No script</span></div></div>
-        ${list.map((x) => `<div class="scen ${x.id === pick.scenarioId ? 'sel' : ''}" data-sid="${esc(x.id)}" tabindex="0">
+          <div class="cbody"><h4>Open call: no script</h4><p>Any caller you like, on the ${esc(line)}</p></div></div>
+        ${list.map((x) => `<div class="scen ${x.id === pick.scenarioId ? 'sel' : ''}" data-sid="${esc(x.id)}" tabindex="0" title="${esc(x.caller.name)}: ${esc(x.caller.role)}">
           <div class="cav">${esc((x.caller.name || '?').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase())}</div>
-          <div class="cbody"><h4>${esc(x.title)}</h4><p><b>${esc(x.caller.name)}</b>: ${esc(x.caller.role)}</p></div>
-          <div class="meta">${App.levelBadge(x.level)}${x.caseId ? `<span class="badge">${esc(x.caseId)}</span>` : ''}${x.custom ? '<span class="badge blue">Yours</span>' : ''}</div></div>`).join('')}</div>
-      </div>
-      ${s ? `<div class="card script-card"><div class="card-head"><h3>🎭 Preview: ${esc(s.title)}</h3><span class="spacer"></span>${App.levelBadge(s.level)}</div>
-        <p class="small"><b>${esc(s.caller.name)}</b>, ${esc(s.caller.role)} · caller ID <span class="mono">${esc(s.caller.idName)} ${esc(s.caller.number)}</span> on the ${esc(lineOf(s.track).label)}</p>
-        <div class="opening">${esc(s.opening)}</div>
-        <div class="grid2"><div><h4>What you know and how you act</h4><div class="persona">${esc(s.hidden)}</div></div>
-        <div><h4>What a good call does</h4><ul class="small">${(s.goals || []).map((g) => `<li>${esc(g)}</li>`).join('')}</ul><h4>The situation</h4><p class="small">${esc(s.facts)}</p></div></div></div>` : ''}`;
+          <div class="cbody"><h4>${esc(x.title)}</h4><p>${App.levelBadge(x.level)}${x.caseId ? `<span class="badge">${esc(x.caseId)}</span>` : ''}${x.custom ? '<span class="badge blue">Yours</span>' : ''}</p></div></div>`).join('')}</div>
+      <p class="small muted" style="margin:10px 0 0">Optional: the call the trainer plays. <a href="#/scenarios">📚 Write your own call</a></p></div>`;
+  }
+
+  // Under the dialer: the call picked on the right, ready to play.
+  function renderPreview() {
+    const el = U.$('#scenPreview'); if (!el) return;
+    const s = App.scen[pick.scenarioId];
+    if (!s) {
+      const oc = App.cfg.openCaller || { idName: 'WIRELESS CALLER', number: '' };
+      el.innerHTML = `<div class="card script-card"><div class="card-head"><h3>🎙 Open call: no script</h3><span class="spacer"></span>${App.trackBadge(pick.track)}</div>
+        <p class="small">Play any caller you like. The trainee sees <b class="mono">${esc(oc.idName)} ${esc(oc.number)}</b> on the ${esc(lineOf(pick.track).label)} and takes the ${esc(App.formFor(pick.track).title.toLowerCase())}.</p>
+        <p class="small muted">Pick a call on the right to play its script instead, with the caller's words, what they know and a checklist.</p></div>`;
+      return;
+    }
+    el.innerHTML = `<div class="card script-card"><div class="card-head"><h3>🎭 Preview: ${esc(s.title)}</h3><span class="spacer"></span>${App.levelBadge(s.level)}</div>
+      <p class="small"><b>${esc(s.caller.name)}</b>, ${esc(s.caller.role)} · caller ID <span class="mono">${esc(s.caller.idName)} ${esc(s.caller.number)}</span> on the ${esc(lineOf(s.track).label)}</p>
+      <div class="opening">${esc(s.opening)}</div>
+      <div class="grid2"><div><h4>What you know and how you act</h4><div class="persona">${esc(s.hidden)}</div></div>
+      <div><h4>What a good call does</h4><ul class="small">${(s.goals || []).map((g) => `<li>${esc(g)}</li>`).join('')}</ul><h4>The situation</h4><p class="small">${esc(s.facts)}</p></div></div></div>`;
   }
 
   /* ---------- 📺 the Class view (a tab to present in Google Meet) ----------
@@ -889,14 +907,14 @@
       app.firstChild.addEventListener('input', onInput);
       document.addEventListener('keydown', onKey);
       render();
-      renderAiCalls(); C.loadAi();
+      renderPicker(); renderAiCalls(); C.loadAi();
       try { C.roster = (await API.post('/api/trainees')).trainees; renderRoster(); if (!App.t) { syncDial(); renderDialer(); } } catch (e) {}
     }
   });
 
   function onClick(e) {
     const fold = e.target.closest('[data-fold]');
-    if (fold) { const k = fold.dataset.fold; App.folded(k, !App.folded(k)); if (k === FOLD_L) renderRoster(); else renderAiCalls(); return; }
+    if (fold) { const k = fold.dataset.fold; App.folded(k, !App.folded(k)); if (k === FOLD_L) renderRoster(); else renderPicker(); return; }
     // The switchboard is the phone's contact list: a trainee's row puts their extension on the dialer; 📞 also rings.
     const ringBtn = e.target.closest('[data-ring]');
     if (ringBtn) { if (App.t) return; pickTrainee(ringBtn.dataset.ring); ring(); return; }
@@ -941,14 +959,14 @@
   function pickCall(id) {
     pick.scenarioId = id && App.scen[id] ? id : '';
     if (pick.scenarioId) pick.track = App.scen[pick.scenarioId].track;
-    renderCallers(); renderDialer();
+    renderPicker(); renderPreview(); renderDialer();
   }
   // The line (Reception, Calendar, Intake): which calls are listed, and where an open call rings.
   function setTrack(k) {
     if (!App.cfg.tracks[k]) return;
     pick.track = k;
     const s = App.scen[pick.scenarioId]; if (s && s.track !== k) pick.scenarioId = '';
-    renderCallers(); renderDialer();
+    renderPicker(); renderPreview(); renderDialer();
   }
   // Typing on the keyboard dials too: digits, * and #; Backspace deletes, Esc clears, Enter rings.
   function onKey(e) {
