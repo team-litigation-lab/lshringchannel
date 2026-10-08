@@ -21,10 +21,10 @@
 import { Switchboard } from './switchboard.js';
 import { Grader, GRADE_AUDIO } from './grader.js';
 import { makeToken, readToken, readTokenString, safeEqual, traineeId, secretOf } from './auth.js';
-import { FIRM, CASES, TRACKS, NOTE_FORMS, LINES, LEVELS, CMS_URL, traineeView, openCall } from './scenarios.js';
+import { FIRM, CASES, TRACKS, NOTE_FORMS, LINES, LEVELS, CMS_URL, AI_VOICES, traineeView, openCall } from './scenarios.js';
 import { hasAI, keyNames, generate, liveToken } from './gemini.js';
 import { callerPrompt, liveSetup } from './prompts.js';
-import { readPortalTicket, portalHome } from './portal.js';
+import { readPortalTicket, portalHome, mintTicket } from './portal.js';
 
 export { Switchboard, Grader };
 
@@ -158,11 +158,31 @@ export default {
         const all = await sb.listScenarios();
         const st = await sb.getSettings();
         return json({
-          me, firm: FIRM, cases: CASES, tracks: TRACKS, forms: NOTE_FORMS, lines: LINES, levels: LEVELS, cms: CMS_URL, portal: portalHome(env), openCaller: openCall('reception').caller,
+          me, firm: FIRM, cases: CASES, tracks: TRACKS, forms: NOTE_FORMS, lines: LINES, levels: LEVELS, cms: CMS_URL, portal: portalHome(env), openCaller: openCall('reception').caller, voices: AI_VOICES,
           scenarios: admin ? all : all.map(traineeView),
-          features: { ai: hasAI(env), recordings: !!env.LSH_KV, aiMinutes: aiMinutes(env) },
+          features: { ai: hasAI(env), recordings: !!env.LSH_KV, aiMinutes: aiMinutes(env), cmsAuth: !!String(env.PORTAL_SSO_SECRET || '').trim() },
           settings: admin ? st : { weights: st.weights, passMark: st.passMark }
         });
+      }
+      /* ---------- 🔎 Case lookup → the CMS Training Library, signed in ----------
+         The trainee opens the case file in the CMS as themselves: the link carries a fresh Portal
+         ticket (5 minutes, one use), the same way the Portal opens the CMS. Without
+         PORTAL_SSO_SECRET on this Worker there's no ticket to sign, and the plain link is returned
+         (the CMS asks them to come in from the Portal). */
+      if (path === '/api/cms-link') {
+        const caseId = String(body.caseId || '').trim();
+        if (caseId && !CASES[caseId]) return json({ error: 'No such case file.' }, 404);
+        if ((await sb.countUsage(me.id, 'cmslink', 3600000)) >= 120) return json({ error: 'Too many case files opened this hour.' }, 429);
+        await sb.logUsage(me.id, 'cmslink');
+        const parts = String(me.name || '').trim().split(/\s+/);
+        const ticket = await mintTicket(env, admin ? { admin: true, name: me.name }
+          : { first: parts[0] || me.name, last: parts.slice(1).join(' ') || parts[0] || me.name, batch: me.batch || '' }, 5);
+        const u = new URL(CMS_URL);
+        u.searchParams.set('program', 'reception');
+        if (caseId) u.searchParams.set('mock', caseId);
+        u.searchParams.set('from', 'ringchannel');
+        if (ticket) u.searchParams.set('ticket', ticket);
+        return json({ url: u.toString(), authed: !!ticket });
       }
       if (path === '/api/ice') {
         if ((await sb.countUsage(me.id, 'ice', 3600000)) >= 120) return json({ error: 'Too many requests.' }, 429);
@@ -259,7 +279,7 @@ export default {
       if (path === '/api/ai/start') {
         if (!hasAI(env)) return json({ error: 'AI practice callers aren\'t set up on this site yet.' }, 501);
         if (!admin && (await sb.countUsage(me.id, 'aicall', 3600000)) >= 30) return json({ error: 'That\'s a lot of practice calls this hour. Take a short break and try again.' }, 429);
-        const res = await sb.startAiCall(me, String(body.scenarioId || ''));
+        const res = await sb.startAiCall(me, String(body.scenarioId || ''), String(body.voice || ''));
         if (res.error) return json({ error: res.error }, res.status || 400);
         await sb.logUsage(me.id, 'aicall');
         return json({ callId: res.id, scenario: traineeView(res.scenario), maxSeconds: aiMinutes(env) * 60 });
@@ -273,7 +293,7 @@ export default {
           // A call gets a few tries (busy keys, models); every token is one Gemini Live session.
           if ((await sb.countUsage(me.id, 'live:' + r.id, 3600000)) >= 8 || (await sb.countUsage(me.id, 'live', 3600000)) >= 60) return json({ error: 'Too many voice connections; this call runs as text.', code: 'RATE_LIMIT' }, 429);
           await sb.logUsage(me.id, 'live:' + r.id); await sb.logUsage(me.id, 'live');
-          const t = await liveToken(env, (model) => liveSetup(s, model), aiMinutes(env), Array.isArray(body.skip) ? body.skip.map(String) : []);
+          const t = await liveToken(env, (model) => liveSetup(s, model, r.data.voice), aiMinutes(env), Array.isArray(body.skip) ? body.skip.map(String) : []);
           return t.ok ? json({ token: t.token, model: t.model, url: t.url, pair: t.pair, maxSeconds: aiMinutes(env) * 60 }) : json({ error: t.error, code: t.code }, t.code === 'BUSY' ? 429 : 502);
         }
         // Text mode: the same caller, one turn at a time (no microphone, or live voice unavailable).

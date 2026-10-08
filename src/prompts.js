@@ -1,11 +1,13 @@
 /* What the AI is told: the caller it plays in practice, and how it scores a call.
    The scorer writes in the LSH facilitator's voice (the DNA the Foundational platform uses,
    from the facilitator's own ranking reports; see js/ft-facilitator-dna.js there). */
-import { FIRM, CASES, TRACKS, LINES, lineOf, NOTE_FORMS } from './scenarios.js';
+import { FIRM, CASES, TRACKS, LINES, lineOf, NOTE_FORMS, AI_VOICES, voiceOk } from './scenarios.js';
 
-const FEMALE_VOICES = ['Kore', 'Aoede', 'Leda', 'Zephyr'], MALE_VOICES = ['Puck', 'Charon', 'Fenrir', 'Orus'];
-export function voiceFor(s) {
-  const pool = s.caller && s.caller.gender === 'm' ? MALE_VOICES : FEMALE_VOICES;
+// The caller's voice: the one the trainer (or trainee) picked on the 🎚 Voice list, or one that suits the caller.
+export function voiceFor(s, picked) {
+  const chosen = voiceOk(picked);
+  if (chosen) return chosen;
+  const pool = AI_VOICES.filter((v) => v.gender === (s.caller && s.caller.gender === 'm' ? 'm' : 'f')).map((v) => v.id);
   let h = 0; for (const ch of String((s.caller && s.caller.name) || s.id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return pool[h % pool.length];
 }
@@ -36,10 +38,10 @@ RULES
 The call has just been answered. Wait for them to greet you, then say why you are calling. If they say nothing, say "Hello?" and then why you are calling.`;
 }
 
-export function liveSetup(s, model) {
+export function liveSetup(s, model, voice) {
   return {
     model: 'models/' + model,
-    generationConfig: { responseModalities: ['AUDIO'], temperature: 0.8, speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceFor(s) } } } },
+    generationConfig: { responseModalities: ['AUDIO'], temperature: 0.8, speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceFor(s, voice) } } } },
     systemInstruction: { parts: [{ text: callerPrompt(s) }] },
     inputAudioTranscription: {},
     outputAudioTranscription: {}
@@ -63,6 +65,9 @@ export function metricsText(m, audio) {
   if (holds.length) rows.push(`Put the caller on hold ${holds.length} time(s): ${holds.map((h) => fmtMs((h.end || h.start) - h.start)).join(', ')}.`);
   else rows.push('No holds.');
   (m.transfers || []).forEach((t) => rows.push(`Transfer to ${t.to} (ext ${t.ext}): ${t.result || 'not completed'}.`));
+  // 🔎 Case lookup: which case file the trainee opened and worked from (the right file is the one the call is about).
+  if ((m.casePicks || []).length) rows.push(`Case files opened from 🔎 Case lookup, in order: ${m.casePicks.map((c) => c.id).join(', ')}. The file worked from: ${m.caseId || m.casePicks[m.casePicks.length - 1].id}${m.rightCase ? ' (the case this call is about)' : m.rightCase === false ? ' (NOT the case this call is about: ' + m.wantCase + ')' : ''}.`);
+  else if (m.wantCase) rows.push(`No case file was opened from 🔎 Case lookup (the call is about ${m.wantCase}).`);
   if (m.endedBy) rows.push(`Call ended by the ${m.endedBy === 'trainer' ? 'caller' : m.endedBy}${m.endReason === 'transferred' ? ' (transferred)' : ''}.`);
   const d = audio && audio.deadAir;
   if (d) rows.push(d.count ? `Dead air measured in the recording (both sides silent for 4 seconds or more, holds excluded): ${d.count} time(s), ${d.total} s in all, the longest ${d.longest} s${(d.gaps || []).length ? ' (at ' + d.gaps.slice(0, 6).map((g) => fmtMs(g[0] * 1000)).join(', ') + ')' : ''}.` : 'No dead air of 4 seconds or more measured in the recording.');

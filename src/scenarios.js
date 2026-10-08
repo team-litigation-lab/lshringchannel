@@ -32,6 +32,21 @@
 
 export const CMS_URL = 'https://lshcasemanagementtraining-trainingcrm.pages.dev/';
 
+/* 🎚 The voices an AI caller can speak with (Gemini Live's prebuilt voices).
+   A call picks one by the caller's gender unless the trainer (or the trainee, on 🎧 Practice)
+   changes it on the 🎚 Voice list: the same caller, a different person on the line. */
+export const AI_VOICES = [
+  { id: 'Kore', label: 'Kore', desc: 'Firm and clear', gender: 'f' },
+  { id: 'Aoede', label: 'Aoede', desc: 'Bright and warm', gender: 'f' },
+  { id: 'Leda', label: 'Leda', desc: 'Young and light', gender: 'f' },
+  { id: 'Zephyr', label: 'Zephyr', desc: 'Easy and breezy', gender: 'f' },
+  { id: 'Puck', label: 'Puck', desc: 'Upbeat and quick', gender: 'm' },
+  { id: 'Charon', label: 'Charon', desc: 'Deep and measured', gender: 'm' },
+  { id: 'Fenrir', label: 'Fenrir', desc: 'Gruff and forceful', gender: 'm' },
+  { id: 'Orus', label: 'Orus', desc: 'Steady and business-like', gender: 'm' }
+];
+export const voiceOk = (v) => AI_VOICES.some((x) => x.id === v) ? String(v) : '';
+
 export const FIRM = {
   name: 'LSH Training Law Group',
   fictional: true,

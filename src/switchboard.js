@@ -19,11 +19,13 @@
      sees the trainee's submitted note the moment it is sent).
    ========================================================= */
 import { DurableObject } from 'cloudflare:workers';
-import { SCENARIOS, cleanScenario, openCall, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM, weightedScore, DEFAULT_SETTINGS, traineeView } from './scenarios.js';
+import { SCENARIOS, cleanScenario, openCall, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM, CASES, weightedScore, DEFAULT_SETTINGS, traineeView, voiceOk } from './scenarios.js';
 
 const RING_MS = 45000;     // an unanswered call rings out after 45 seconds
 const GRACE_MS = 30000;    // a dropped phone has 30 seconds to reconnect before its call ends
 const MAX_CALL_MS = 2 * 3600 * 1000;
+const TRAINER_EXT = 8000;   // trainers' own desk extensions: 8001, 8002, … (trainees are 7001 and up)
+const MAX_CONF = 2;         // how many more trainees a trainer can merge into one call
 const AUDIO_WAIT = 3 * 60000;   // autograding waits this long after a call for its recording …
 const NOTE_WAIT = 10 * 60000;   // … and this long for the trainee to submit the note
 const OPEN = 1;
@@ -51,6 +53,10 @@ export class Switchboard extends DurableObject {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS usage (id INTEGER PRIMARY KEY AUTOINCREMENT, who TEXT, kind TEXT, at INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS tickets (sig TEXT PRIMARY KEY, exp INTEGER)`);   // Portal tickets already used
+    // Each trainer account's own desk extension (8001, 8002, …), kept by their Portal name, so a
+    // batch with two trainers on at once sees which line each of them is calling from.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS trainers (name TEXT PRIMARY KEY, ext TEXT, created_at INTEGER, last_seen INTEGER)`);
+    this.sql.exec('CREATE UNIQUE INDEX IF NOT EXISTS trainers_by_ext ON trainers (ext)');
     // Each trainee's PIN (a salted hash) from when Ring Channel had its own sign-in form (no longer used).
     if (!this.sql.exec(`SELECT name FROM pragma_table_info('trainees') WHERE name = 'pin'`).toArray().length) this.sql.exec('ALTER TABLE trainees ADD COLUMN pin TEXT');
     // Each trainee's desk extension (7001, 7002, …), so the trainer can dial them. The firm's own
@@ -84,6 +90,19 @@ export class Switchboard extends DurableObject {
     this.sql.exec('UPDATE trainees SET ext = ? WHERE id = ? AND ext IS NULL', ext, id);
     return ext;
   }
+  // A trainer's own extension, given the first time that account opens the console and kept after that.
+  trainerExt(name) {
+    const n = String(name || '').trim().slice(0, 60);
+    if (!n) return '';
+    const cur = this.sql.exec('SELECT ext FROM trainers WHERE name = ?', n).toArray()[0];
+    if (cur && cur.ext) { this.sql.exec('UPDATE trainers SET last_seen = ? WHERE name = ?', now(), n); return cur.ext; }
+    const top = this.sql.exec('SELECT MAX(CAST(ext AS INTEGER)) AS n FROM trainers').toArray()[0].n;
+    const ext = String(Math.max(TRAINER_EXT, Number(top) || 0) + 1);
+    this.sql.exec('INSERT OR REPLACE INTO trainers (name, ext, created_at, last_seen) VALUES (?, ?, ?, ?)', n, ext, now(), now());
+    return ext;
+  }
+  trainerList() { return this.sql.exec('SELECT name, ext, last_seen FROM trainers ORDER BY CAST(ext AS INTEGER)').toArray(); }
+
   scenario(id) {
     const c = this.sql.exec('SELECT data FROM scenarios WHERE id = ? AND deleted = 0', id).toArray()[0];
     if (c) return JSON.parse(c.data);
@@ -107,7 +126,8 @@ export class Switchboard extends DurableObject {
     const [client, server] = Object.values(pair);
     const cid = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
     this.ctx.acceptWebSocket(server, ['c:' + cid, 'u:' + who.id, 'r:' + who.role]);
-    const me = { cid, role: who.role, id: who.id, name: prof ? prof.name : who.id, batch: prof ? prof.batch : '', ext: prof ? prof.ext || '' : '', status: who.role === 't' ? 'available' : 'online', hand: false, handAt: 0, call: null, at: now() };
+    const ext = who.role === 'a' ? this.trainerExt(who.id) : (prof ? prof.ext || '' : '');
+    const me = { cid, role: who.role, id: who.id, name: prof ? prof.name : who.id, batch: prof ? prof.batch : '', ext, status: who.role === 't' ? 'available' : 'online', hand: false, handAt: 0, call: null, at: now() };
     server.serializeAttachment(me);
     if (prof) this.sql.exec('UPDATE trainees SET last_seen = ? WHERE id = ?', now(), who.id);
     // A phone that reconnects mid-call is told about it, so it can resume.
@@ -126,8 +146,9 @@ export class Switchboard extends DurableObject {
     const b = { callId: r.id, status: r.status, line, lineLabel: LINES[line].label, lineNumber: LINES[line].number, track: s.track,
       callerId: r.data.withheld ? { name: 'PRIVATE CALLER', number: 'Unknown' } : { name: s.caller.idName, number: s.caller.number },
       createdAt: r.created_at, answeredAt: r.answered_at || null, recording: !!r.data.record, trainer: r.trainer, live: r.data.live || {} };
+    if (r.data.conf) b.conf = { parent: r.data.conf.parent };
     if (role === 'a') Object.assign(b, { scenario: s, graded: !!r.data.graded, trainee: { id: r.trainee_id, name: r.trainee_name, batch: r.batch, ext: (this.trainee(r.trainee_id) || {}).ext || '' }, note: r.data.note || {}, ticks: r.data.ticks || [], metrics: r.data.metrics || {}, traineeCid: r.data.traineeCid || null });
-    else Object.assign(b, { trainerCid: r.data.trainerCid || null, note: r.data.note || {}, hideCases: s.hideCases || [], caseId: null });
+    else Object.assign(b, { trainerCid: r.data.trainerCid || null, note: r.data.note || {}, hideCases: s.hideCases || [], caseId: r.data.caseId || '' });
     return b;
   }
 
@@ -144,12 +165,23 @@ export class Switchboard extends DurableObject {
       if (a.call) cur.call = a.call;
       byId.set(a.id, cur);
     }
-    const trainers = all.filter(([, a]) => a.role === 'a').map(([, a]) => ({ name: a.name, call: a.call }));
+    const trainers = all.filter(([, a]) => a.role === 'a').map(([, a]) => ({ name: a.name, ext: a.ext || '', call: a.call }));
     const trainees = [...byId.values()];
-    const names = [...new Set(trainers.map((x) => x.name))];
+    // One row per trainer account (a trainer with two tabs open is one trainer), with their own extension.
+    const desks = new Map();
+    for (const x of trainers) {
+      const cur = desks.get(x.name) || { name: x.name, ext: x.ext, call: false };
+      if (x.call) cur.call = true;
+      if (x.ext) cur.ext = x.ext;
+      desks.set(x.name, cur);
+    }
+    const onTrainers = [...desks.values()];
     for (const [w, a] of all) {
-      if (a.role === 'a') this.send(w, { t: 'presence', trainees, trainers });
-      else this.send(w, { t: 'presence', trainers: names.length });
+      if (a.role === 'a') this.send(w, { t: 'presence', trainees, trainers, desks: onTrainers });
+      // A trainee's own switchboard panel: their batch mates and the trainers who are on.
+      else this.send(w, { t: 'presence', trainers: onTrainers.length, desks: onTrainers,
+        peers: trainees.filter((x) => !a.batch || !x.batch || x.batch === a.batch)
+          .map((x) => ({ id: x.id, name: x.name, batch: x.batch, ext: x.ext, status: x.status, call: !!x.call, hand: !!x.hand, me: x.id === a.id })) });
     }
   }
 
@@ -182,7 +214,27 @@ export class Switchboard extends DurableObject {
     }
     this.clearCallOn(r.id);
     this.presence();
-    if (r.status === 'ended') this.scheduleGrade(r.id).catch(() => {});
+    // A merged leg ends with the call it joined; the rest of the conference carries on without it.
+    const legs = (r.data.legs || []).slice();
+    if (legs.length) { r.data.legs = []; this.save(r); legs.forEach((id) => { const x = this.row(id); if (x && ['ringing', 'live'].includes(x.status)) this.endCall(x, by, 'conference-ended'); }); }
+    if (r.data.conf) { const p = this.row(r.data.conf.parent); if (p && p.status === 'live') this.confTell(p); }
+    if (r.status === 'ended' && !r.data.conf) this.scheduleGrade(r.id).catch(() => {});
+  }
+
+  /* ---------------- 👥 conference legs ---------------- */
+  // The calls merged into this one that are still on the line.
+  legsOf(p) { return ((p.data && p.data.legs) || []).map((id) => this.row(id)).filter((x) => x && ['ringing', 'live'].includes(x.status)); }
+  // Tells everyone on a conference who else is on it, and the trainer what each leg is doing.
+  confTell(p) {
+    if (!p) return;
+    const legs = this.legsOf(p);
+    const names = [p.trainee_name, ...legs.map((x) => x.trainee_name)];
+    for (const r of [p, ...legs]) {
+      this.send(this.peerOf(r, 'a'), { t: 'conf-parties', callId: r.id, on: legs.length > 0, trainer: p.trainer, names, others: names.filter((n) => n !== r.trainee_name) });
+    }
+    this.send(this.byCid(p.data.trainerCid), { t: 'conf-state', callId: p.id,
+      legs: legs.map((x) => ({ callId: x.id, status: x.status, ringAt: x.created_at, answeredAt: x.answered_at || null,
+        trainee: { id: x.trainee_id, name: x.trainee_name, batch: x.batch, ext: (this.trainee(x.trainee_id) || {}).ext || '' } })) });
   }
 
   // What's happening on the line now (so a phone that reloads can show it again).
@@ -246,9 +298,16 @@ export class Switchboard extends DurableObject {
         if (me.role !== 'a') return;
         const tr = this.trainee(String(m.traineeId || ''));
         if (!tr || tr.archived) return this.send(ws, { t: 'ai-failed', reason: 'Dial a trainee first.' });
-        let s = m.scenarioId ? this.scenario(String(m.scenarioId)) : null;
-        if (m.scenarioId && !s) return this.send(ws, { t: 'ai-failed', reason: 'That call isn\'t in the library any more.' });
-        if (s && s.ai === false) return this.send(ws, { t: 'ai-failed', reason: `"${s.title}" is live-only: the AI can't play it. Pick another call, or ring it yourself.` });
+        // One call, or a few for the AI to draw from (🎭 AI caller setup), or none: a random call on the line.
+        const ids = (Array.isArray(m.scenarioIds) ? m.scenarioIds : m.scenarioId ? [m.scenarioId] : []).map(String).filter(Boolean).slice(0, 60);
+        let s = null;
+        if (ids.length) {
+          const picked = ids.map((id) => this.scenario(id)).filter(Boolean);
+          if (!picked.length) return this.send(ws, { t: 'ai-failed', reason: 'That call isn\'t in the library any more.' });
+          const playable = picked.filter((x) => x.ai !== false);
+          if (!playable.length) return this.send(ws, { t: 'ai-failed', reason: picked.length === 1 ? `"${picked[0].title}" is live-only: the AI can't play it. Pick another call, or ring it yourself.` : 'None of those calls can be played by the AI: they are live-only.' });
+          s = playable[Math.floor(Math.random() * playable.length)];
+        }
         if (!s) {
           const track = TRACKS[m.track] ? m.track : 'reception';
           const pool = this.listScenarios().filter((x) => x.track === track && x.ai !== false);
@@ -263,7 +322,7 @@ export class Switchboard extends DurableObject {
         const line = lineOf(s.track);
         const r2 = { id: newId(), mode: 'ai', track: s.track, scenario_id: s.id, title: s.title, trainee_id: tr.id, trainee_name: tr.name, batch: tr.batch, trainer: me.name,
           status: 'live', created_at: t, answered_at: t,
-          data: { scenario: s, assigned: { by: me.name, cid: me.cid, at: t }, graded: !!m.graded, metrics: {}, note: {}, transcript: [], events: [{ t: 'ring', at: t }] } };
+          data: { scenario: s, assigned: { by: me.name, cid: me.cid, at: t }, graded: !!m.graded, voice: voiceOk(m.voice), metrics: {}, note: {}, transcript: [], events: [{ t: 'ring', at: t }] } };
         this.save(r2);
         phones.forEach((w) => this.setAtt(w, { call: r2.id, hand: false, handAt: 0 }));
         const view = traineeView(s);
@@ -347,6 +406,7 @@ export class Switchboard extends DurableObject {
         if (!trainer) { r.data.lost = { a: t }; this.save(r); await this.armAlarm(t + GRACE_MS); }
         await this.armAlarm(t + MAX_CALL_MS);
         this.presence();
+        if (r.data.conf) this.confTell(this.row(r.data.conf.parent));
         return;
       }
       case 'decline':   // busy: the trainee is on a practice call
@@ -434,6 +494,64 @@ export class Switchboard extends DurableObject {
         this.send(this.byCid(r.data.trainerCid), { t: 'note', callId: r.id, note: r.data.note });
         return;
       }
+      /* ----- 🔎 Case lookup: the case file the trainee is working from -----
+         The trainee opens a file during the call and marks it as the one the call is about; the
+         trainer sees it live (right file or wrong one), and the grade says which they worked from. */
+      case 'case': {
+        if (!party || me.role !== 't' || !['live', 'ended'].includes(r.status)) return;
+        if (r.data.noteSubmittedAt) return;
+        const id = String(m.caseId || '').slice(0, 20);
+        if (id && !CASES[id]) return;
+        const mx = r.data.metrics = r.data.metrics || {};
+        const want = (r.data.scenario && r.data.scenario.caseId) || '';
+        mx.wantCase = want;
+        if (id) {
+          mx.casePicks = (mx.casePicks || []).slice(-19);
+          if (!mx.casePicks.length || mx.casePicks[mx.casePicks.length - 1].id !== id) mx.casePicks.push({ id, at: t });
+        }
+        mx.caseId = id;
+        mx.rightCase = want ? id === want : null;
+        r.data.caseId = id;
+        this.save(r);
+        const msg = { t: 'case', callId: r.id, caseId: id, name: id ? CASES[id].name : '', want, right: mx.rightCase };
+        if (r.data.conf) { const p = this.row(r.data.conf.parent); if (p) this.send(this.byCid(p.data.trainerCid), msg); }
+        if (r.data.assigned) this.tellTrainers(msg); else this.send(this.byCid(r.data.trainerCid), msg);
+        return;
+      }
+
+      /* ----- 👥 Merge calls (a conference) -----
+         The trainer, already on a live call, rings a second (or third) trainee and merges them in.
+         The extra trainee's phone rings like any call and they answer it the same way; the trainer's
+         browser mixes the voices, so everyone on the call hears everyone. The merged legs aren't
+         graded or recorded of their own: the conference is one call, recorded on the trainer's side. */
+      case 'conf-ring': {
+        if (me.role !== 'a') return;
+        const p = r;
+        if (!p || p.mode !== 'live' || p.status !== 'live' || p.data.trainerCid !== me.cid) return err('Start a call first, then merge another trainee into it.');
+        if (p.data.conf) return err('Merge from the first call on the line, not from a merged one.');
+        const tr = this.trainee(String(m.traineeId || ''));
+        if (!tr || tr.archived) return this.send(ws, { t: 'conf-failed', callId: p.id, reason: 'Dial the trainee you want to merge in.' });
+        const legs = this.legsOf(p);
+        if (legs.length >= MAX_CONF) return this.send(ws, { t: 'conf-failed', callId: p.id, reason: `A conference holds you and ${MAX_CONF + 1} trainees.` });
+        if (tr.id === p.trainee_id || legs.some((x) => x.trainee_id === tr.id)) return this.send(ws, { t: 'conf-failed', callId: p.id, reason: `${tr.name} is already on this call.` });
+        const phones = this.open('u:' + tr.id).filter((w) => this.att(w).role === 't');
+        if (!phones.length) return this.send(ws, { t: 'conf-failed', callId: p.id, reason: `${tr.name}'s phone isn't open.` });
+        if (phones.some((w) => { const a = this.att(w); if (!a.call) return false; const c = this.row(a.call); return c && ['ringing', 'live'].includes(c.status); })) return this.send(ws, { t: 'conf-failed', callId: p.id, reason: `${tr.name} is on another call.` });
+        const s = p.data.scenario;
+        const r2 = { id: newId(), mode: 'live', track: s.track, scenario_id: s.id, title: s.title + ' (conference)', trainee_id: tr.id, trainee_name: tr.name, batch: tr.batch, trainer: me.name,
+          status: 'ringing', created_at: t, data: { scenario: s, trainerCid: me.cid, graded: false, record: false, withheld: !!p.data.withheld,
+            conf: { parent: p.id }, metrics: {}, note: {}, ticks: [], events: [{ t: 'ring', at: t }] } };
+        this.save(r2);
+        p.data.legs = [...legs.map((x) => x.id), r2.id];
+        this.save(p);
+        phones.forEach((w) => { this.setAtt(w, { call: r2.id, hand: false, handAt: 0 }); this.send(w, Object.assign({ t: 'incoming' }, this.brief(r2, 't'))); });
+        this.send(ws, Object.assign({ t: 'conf-ringing', parent: p.id }, this.brief(r2, 'a')));
+        await this.armAlarm(t + RING_MS);
+        this.presence();
+        this.confTell(p);
+        return;
+      }
+
       case 'ticks':   // the trainer's live checklist
         if (!party || me.role !== 'a') return;
         r.data.ticks = (Array.isArray(m.ticks) ? m.ticks : []).map(Number).filter((x) => x >= 0 && x < 30);
@@ -455,6 +573,14 @@ export class Switchboard extends DurableObject {
         this.save(r);
         this.setAtt(ws, { call: r.id });
         this.send(ws, Object.assign({ t: 'resumed' }, this.brief(r, me.role)));
+        // A console that reloaded can't pick the mixing back up, so a conference ends with the tab
+        // that was holding it; the first call carries on.
+        if (me.role === 'a' && (r.data.legs || []).length) {
+          const legs = this.legsOf(r);
+          r.data.legs = []; this.save(r);
+          legs.forEach((x) => this.endCall(x, 'trainer', 'conference-ended'));
+          if (legs.length) this.send(ws, { t: 'error', msg: `The conference with ${legs.map((x) => x.trainee_name).join(' and ')} ended when this page reloaded; you're back on the call with ${r.trainee_name}.` });
+        }
         this.send(this.peerOf(r, me.role), { t: 'peer-back', callId: r.id, cid: me.cid });
         this.presence();
         return;
@@ -550,13 +676,13 @@ export class Switchboard extends DurableObject {
   deleteCall(id) { this.sql.exec('DELETE FROM calls WHERE id = ?', id); return true; }
 
   // A practice call with the AI caller (the trainee's browser runs the call).
-  async startAiCall(who, scenarioId) {
+  async startAiCall(who, scenarioId, voice) {
     const s = this.scenario(scenarioId);
     if (!s) return { error: 'No such scenario', status: 404 };
     if (s.ai === false && who.role !== 'a') return { error: 'This call is for live practice with a trainer only.', status: 403 };
     const t = now();
     const r = { id: newId(), mode: 'ai', track: s.track, scenario_id: s.id, title: s.title, trainee_id: who.id, trainee_name: who.name, batch: who.batch || '', trainer: '',
-      status: 'live', created_at: t, answered_at: t, data: { scenario: s, metrics: {}, note: {}, transcript: [], events: [] } };
+      status: 'live', created_at: t, answered_at: t, data: { scenario: s, voice: voiceOk(voice), metrics: {}, note: {}, transcript: [], events: [] } };
     this.save(r);
     await this.armAlarm(t + (Math.min(15, Math.max(2, Number(this.env.AI_MAX_MINUTES) || 8)) + 2) * 60000);
     return { id: r.id, scenario: s };
@@ -700,7 +826,7 @@ export class Switchboard extends DurableObject {
     const status = r.status === 'live' ? (a.answeredAt ? 'live' : 'ringing') : r.status;
     return { callId: r.id, traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, ext: (this.trainee(r.trainee_id) || {}).ext || '', title: r.title, track: r.track,
       status, outcome: a.outcome || '', by: a.by || r.trainer || '', createdAt: r.created_at, answeredAt: a.answeredAt || null, endedAt: r.ended_at || null, graded: !!d.graded,
-      note: d.note || {}, grade: (d.autograde && d.autograde.state) || '', score: r.score == null ? null : r.score };
+      note: d.note || {}, voice: d.voice || '', grade: (d.autograde && d.autograde.state) || '', score: r.score == null ? null : r.score };
   }
   freePhones(r) {
     for (const w of this.open('u:' + r.trainee_id)) if (this.att(w).call === r.id) this.setAtt(w, { call: null });

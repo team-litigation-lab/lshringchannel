@@ -104,6 +104,18 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   if (!/SANTOS MARIA/.test(await te.textContent('#device .lcd'))) throw new Error('The AI call should show the caller ID: ' + await te.textContent('#device .lcd'));
   await tr.waitForFunction(() => /Ringing/.test(document.querySelector('#aiCalls').textContent));
   ok(`🤖 AI caller from the dialer: the trainee's own phone rings (ext ${ext}, SANTOS MARIA), and the console lists the call`);
+  // 🎭 AI caller setup: the trainer picks the calls to draw from, the voice and who to ring
+  await te.click('[data-act="decline"]');
+  await tr.waitForFunction(() => /Declined/.test(document.querySelector('#aiCalls').textContent));
+  await tr.click('[data-act="aisetup"]');
+  await tr.waitForSelector('.modal #asScens [data-asid]');
+  await tr.selectOption('.modal #asVoice', 'Charon');
+  await tr.click('.modal [data-asid="ft_rc_appt"]');
+  await tr.click('.modal [data-aswhoall]');
+  await tr.click('.modal [data-assend]');
+  await te.waitForSelector('#device .lcd.ringing', { timeout: 10000 });
+  await tr.waitForFunction(() => /Ringing/.test(document.querySelector('#aiCalls').textContent) && /🎚 Charon/.test(document.querySelector('#aiCalls').textContent));
+  ok('🎭 AI caller setup: the chosen call, the chosen voice (Charon) and everyone free — the console lists the call with its voice');
   await te.click('[data-act="answer"]');
   await te.waitForSelector('#device .lcd.live', { timeout: 15000 });
   await tr.waitForFunction(() => /On the call/.test(document.querySelector('#aiCalls').textContent) && /on a call/.test(document.querySelector('#roster').textContent));

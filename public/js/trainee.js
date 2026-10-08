@@ -44,6 +44,7 @@
   T.onPresence = function () {
     const el = U.$('#trOnline');
     if (el) el.innerHTML = trainerLine();
+    renderSide();
     if (!App.trainersOnline && App.hand) { /* keep the hand up: it shows when a trainer comes on */ }
   };
   const trainerLine = () => App.trainersOnline ? `🎓 ${App.trainersOnline} trainer${App.trainersOnline > 1 ? 's' : ''} online` : 'No trainer online';
@@ -85,12 +86,15 @@
         if (!mine) return;
         if (p.needRejoin) return;   // waits for the trainee's click (browsers need one to play audio)
         return;
+      // 👥 Merged into a conference: who else is on the call with you.
+      case 'conf-parties': if (mine) { p.conf = m.on ? { names: m.names || [], others: m.others || [], trainer: m.trainer || '' } : null; renderDevice(); } return;
       case 'ended': if (mine) endLive(m); return;
     }
   };
 
   const fromBrief = (m) => ({ mode: 'live', callId: m.callId, line: m.line, lineLabel: m.lineLabel, lineNumber: m.lineNumber, callerId: m.callerId, track: m.track,
-    hideCases: m.hideCases || [], rec: !!m.recording, trainer: m.trainer, note: {}, muted: false, held: false });
+    hideCases: m.hideCases || [], rec: !!m.recording, trainer: m.trainer, note: {}, muted: false, held: false, caseId: m.caseId || '',
+    merged: !!m.conf });   // merged: this phone was rung into a call the trainer already had on the line
 
   function incoming(m) {
     if (App.p && active(App.p)) {
@@ -307,7 +311,7 @@
   async function startAi(scenarioId, opts) {
     if (App.p && active(App.p)) return U.toast('Finish the call you are on first.', 'error');
     let r;
-    try { r = await API.post('/api/ai/start', { scenarioId }); } catch (e) { return U.toast(e.message, 'error'); }
+    try { r = await API.post('/api/ai/start', { scenarioId, voice: (opts && opts.voice) || '' }); } catch (e) { return U.toast(e.message, 'error'); }
     const s = r.scenario;
     const line = App.cfg.lines[s.line];
     App.p = { mode: 'ai', status: 'waiting', callId: r.callId, scenario: s, surprise: !!opts.surprise, typed: !!opts.typed, showTranscript: !!opts.transcript,
@@ -408,7 +412,39 @@
   /* =========================================================
      Rendering
      ========================================================= */
-  function renderAll() { if (!onPage()) { App.onCallBar(); return; } renderDevice(); renderWork(); App.onCallBar(); }
+  function renderAll() { if (!onPage()) { App.onCallBar(); return; } renderDevice(); renderSide(); renderWork(); App.onCallBar(); }
+
+  /* ---------- ☎ the switchboard beside the phone ----------
+     The same board the trainer works from, as much of it as a trainee needs: their own desk line, the
+     trainers who are on, and the rest of their batch with their extensions. It folds away to a thin
+     rail (the phone and the workspace take the room back). */
+  const FOLD = 'tside';
+  function renderSide() {
+    const el = U.$('#tside'); if (!el) return;
+    const wrap = el.parentElement;
+    const folded = App.folded(FOLD);
+    if (wrap) wrap.classList.toggle('side-folded', folded);
+    if (folded) { el.innerHTML = App.railHTML(FOLD, 'Switchboard', '☎'); return; }
+    const peers = (App.peers || []).slice().sort((a, b) => (a.me ? -1 : b.me ? 1 : 0) || (b.hand - a.hand) || a.name.localeCompare(b.name));
+    const desks = App.desks || [];
+    const mine = peers.find((x) => x.me);
+    const batch = (mine && mine.batch) || (App.me && App.me.batch) || '';
+    el.innerHTML = `<div class="card roster side-card">
+      <div class="card-head"><h3>☎ Switchboard</h3><span class="spacer"></span><span class="badge green">${peers.length || 1} online</span>${App.foldKey(FOLD, 'the switchboard')}</div>
+      <div class="my-line">
+        <div class="small muted">My line</div>
+        <div class="nm">${esc((App.me && App.me.name) || 'Me')}</div>
+        <div class="bt">${esc(batch || 'No batch')}${App.myExt ? ` · ext <span class="mono">${esc(App.myExt)}</span>` : ''} · ${App.status === 'away' ? 'away' : 'available'}${App.hand ? ' · ✋ asked for a call' : ''}</div>
+      </div>
+      <div class="side-h small muted">${desks.length ? 'Trainers on' : 'No trainer online'}</div>
+      ${desks.map((d) => `<div class="tr" style="cursor:default"><span class="led ${d.call ? 'ringing' : 'available'}"></span>
+        <div style="flex:1;min-width:0"><div class="nm">🎓 ${esc(d.name)}</div><div class="bt">${d.ext ? `ext <span class="mono">${esc(d.ext)}</span> · ` : ''}${d.call ? 'on a call' : 'free'}</div></div></div>`).join('')}
+      <div class="side-h small muted">${esc(batch ? batch : 'All batches')}</div>
+      ${peers.map((x) => `<div class="tr ${x.me ? 'sel' : ''}" style="cursor:default"><span class="led ${x.call ? 'ringing' : x.status}"></span>
+        <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)}${x.me ? ' <span class="badge">you</span>' : ''} ${x.hand ? '<span class="hand-wave" title="Asked for a mock call">✋</span>' : ''}</div>
+        <div class="bt">${x.ext ? `ext <span class="mono">${esc(x.ext)}</span> · ` : ''}${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}</div></div></div>`).join('') || '<div class="empty small">Nobody else is online.</div>'}
+      <p class="small muted" style="margin:10px 0 0">Your trainer dials your extension to ring this phone.</p></div>`;
+  }
   T.renderAll = renderAll;
 
   function idleInfo(mode) {
@@ -448,6 +484,7 @@
         : `<div class="dev-msg transfer">📵 No answer at ext ${esc(tx.ext)} (${esc(tx.to)}). ${p.mode === 'ai' ? 'You are back with the caller.' : 'Press <b>Resume</b> to go back to the caller.'}</div>`;
     } else if (p && p.peerLost) msg = `<div class="dev-msg lost">The caller's connection dropped. Waiting for them to come back…</div>`;
     else if (p && p.slow && p.status === 'connecting') msg = `<div class="dev-msg lost">Still connecting the audio… If it doesn't connect, your network may be blocking calls: tell your trainer (the TURN relay fixes this).</div>`;
+    else if (p && p.conf && p.status === 'live') msg = `<div class="dev-msg coach">👥 <b>Conference call.</b> On the line with you: ${esc(p.conf.others.join(', ') || 'your trainer')}${p.conf.trainer ? ' and ' + esc(p.conf.trainer) + ' (the caller)' : ''}. Everyone hears everyone.</div>`;
     else if (p && p.notice && p.status === 'live') msg = `<div class="dev-msg">${esc(p.notice)}</div>`;
     else if (p && p.classOn && p.status === 'live') msg = `<div class="dev-msg coach">🎧 <b>Your class is listening in Google Meet.</b> If you're in the Meet too, mute your Meet mic and the Meet tab (right-click the tab → Mute site) until the call ends, so there's no echo.</div>`;
     else if (p && p.rec && p.status === 'ringing') msg = `<div class="dev-msg">● This call will be recorded for your review.</div>`;
@@ -481,7 +518,11 @@
     const ended = p.status === 'ended';
     const tabs = [['note', '📝 Note'], ['lookup', '🔎 Case lookup'], ['dir', '📇 Directory'], ['rules', '📘 Rules']];
     if (p.mode === 'ai' && (p.showTranscript || ended)) tabs.splice(1, 0, ['tr', p.voice === 'text' ? '💬 Conversation' : '💬 Transcript']);
-    const first = p.mode === 'ai' && p.voice === 'text' && !ended ? 'tr' : 'note';
+    // On a live mock call the case file comes first, as at the real front desk: look the caller up,
+    // open the file (in the CMS if you like), then take the note.
+    const start = p.mode === 'ai' && p.voice === 'text' && !ended ? 'tr' : p.mode === 'live' && !ended ? 'lookup' : 'note';
+    // The pane the trainee last opened stays open: the screen redraws often during a call.
+    const first = p.tab && tabs.some(([k]) => k === p.tab) ? p.tab : start;
     let wrap = '';
     if (ended) {
       if (p.mode === 'ai' && p.submitted) wrap = gradeHTML(p);
@@ -498,10 +539,11 @@
     el.innerHTML = `${wrap}<div class="work-tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === first ? 'on' : ''}">${l}</button>`).join('')}</div>
       <div class="pane ${first === 'note' ? 'on' : ''}" data-pane="note">${App.noteFormHTML(track, p.note, p.submitted)}</div>
       ${trPane.replace('class="pane"', `class="pane ${first === 'tr' ? 'on' : ''}"`)}
-      <div class="pane" data-pane="lookup">${App.lookupHTML()}</div>
+      <div class="pane ${first === 'lookup' ? 'on' : ''}" data-pane="lookup">${App.lookupHTML(p)}</div>
       <div class="pane" data-pane="dir">${App.directoryHTML(p.status === 'live')}</div>
       <div class="pane" data-pane="rules">${App.rulesHTML(track)}</div>`;
-    App.bindLookup(el, p.hideCases);
+    App.bindLookup(el, { hide: p.hideCases, live: !ended && p.status !== 'waiting',
+      onPick: (id) => { p.caseId = id; if (p.mode === 'live' || p.assigned) App.board.send({ t: 'case', callId: p.callId, caseId: id }); } });
     const box = U.$('#trLines', el); if (box) box.scrollTop = box.scrollHeight;
   }
 
@@ -547,11 +589,14 @@
     root.addEventListener('click', (e) => {
       const tab = e.target.closest('[data-tab]');
       if (tab) {
+        if (App.p) App.p.tab = tab.dataset.tab;
         const w = U.$('#work');
         U.$$('[data-tab]', w).forEach((b) => b.classList.toggle('on', b === tab));
         U.$$('[data-pane]', w).forEach((x) => x.classList.toggle('on', x.dataset.pane === tab.dataset.tab));
         return;
       }
+      const fold = e.target.closest('[data-fold]');
+      if (fold) { App.folded(fold.dataset.fold, !App.folded(fold.dataset.fold)); renderSide(); return; }
       const b = e.target.closest('[data-act]'); if (!b) return;
       const act = b.dataset.act;
       if (act === 'answer') answer();
@@ -600,7 +645,7 @@
       if (App.p && App.p.mode === 'ai' && !App.p.assigned) App.p = null;
       if (App.p && App.p.assigned && App.p.status === 'ended' && App.p.submitted && !App.p.grading && App.p.seenGrade) App.p = null;
       if (App.p && App.p.status === 'ended' && App.p.submitted) App.p = null;   // finished and submitted: ready for the next call
-      app.innerHTML = `<div class="phone-layout"><div class="device" id="device"></div><div class="work card" id="work"></div></div>`;
+      app.innerHTML = `<div class="phone-layout with-side"><div class="tside" id="tside"></div><div class="device" id="device"></div><div class="work card" id="work"></div></div>`;
       bindPage(app.firstChild);
       renderAll();
     }
@@ -633,6 +678,7 @@
           <span class="spacer"></span>
           <label class="check small"><input type="checkbox" id="optTr"> Show the live transcript</label>
           <label class="check small"><input type="checkbox" id="optTyped"> Type instead of talking</label>
+          <label class="check small" title="The voice the AI caller speaks with: the same call, a different person on the line">🎚 <select class="input input-sm" id="optVoice">${App.voiceOptions(T.voice)}</select></label>
           <button class="btn btn-orange" id="surprise">🎲 Surprise me</button>
         </div>
         <div class="scen-grid">${list.map((s) => `<div class="scen" data-id="${esc(s.id)}">
@@ -640,7 +686,7 @@
             <h4>${esc(s.title)}</h4><p>${esc(s.facts || '')}</p>
             <div><button class="btn btn-primary btn-sm">📞 Take this call</button></div></div>`).join('') || '<div class="empty">No practice calls on this line yet.</div>'}</div>
       </div>`;
-      const opts = () => ({ transcript: U.$('#optTr').checked, typed: U.$('#optTyped').checked });
+      const opts = () => { T.voice = U.$('#optVoice').value; return { transcript: U.$('#optTr').checked, typed: U.$('#optTyped').checked, voice: T.voice }; };
       U.$('#trk').onclick = (e) => { const b = e.target.closest('[data-track]'); if (b) { T.track = b.dataset.track; App.views.practice.render(); } };
       app.querySelector('.scen-grid').onclick = (e) => { const c = e.target.closest('[data-id]'); if (c) startAi(c.dataset.id, opts()); };
       U.$('#surprise').onclick = () => { if (!list.length) return; const s = list[Math.floor(Math.random() * list.length)]; startAi(s.id, Object.assign(opts(), { surprise: true })); };

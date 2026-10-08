@@ -38,7 +38,10 @@ Ring Channel installs as an app from Chrome or Edge: its own window with no brow
 
 A trainee can take a call where the AI plays the caller, two ways:
 - **The trainee starts it:** **🎧 Practice** (see *AI practice callers*).
-- **The trainer sends it:** on the dialer, dial the trainee's extension and press **🤖 AI caller**.
+- **The trainer sends it:** on the dialer, dial the trainee's extension and press **🤖 AI caller**, or **🎭 Choose…** (also **🎭 Send AI callers…** on 🤖 AI calls) for the setup:
+  - **🎚 The caller's voice**: the voice the AI speaks with (Kore, Aoede, Leda, Zephyr, Puck, Charon, Fenrir, Orus), or left to suit the caller. The same call, a different person on the line; the AI calls list shows the voice each call used. Trainees get the same 🎚 list on 🎧 Practice.
+  - **🎭 The calls the AI may play**: tick one, or a few for it to draw from; with none ticked it plays any call on the line.
+  - **👥 Who to ring**: tick any number of trainees who are free (or **Everyone free**), and each gets a call drawn from what you ticked, graded or not.
   - The AI plays the call picked under the dialer, or a random call on the line when none is picked. Live-only calls can't be sent.
   - **The trainee's own phone (My phone) rings** like any call, with the caller ID on the line. They answer and talk out loud (Hold, Transfer, Case lookup and the note all work), and **AI CALLER** shows once they answer. It rings out after 45 seconds.
   - **🤖 AI calls**, under the switchboard, lists them: ringing, on the call (with the time), missed or declined, then the AI's score. Trainers can send AI callers to several trainees at once.
@@ -52,11 +55,12 @@ A trainee can take a call where the AI plays the caller, two ways:
 **Trainee** (📞 My phone)
 1. Opens **☎ LSH Ring Channel** from the LSH Training Portal and lands on **My phone**, signed in (see *On the LSH Training Portal*). They keep it open with a headset on. **🎧 Audio check** tests the microphone, the headset and the speaker.
    Each trainee gets a **desk extension** (7001, 7002, … in the order they first open Ring Channel), shown on their phone; it's the number the trainer dials.
+   **☎ The switchboard** sits beside the phone: their own line (name, batch, extension, available or away), the trainers who are on with their extensions, and the rest of their batch. **«** folds it away to a rail, and the rail brings it back; it stays as they left it on that computer.
 2. Sets **● Available** (or **◌ Away**). **✋ Ask for a call** raises a hand on the trainer's switchboard.
 3. When the phone rings, it shows the line (Main Line or Intake Line) and the caller ID. The trainee answers within 3 rings.
-4. During the call, beside the phone:
+4. During the call, beside the phone (**🔎 Case lookup** opens first on a live call, as at the real front desk: look the caller up, then take the note):
+   - **🔎 Case lookup**: the CMS Training Library case files, searched by name, phone, DOB or MC number (nothing shows until you search, like the real front desk). A hit opens as a **preview** of the file, with **✅ This is the case file** (the trainer sees which file they chose, and the grade says whether it was the right one for the call) and **🗂 Open in the CMS ↗**, which opens that case in the CMS Training Library **signed in as them** (a fresh one-use Portal ticket, as the Portal opens the CMS; it needs `PORTAL_SSO_SECRET` here, otherwise the CMS asks them to come in from the Portal);
    - **📝 Note**: the message slip, the calendar entry or the intake note, by line;
-   - **🔎 Case lookup**: the CMS Training Library case files, searched by name, phone, DOB or MC number (nothing shows until you search, like the real front desk);
    - **📇 Directory**: the firm's extensions, with Transfer buttons;
    - **📘 Rules**: the front-desk rules and the line's reminders.
 5. The phone keys are **Mute**, **🔊 Speaker** (see *The speaker key*), **Hold** (hold music plays to the caller), **Transfer** (pick an extension; the caller is held while it rings) and **Hang up**.
@@ -64,17 +68,20 @@ A trainee can take a call where the AI plays the caller, two ways:
 
 **Trainer** (🎛 Console)
 1. Opens **☎ LSH Ring Channel** from the Portal (Training Directory or Master Control) and lands on the console, signed in under their Portal name.
-2. **☎ Switchboard** (left) shows every trainee online, by batch, with their extension: available, away, on a call, or ✋ asking for a call. It works as the phone's contact list: clicking a trainee puts their extension on the dialer.
+2. The console is the dialer with a sidebar on each side, and **«** on either one folds it away to a rail (it stays folded on that computer):
+   - **☎ Switchboard** (left, under the LSH mark): the trainer's own line with **their own extension** (8001, 8002, … one per trainer account, so a batch with two trainers on sees which line each is calling from), the other trainers who are on, and every trainee online by batch with their extension: available, away, on a call, or ✋ asking for a call. It works as the phone's contact list: clicking a trainee puts their extension on the dialer.
+   - **🤖 AI calls** (right): the AI calls on the line and the ones that ended, with **🎭 Send AI callers…** on top (see *🤖 AI calls*).
 3. The **☎ dialer** is a desk phone on screen:
    - **Dial the trainee's extension** on the keypad (or type it; Backspace deletes, Esc clears). The screen says who it reaches: *Ready to call* with the trainee's name, *Not signed in*, a firm extension (201 is Atty. Reyes), or *No such extension*.
    - The **line keys** under the screen pick the line: Reception, Calendar (both ring the Main Line) or Intake (the Intake Line). The line decides the note the trainee takes and the metrics the call is graded on.
    - **🎭 The call to play** is optional, in the list under the dialer (Beginner to Advanced, by line). Pick one to play its script, or leave **🎙 Open call: no script** selected and play any caller you like. The dialer's screen shows the caller ID the trainee will see (WIRELESS CALLER on an open call), the line, and the call.
    - The soft keys under the keypad: **📋 Graded** (on by default; see *Graded mock calls and autograding*; a graded call is always recorded), **Record** (on by default) and **🙈 Hide ID** (the trainee sees PRIVATE CALLER).
    - **📞** (or Enter) rings the trainee. The trainer hears the ringback. After a call the screen clears; 📞 on an empty screen brings back the last number (redial).
-4. On the call, the dialer shows who's on the line, the timer, 📋 GRADED, REC, the trainee's hold / mute, the connection quality (and whether it's going through the relay), and 🔊 SPEAKER. Its keys are **Mute**, **🔊 Speaker**, **⏸ Coaching time-out**, **📺 Class view** and **End call**. Beside it:
+4. On the call, the dialer shows who's on the line, the timer, 📋 GRADED, REC, the trainee's hold / mute, the connection quality (and whether it's going through the relay), and 🔊 SPEAKER. Its keys are **Mute**, **🔊 Speaker**, **⏸ Coaching time-out**, **📺 Class view**, **👥 Merge call** (see *👥 Merge calls*) and **End call**. Beside it:
    - **🎭 You are the caller**: the opening line, what the caller knows and how they act, the situation, who is out of the office (on an open call: any case file to play a client from);
    - **✅ Live checklist**: the call's goals, ticked as they happen;
-   - **📝 The trainee's note**, live.
+   - **📝 The trainee's note**, live;
+   - **📁 the case file the trainee opened** in 🔎 Case lookup, and whether it's the one this call is about.
 5. When the trainee transfers, a panel asks what happens: **Picks up** (the call is handed over and ends), **No answer** or **Voicemail**. The scenario says who is out.
 6. **⏸ Coaching time-out** pauses the role-play so the trainer can coach as themselves; the trainee's phone shows it. **▶ Resume** goes back to the role-play.
    **📺 Class view** opens a tab to present in Google Meet, so the batch can listen (see *In a Google Meet class*).
@@ -84,6 +91,14 @@ A trainee can take a call where the AI plays the caller, two ways:
    - a verdict, a summary and "next time" tips.
 
    When the AI's grade is in, the scorecard holds it: **✅ Approve the AI grade & send**, or change any score or feedback and **📨 Send to the trainee**. **✨ Grade again with AI** re-grades the call.
+
+## 👥 Merge calls (a conference)
+
+**👥 Merge call** on the dialer rings a second trainee into the call that's already on the line, and up to two can be merged in. Their phone rings like any call and they answer it the same way; once they're in, **everyone hears everyone**: the trainer's browser mixes the voices and sends each person the trainer's microphone plus the others, never their own voice back.
+
+- The console lists who is on the line under **👥 Conference**, with **⏏ Drop** to take one off; the dialer's screen shows **👥 CONFERENCE**. Each merged trainee's phone says who else is on the call.
+- The conference is **one call**: it's recorded and graded as the first trainee's call (every voice is in the recording), and a merged leg isn't graded of its own. On a conference there's no extension to ring, so a merged trainee's **Transfer** comes back as no answer.
+- Ending the call, or dropping the last one merged in, puts the first call back on the plain microphone. A conference ends if the console's page reloads (the trainer is told); the first call carries on.
 
 ## Sound
 

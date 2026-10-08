@@ -196,6 +196,53 @@
     close() { this.closed = true; clearInterval(this.statsTimer); clearTimeout(this.dt); try { this.pc.close(); } catch (e) {} }
   }
 
+  /* 👥 Merge calls (a conference): the trainer's browser is the bridge.
+     Each person on the call gets their own mix: the trainer's microphone plus everyone else's voice,
+     but never their own (that would be an echo). The mix is sent down the call that is already open,
+     so nothing changes on the trainees' phones. Also hands the recorder one stream with every voice. */
+  class Mixer {
+    constructor(micStream) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new Ctx();
+      this.mic = this.ctx.createMediaStreamSource(micStream);
+      this.legs = new Map();   // callId → { stream, src, dest }
+      this.all = this.ctx.createMediaStreamDestination();   // every trainee's voice in one stream (the Class view plays it)
+    }
+    // The people on the call (one entry per open leg, the first call included).
+    set(id, stream) {
+      let leg = this.legs.get(id);
+      if (!leg) { leg = { dest: this.ctx.createMediaStreamDestination() }; this.legs.set(id, leg); }
+      if (stream && leg.stream !== stream) {
+        if (leg.src) { try { leg.src.disconnect(); } catch (e) {} }
+        leg.stream = stream;
+        try { leg.src = this.ctx.createMediaStreamSource(stream); } catch (e) { leg.src = null; }
+        if (leg.src) leg.src.connect(this.all);
+      }
+      this.wire();
+      return this.trackFor(id);
+    }
+    remove(id) {
+      const leg = this.legs.get(id);
+      if (!leg) return;
+      if (leg.src) { try { leg.src.disconnect(); } catch (e) {} }
+      this.legs.delete(id);
+      this.wire();
+    }
+    // Everyone hears the trainer and each other, nobody hears themselves.
+    wire() {
+      try { this.mic.disconnect(); } catch (e) {}
+      for (const [, leg] of this.legs) if (leg.src) { try { leg.src.disconnect(); } catch (e) {} leg.src.connect(this.all); }
+      for (const [id, leg] of this.legs) {
+        this.mic.connect(leg.dest);
+        for (const [other, x] of this.legs) if (other !== id && x.src) x.src.connect(leg.dest);
+      }
+    }
+    trackFor(id) { const leg = this.legs.get(id); return leg ? leg.dest.stream.getAudioTracks()[0] : null; }
+    voices() { return this.all.stream; }   // the trainees on the call, without the trainer's own microphone
+    resume() { try { if (this.ctx.state === 'suspended') this.ctx.resume(); } catch (e) {} }
+    close() { try { this.ctx.close(); } catch (e) {} this.legs.clear(); }
+  }
+
   // Both voices in one file. Chrome needs the remote stream to also play in an <audio> element (it does).
   class Recorder {
     constructor(streams) {
@@ -352,5 +399,5 @@
   if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => { Speaker.apply().catch(() => {}); });
   document.addEventListener('DOMContentLoaded', () => Speaker.register(document.getElementById('remoteAudio')));
 
-  window.VoIP = { Board, Mic, RtcCall, Recorder, ice, toWav8k, uploadForGrading, meter, Speaker, iceInfo: () => iceCache };
+  window.VoIP = { Board, Mic, RtcCall, Recorder, Mixer, ice, toWav8k, uploadForGrading, meter, Speaker, iceInfo: () => iceCache };
 })();

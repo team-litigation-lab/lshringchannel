@@ -132,7 +132,13 @@ table.list tr.click:hover td { background: #f8fafc; }
 
 /* ---------- the softphone (a desk phone on screen) ---------- */
 .phone-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
-@media (max-width: 960px) { .phone-layout { grid-template-columns: 1fr; } }
+.phone-layout.with-side { grid-template-columns: var(--ts, 250px) 360px minmax(0, 1fr); gap: 18px; }
+.phone-layout.with-side.side-folded { --ts: 52px; }
+@media (max-width: 1240px) { .phone-layout.with-side { --ts: 220px; gap: 14px; } }
+.phone-layout > * { min-width: 0; }
+.tside { position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow: auto; }
+@media (max-width: 1060px) { .phone-layout.with-side, .phone-layout.with-side.side-folded { grid-template-columns: 360px minmax(0, 1fr); } .tside { grid-column: 1 / -1; position: static; max-height: none; } }
+@media (max-width: 960px) { .phone-layout, .phone-layout.with-side, .phone-layout.with-side.side-folded { grid-template-columns: 1fr; } }
 .device { background: linear-gradient(160deg, #13254d, #0a1530 70%); color: #e2e8f0; border-radius: 26px; padding: 16px; box-shadow: 0 20px 50px rgba(8, 18, 38, .35), inset 0 1px 0 rgba(255, 255, 255, .06); position: sticky; top: 76px; }
 @media (max-width: 960px) { .device { position: static; } }
 .dev-head { display: flex; align-items: center; gap: 8px; padding: 2px 4px 12px; font-size: 13px; color: #94a3b8; }
@@ -195,6 +201,9 @@ table.list tr.click:hover td { background: #f8fafc; }
 .lookup-hit { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 8px; cursor: pointer; }
 .lookup-hit:hover { border-color: #93c5fd; background: #f8fbff; }
 .lookup-hit.open { border-color: var(--blue); cursor: default; background: #fff; }
+.lookup-hit.mine { border-color: var(--green); box-shadow: 0 0 0 2px rgba(22, 163, 74, .15); }
+.case-head { text-transform: uppercase; letter-spacing: .5px; font-weight: 700; margin: 8px 0 4px; }
+.case-body .row { margin-top: 8px; }
 .dir-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eef2f7; }
 .dir-row .ext { font-family: var(--mono); font-weight: 700; color: var(--navy); width: 44px; }
 .rules li { margin-bottom: 8px; }
@@ -215,12 +224,50 @@ table.list tr.click:hover td { background: #f8fafc; }
 .lvl-Beginner { background: #dcfce7; color: #166534; } .lvl-Intermediate { background: var(--blue-soft); color: #1e40af; } .lvl-Advanced { background: #fee2e2; color: #991b1b; }
 
 /* ---------- trainer console ---------- */
-.console { display: grid; grid-template-columns: 310px 1fr; gap: 20px; align-items: start; }
-@media (max-width: 1000px) { .console { grid-template-columns: minmax(0, 1fr); } }
+.console { display: grid; grid-template-columns: var(--sl, 290px) minmax(0, 1fr) var(--sr, 290px); gap: 18px; align-items: start; }
+.console.l-folded { --sl: 52px; }
+.console.r-folded { --sr: 52px; }
+@media (max-width: 1340px) { .console { --sl: 250px; --sr: 250px; gap: 14px; } }
+@media (max-width: 1140px) { .console, .console.l-folded, .console.r-folded { grid-template-columns: minmax(0, 1fr); } }
 .console > *, .dial-stage > *, .dial-side > * { min-width: 0; }
 .console-side { position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow: auto; }
 .console-side > .card + .card { margin-top: 16px; }
-@media (max-width: 1000px) { .console-side { position: static; max-height: none; } }
+@media (max-width: 1140px) { .console-side { position: static; max-height: none; } .console-side.right { order: 3; } }
+
+/* the two sidebars fold away to a rail, and the trainee's switchboard with them */
+.fold-btn { border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 7px; width: 24px; height: 24px; line-height: 1; cursor: pointer; font-weight: 700; }
+.fold-btn:hover { border-color: var(--blue); color: var(--navy); }
+.rail { width: 100%; border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 12px 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--navy); font: inherit; }
+.rail:hover { border-color: var(--blue); box-shadow: 0 4px 14px rgba(37, 99, 235, .08); }
+.rail .rail-ic { font-size: 20px; }
+.rail .rail-label { writing-mode: vertical-rl; font-size: 12px; font-weight: 700; letter-spacing: .4px; color: var(--muted); }
+@media (max-width: 1140px) { .rail .rail-label { writing-mode: horizontal-tb; } .rail { flex-direction: row; justify-content: center; } }
+/* the LSH mark over the switchboard */
+.side-brand { background: linear-gradient(160deg, #13254d, #0a1530 70%); border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; text-align: center; }
+.side-brand img { max-width: 100%; height: auto; display: block; margin: 0 auto 6px; }
+.side-brand .sb-sub { font-size: 11.5px; letter-spacing: .5px; text-transform: uppercase; color: #94a3b8; font-weight: 700; }
+.my-line { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; background: #f8fafc; }
+.my-line .nm { font-weight: 700; font-size: 14px; }
+.my-line .bt { font-size: 12px; color: var(--muted); }
+.side-h { text-transform: uppercase; letter-spacing: .5px; font-weight: 700; margin: 12px 0 4px; }
+.side-card { margin: 0; }
+/* the sidebars are narrow: their headings wrap instead of pushing the minimize key off the card */
+.tside .card-head, .console-side .card-head { flex-wrap: wrap; row-gap: 6px; }
+.tside .card-head h3, .console-side .card-head h3 { font-size: 15px; }
+.tside .card-head .spacer, .console-side .card-head .spacer { flex: 1 1 0; }
+
+/* 👥 conference: who is on the line */
+.conf-card { border-color: #a7f3d0; }
+.conf-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eef2f7; }
+.conf-row:last-of-type { border-bottom: 0; }
+
+/* 🎭 AI caller setup and other tick lists */
+.ai-setup h4 { margin: 14px 0 6px; }
+.pick-list { max-height: 230px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+.pick { display: flex; align-items: flex-start; gap: 8px; padding: 7px 8px; border-radius: 8px; cursor: pointer; font-size: 13.5px; }
+.pick:hover { background: #f8fbff; }
+.pick.on { background: var(--blue-soft); }
+.input-sm { width: auto; padding: 5px 8px; font-size: 13px; }
 .aic { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 4px; border-bottom: 1px solid var(--line); }
 .aic .aic-who { flex: 1 1 170px; min-width: 0; }
 .aic:last-child { border-bottom: 0; }
@@ -275,6 +322,8 @@ table.list tr.click:hover td { background: #f8fafc; }
 .dev-link { background: transparent; border: 0; color: #94a3b8; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap; font-family: inherit; padding: 2px 0; }
 .dev-link:hover { color: #fff; }
 .lb.spk { background: #172554; color: #93c5fd; } .lb.grd { background: #422006; color: #fdba74; }
+.lb.conf { background: #052e16; color: #86efac; }
+.key.conf.on { background: #166534; color: #dcfce7; }
 /* before a call: the dialer on top, the call to play (optional) under it */
 .dial-home { display: flex; justify-content: center; }
 .dial-home .dialer { width: 360px; max-width: 100%; position: static; }

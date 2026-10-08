@@ -58,6 +58,23 @@ function expOf(payload) {
   try { return Number(JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(payload.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)))).exp) || 0; } catch (e) { return 0; }
 }
 
+/* A ticket of our own, for sending someone on to another LSH platform signed in: 🔎 Case lookup
+   opens a case file in the CMS Training Library as the trainee who is on the call, instead of
+   dropping them on its sign-in page. It needs PORTAL_SSO_SECRET here (the same secret the Portal
+   signs with, which the CMS checks); without it there's no ticket to make and the plain link is used.
+   who: { admin, name } for a trainer, or { first, last, batch } for a trainee. */
+export async function mintTicket(env, who, minutes) {
+  const secret = String(env.PORTAL_SSO_SECRET || '').trim();
+  if (!secret) return '';
+  const exp = Date.now() + Math.min(10, Math.max(1, Number(minutes) || 5)) * 60000;
+  const t = who && who.admin ? { r: 'a', n: String(who.name || '').slice(0, 60), exp }
+    : { first: String((who && who.first) || '').slice(0, 40), last: String((who && who.last) || '').slice(0, 40), b: String((who && who.batch) || '').slice(0, 20), exp };
+  if (!t.r && (!t.first || !t.last)) return '';
+  const payload = b64url(enc.encode(JSON.stringify(t)));
+  const key = await crypto.subtle.importKey('raw', enc.encode('portal-sso:' + secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return payload + '.' + b64url(await crypto.subtle.sign('HMAC', key, enc.encode(payload)));
+}
+
 export async function readPortalTicket(env, ticket) {
   const t = String(ticket || '').trim();
   if (!t || t.length > 2000) return { ok: false, code: 'format' };
