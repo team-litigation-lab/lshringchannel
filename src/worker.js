@@ -52,7 +52,8 @@ function forTrainee(r) {
     scenario: scen, metrics: d.metrics || {}, note: d.note || {}, noteSubmittedAt: d.noteSubmittedAt || null, transcript: done ? d.transcript || [] : [],
     recording: d.recording || null, ai: d.ai || null, review: d.review && d.review.sentAt ? d.review : null,
     graded: !!d.graded, audioStats: done ? d.audioStats || null : null,
-    autograde: r.mode === 'ai' && d.autograde ? { state: d.autograde.state, error: d.autograde.error || '' } : null
+    autograde: r.mode === 'ai' && d.autograde ? { state: d.autograde.state, error: d.autograde.error || '' } : null,
+    assigned: d.assigned ? { by: d.assigned.by } : null
   };
 }
 function forTrainer(r) {
@@ -62,7 +63,7 @@ function forTrainer(r) {
     traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, trainer: r.trainer, reviewed: !!r.reviewed, score: r.score,
     scenario: d.scenario, metrics: d.metrics || {}, note: d.note || {}, noteSubmittedAt: d.noteSubmittedAt || null, transcript: d.transcript || [],
     recording: d.recording || null, ai: d.ai || null, aiDraft: d.aiDraft || null, review: d.review || null, reviewDraft: d.reviewDraft || null, ticks: d.ticks || [], events: d.events || [],
-    graded: !!d.graded, aiScore: d.aiScore != null ? d.aiScore : null, autograde: d.autograde || null, gradeAudio: !!d.gradeAudio, audioStats: d.audioStats || null
+    graded: !!d.graded, assigned: d.assigned ? { by: d.assigned.by } : null, aiScore: d.aiScore != null ? d.aiScore : null, autograde: d.autograde || null, gradeAudio: !!d.gradeAudio, audioStats: d.audioStats || null
   };
 }
 
@@ -250,6 +251,9 @@ export default {
         if (!got || !got.value) return json({ error: 'This recording has expired or was never saved.' }, 404);
         return new Response(got.value, { headers: { 'Content-Type': (got.metadata && got.metadata.type) || 'audio/webm', 'Cache-Control': 'private, no-store' } });
       }
+
+      /* ---------- 🤖 AI calls a trainer sent (the console's list, after a reload) ---------- */
+      if (path === '/api/ai/assigned') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ calls: await sb.assignedCalls() }); }
 
       /* ---------- AI practice callers ---------- */
       if (path === '/api/ai/start') {

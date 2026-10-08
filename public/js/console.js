@@ -60,6 +60,14 @@
     const t = App.t;
     const mine = t && t.callId === m.callId;
     switch (m.t) {
+      case 'ai-call': aiUpsert(m.call); return;
+      case 'ai-failed': U.toast(m.reason, 'error'); return;
+      case 'ai-line': {
+        const c = C.ai.get(m.callId); if (!c) return;
+        const x = c.lines.find((l) => l.id === m.id); if (x) x.text = m.text; else c.lines.push({ id: m.id, who: m.who, text: m.text });
+        if (C.follow === m.callId) renderFollow();
+        return;
+      }
       case 'ringing':
         C.ringSent = 0;
         App.t = Object.assign(fromBrief(m), { status: 'ringing' });
@@ -127,23 +135,82 @@
         endCall(m);
         return;
       case 'gone': if (mine) endCall({ by: 'system', reason: 'gone', status: m.status }); return;
-      case 'graded': if (mine && t.status === 'ended') { t.grade = m.state; renderEnded(); } return;
+      case 'graded':
+        if (C.ai.has(m.callId)) { if (m.state === 'done') C.loadAi(); else aiUpsert({ callId: m.callId, grade: m.state }); }
+        if (mine && t.status === 'ended') { t.grade = m.state; renderEnded(); }
+        return;
     }
   };
 
   /* ---------- the call ---------- */
+  // The trainee on the dialer, or why there's nobody to ring.
+  function dialTarget() {
+    if (pick.dial) syncDial();
+    if (pick.traineeId) return null;
+    const d = dialed();
+    return !d ? 'Dial the trainee\'s extension, or pick them on the switchboard.'
+      : d.kind === 'offline' ? `${d.t.name}'s phone isn't open: they open ☎ LSH Ring Channel from the Portal to take calls.`
+        : d.kind === 'dir' ? `Ext ${pick.dial} is ${d.dir.name}, in the firm's directory. Trainees' desks are 7001 and up.`
+          : `No trainee answers at ext ${pick.dial}.`;
+  }
+
+  /* ---------- 🤖 AI calls: the AI plays the caller ----------
+     The trainee's phone rings like any call; the AI plays the call picked under the dialer (or a random one on the
+     line); the trainee's browser runs the conversation. Several can run at once: each shows in 🤖 AI calls, where the
+     trainer follows the transcript and note live, can end it, and opens the AI's review afterwards. */
+  C.ai = new Map();
+  function aiRing() {
+    if (!App.cfg.features.ai) return U.toast('AI callers need the Gemini keys (see ⚙️ Setup).', 'error');
+    const why = dialTarget(); if (why) return U.toast(why, 'error');
+    const s = App.scen[pick.scenarioId];
+    if (s && s.ai === false) return U.toast(`"${s.title}" is live-only: the AI can't play it. Pick another call, or ring it yourself.`, 'error');
+    App.board.send({ t: 'ai-ring', traineeId: pick.traineeId, scenarioId: pick.scenarioId || '', track: pick.track, graded: gradedPick() });
+    U.toast(`🤖 Ringing ${(dialed() || {}).t ? dialed().t.name : 'the trainee'} with an AI caller${s ? ': ' + s.title : ' (a random ' + App.cfg.tracks[pick.track].label + ' call)'}.`, 'ok');
+    pick.dial = ''; syncDial(); renderDialer(); renderRoster();
+  }
+  function aiUpsert(c) {
+    const cur = C.ai.get(c.callId) || { lines: [] };
+    C.ai.set(c.callId, Object.assign(cur, c));
+    renderAiCalls(); if (C.follow === c.callId) renderFollow();
+  }
+  const aiLabel = (c) => c.status === 'ringing' ? `<span class="badge orange">Ringing</span>`
+    : c.status === 'live' ? `<span class="badge green">On the call <span data-since="${c.answeredAt}">${U.since(c.answeredAt)}</span></span>`
+      : c.status === 'missed' ? '<span class="badge red">Missed</span>' : c.status === 'declined' ? '<span class="badge red">Declined</span>' : c.status === 'cancelled' ? '<span class="badge">Busy</span>'
+        : c.score != null ? `<span class="badge blue">🤖 ${c.score}%</span>` : c.grade === 'failed' ? '<span class="badge red">AI couldn\'t review</span>' : '<span class="badge amber">Ended · AI reviewing</span>';
+  function renderAiCalls() {
+    const el = U.$('#aiCalls'); if (!el) return;
+    const list = [...C.ai.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
+    el.classList.toggle('hidden', !list.length);
+    el.innerHTML = `<div class="card-head"><h3 title="Calls where the AI plays the caller">🤖 AI calls</h3></div>
+      ${list.map((c) => `<div class="aic"><div class="aic-who"><div class="nm">${esc(c.traineeName)} ${aiLabel(c)}</div><div class="bt">${esc(c.title)}${c.graded ? ' · 📋 graded' : ''}</div></div>
+        ${['ringing', 'live'].includes(c.status) ? `<button class="btn btn-sm" data-aifollow="${esc(c.callId)}">👂 Follow</button><button class="btn btn-sm" data-aistop="${esc(c.callId)}" title="End this AI call">⏹</button>`
+          : c.status === 'ended' ? `<a class="btn btn-sm" href="#/call/${esc(c.callId)}">📋 Review</a>` : ''}</div>`).join('')}`;
+  }
+  // 👂 Follow: the call's transcript and the trainee's note, live.
+  function renderFollow() {
+    const c = C.ai.get(C.follow), box = U.$('#aiFollow'); if (!c || !box) return;
+    const form = App.formFor(c.track), n = c.note || {};
+    box.innerHTML = `<p class="small">${aiLabel(c)} · ${esc(c.title)}</p>
+      <div class="grid2"><div><h4>💬 What's being said</h4><div class="transcript" style="max-height:340px">${c.lines.map((l) => `<div class="tl ${l.who}"><b>${l.who === 'caller' ? 'AI caller' : esc(c.traineeName)}</b>${esc(l.text)}</div>`).join('') || '<div class="empty small">Nothing yet.</div>'}</div></div>
+      <div><h4>📝 ${esc(form.title)}</h4><div class="live-note">${form.fields.filter((f) => n[f.k]).map((f) => `<div class="ln"><b>${esc(f.label)}</b><span>${esc(n[f.k])}</span></div>`).join('') || '<div class="empty small">Nothing typed yet.</div>'}</div></div></div>
+      ${c.status === 'ended' ? `<p style="margin-top:10px"><a class="btn btn-primary" href="#/call/${esc(c.callId)}">📋 Open the call and the AI's review</a></p>` : ''}`;
+    const t = U.$('.transcript', box); if (t) t.scrollTop = t.scrollHeight;
+  }
+  function aiFollow(id) {
+    C.follow = id;
+    const m = App.modal({ title: '👂 Following an AI call', wide: true, body: '<div id="aiFollow"></div>', onClose: () => { C.follow = null; } });
+    m.el.addEventListener('click', (e) => { if (e.target.closest('a[href^="#/call/"]')) m.close(); });
+    renderFollow();
+  }
+  C.loadAi = async function () {
+    try { (await API.post('/api/ai/assigned')).calls.forEach((c) => aiUpsert(c)); } catch (e) { /* the list fills as calls come in */ }
+  };
+
   async function ring() {
     if (active(App.t)) return U.toast('Hang up the current call first.', 'error');
     if (C.ringSent && Date.now() - C.ringSent < 5000) return;   // already ringing out
     if (!pick.dial && !pick.traineeId && C.lastDial) { setDial(C.lastDial); return; }   // 📞 on an empty screen: the last number (redial)
-    if (pick.dial) syncDial();
-    if (!pick.traineeId) {
-      const d = dialed();
-      return U.toast(!d ? 'Dial the trainee\'s extension, or pick them on the switchboard.'
-        : d.kind === 'offline' ? `${d.t.name}'s phone isn't open: they sign in to 📞 My phone to take calls.`
-          : d.kind === 'dir' ? `Ext ${pick.dial} is ${d.dir.name}, in the firm's directory. Trainees' desks are 7001 and up.`
-            : `No trainee answers at ext ${pick.dial}.`, 'error');
-    }
+    const why = dialTarget(); if (why) return U.toast(why, 'error');
     // No call picked: an open call (no script) on the line chosen on the dialer.
     if (pick.scenarioId && !App.scen[pick.scenarioId]) pick.scenarioId = '';
     C.ringSent = Date.now();
@@ -400,7 +467,8 @@
           <label class="soft ${rec ? 'on' : ''} ${recOk && !graded ? '' : 'dis'}" title="${recOk ? (graded ? 'Graded calls are always recorded' : 'Record the call (both voices) for the review') : 'Recordings aren\'t set up on this site'}"><input type="checkbox" id="pkRec" ${rec ? 'checked' : ''} ${recOk && !graded ? '' : 'disabled'}><i class="dot"></i>Record</label>
           <label class="soft ${pick.withhold ? 'on' : ''}" title="The trainee's phone shows PRIVATE CALLER instead of the caller ID"><input type="checkbox" id="pkHide" ${pick.withhold ? 'checked' : ''}><i class="dot"></i>🙈 Hide ID</label>
         </div>
-        <button type="button" class="dev-btn ${C.classOn() ? 'on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view for Meet'}</button>`;
+        <div class="dev-btns"><button type="button" class="dev-btn ai" data-act="airing" title="Ring the trainee with an AI caller: the AI plays ${s ? 'this call\'s caller' : 'a random caller on this line'}, you follow it live, and the AI reviews it" ${App.cfg.features.ai ? '' : 'disabled'}>🤖 AI caller</button>
+          <button type="button" class="dev-btn ${C.classOn() ? 'on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view'}</button></div>`;
     } else if (status === 'ended') {
       main = `<div class="lcd-state">Call ended</div><div class="lcd-name">${esc(t.trainee.name)}</div><div class="lcd-timer" style="color:#94a3b8">${U.dur(t.endedAt - t.answeredAt)}</div><div class="lcd-sub">${esc(t.endNote || '')}</div>`;
       cid = `Played <b>${esc(t.scenario.title)}</b>`;
@@ -541,13 +609,14 @@
     trainer: true,
     async render() {
       const app = U.$('#app');
-      app.innerHTML = `<div class="console"><div class="card roster" id="roster"></div><div id="stage"></div></div>`;
+      app.innerHTML = `<div class="console"><div class="console-side"><div class="card roster" id="roster"></div><div class="card hidden" id="aiCalls"></div></div><div id="stage"></div></div>`;
       App.leave = () => { document.removeEventListener('keydown', onKey); if (App.t && App.t.status === 'ended' && App.t.upload !== 'saving') App.t = null; };
       app.firstChild.addEventListener('click', onClick);
       app.firstChild.addEventListener('change', onChange);
       app.firstChild.addEventListener('input', onInput);
       document.addEventListener('keydown', onKey);
       render();
+      renderAiCalls(); C.loadAi();
       try { C.roster = (await API.post('/api/trainees')).trainees; renderRoster(); if (!App.t) { syncDial(); renderDialer(); } } catch (e) {}
     }
   });
@@ -566,12 +635,15 @@
     if (ln) { setTrack(ln.dataset.line); return; }
     const sc = e.target.closest('[data-sid]');
     if (sc) { pickCall(sc.dataset.sid); return; }
+    const af = e.target.closest('[data-aifollow]'); if (af) { aiFollow(af.dataset.aifollow); return; }
+    const as = e.target.closest('[data-aistop]'); if (as) { if (confirm('End this AI call? The trainee\'s phone hangs up and the call is reviewed as it is.')) App.board.send({ t: 'ai-stop', callId: as.dataset.aistop }); return; }
     const xf = e.target.closest('[data-xfer]');
     if (xf) { transferResult(xf.dataset.xfer); return; }
     const b = e.target.closest('[data-act]'); if (!b) return;
     const act = b.dataset.act;
     if (act === 'ring') ring();
     else if (act === 'backspace') setDial(pick.dial.slice(0, -1));
+    else if (act === 'airing') aiRing();
     else if (act === 'speaker') App.toggleSpeaker(renderDialer);
     else if (act === 'hangup') hangup();
     else if (act === 'mute') toggleMute();

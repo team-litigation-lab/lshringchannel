@@ -161,7 +161,7 @@
     app.innerHTML = `
       <div class="row" style="margin-bottom:12px"><a href="#/calls" class="btn btn-sm">← ${tr ? 'Call log' : 'My calls'}</a>${tr && c.graded ? '<a href="#/graded" class="btn btn-sm">📋 Graded calls</a>' : ''}<span class="spacer"></span>${tr ? `<button class="btn btn-sm" data-act="delete">🗑 Delete call</button>` : ''}</div>
       <div class="card">
-        <div class="row">${App.trackBadge(c.track)}${s.level ? App.levelBadge(s.level) : ''}${c.mode === 'ai' ? '<span class="badge">🎧 AI practice</span>' : `<span class="badge orange">📞 Live with ${esc(c.trainer || 'trainer')}</span>`}${gradedBadge(c)}<span id="callStatus">${statusBadge(c)}</span></div>
+        <div class="row">${App.trackBadge(c.track)}${s.level ? App.levelBadge(s.level) : ''}${c.mode === 'ai' ? (c.assigned ? `<span class="badge violet">🤖 AI caller · sent by ${esc(c.assigned.by || 'the trainer')}</span>` : '<span class="badge">🎧 AI practice</span>') : `<span class="badge orange">📞 Live with ${esc(c.trainer || 'trainer')}</span>`}${gradedBadge(c)}<span id="callStatus">${statusBadge(c)}</span></div>
         <h1 style="margin-top:10px">${esc(c.title)}</h1>
         <p class="muted">${esc(c.traineeName)}${c.batch ? ' · ' + esc(c.batch) : ''} · ${U.when(c.createdAt)}${s.caller && s.caller.name ? ` · Caller: ${esc(s.caller.name)}${s.caller.role ? ' (' + esc(s.caller.role) + ')' : ''}` : ''}</p>
         ${c.status === 'ended' ? statsHTML(c) : `<div class="warn-box">This call ${c.status === 'missed' ? 'rang out: nobody answered' : c.status === 'declined' ? 'was declined' : c.status === 'cancelled' ? 'was cancelled before it was answered' : 'is still in progress'}.</div>`}

@@ -19,7 +19,7 @@
      sees the trainee's submitted note the moment it is sent).
    ========================================================= */
 import { DurableObject } from 'cloudflare:workers';
-import { SCENARIOS, cleanScenario, openCall, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM, weightedScore, DEFAULT_SETTINGS } from './scenarios.js';
+import { SCENARIOS, cleanScenario, openCall, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM, weightedScore, DEFAULT_SETTINGS, traineeView } from './scenarios.js';
 
 const RING_MS = 45000;     // an unanswered call rings out after 45 seconds
 const GRACE_MS = 30000;    // a dropped phone has 30 seconds to reconnect before its call ends
@@ -203,7 +203,7 @@ export class Switchboard extends DurableObject {
     for (const x of this.sql.exec(`SELECT id FROM calls WHERE status IN ('ringing', 'live')`).toArray()) {
       const r = this.row(x.id);
       if (r.mode === 'ai') {
-        if (t - r.created_at >= aiMs) { r.status = 'ended'; r.ended_at = t; r.data.metrics = Object.assign({ endedBy: 'caller', endReason: 'time-limit' }, r.data.metrics || {}); this.save(r); }
+        if (t - r.created_at >= aiMs) { r.status = 'ended'; r.ended_at = t; r.data.metrics = Object.assign({ endedBy: 'caller', endReason: 'time-limit' }, r.data.metrics || {}); this.save(r); if (r.data.assigned) { this.freePhones(r); this.tellTrainers({ t: 'ai-call', call: this.aiBrief(r) }); } }
         else want(r.created_at + aiMs);
         continue;
       }
@@ -237,6 +237,71 @@ export class Switchboard extends DurableObject {
       case 'hand':
         if (me.role === 't') { this.setAtt(ws, { hand: !!m.up, handAt: m.up ? t : 0 }); this.presence(); }
         return;
+
+      /* ----- 🤖 the trainer sends an AI caller to a trainee's phone -----
+         The AI plays the caller (the call picked, or a random one on the line); the trainee's phone rings like any call,
+         and their browser runs the conversation (as on 🎧 Practice). The trainer follows it live (transcript and note)
+         and the AI reviews it when the note is in. */
+      case 'ai-ring': {
+        if (me.role !== 'a') return;
+        const tr = this.trainee(String(m.traineeId || ''));
+        if (!tr || tr.archived) return this.send(ws, { t: 'ai-failed', reason: 'Dial a trainee first.' });
+        let s = m.scenarioId ? this.scenario(String(m.scenarioId)) : null;
+        if (m.scenarioId && !s) return this.send(ws, { t: 'ai-failed', reason: 'That call isn\'t in the library any more.' });
+        if (s && s.ai === false) return this.send(ws, { t: 'ai-failed', reason: `"${s.title}" is live-only: the AI can't play it. Pick another call, or ring it yourself.` });
+        if (!s) {
+          const track = TRACKS[m.track] ? m.track : 'reception';
+          const pool = this.listScenarios().filter((x) => x.track === track && x.ai !== false);
+          if (!pool.length) return this.send(ws, { t: 'ai-failed', reason: 'No call on this line can be played by the AI.' });
+          s = pool[Math.floor(Math.random() * pool.length)];
+        }
+        const phones = this.open('u:' + tr.id).filter((w) => this.att(w).role === 't');
+        if (!phones.length) return this.send(ws, { t: 'ai-failed', reason: `${tr.name}'s phone isn't open.` });
+        if (phones.some((w) => { const a = this.att(w); if (!a.call) return false; const c = this.row(a.call); return c && ['ringing', 'live'].includes(c.status); })) return this.send(ws, { t: 'ai-failed', reason: `${tr.name} is on another call.` });
+        if (this.countUsage(me.id, 'aiassign', 3600000) >= 120) return this.send(ws, { t: 'ai-failed', reason: 'That\'s a lot of AI calls this hour. Try again in a little while.' });
+        this.logUsage(me.id, 'aiassign');
+        const line = lineOf(s.track);
+        const r2 = { id: newId(), mode: 'ai', track: s.track, scenario_id: s.id, title: s.title, trainee_id: tr.id, trainee_name: tr.name, batch: tr.batch, trainer: me.name,
+          status: 'live', created_at: t, answered_at: t,
+          data: { scenario: s, assigned: { by: me.name, cid: me.cid, at: t }, graded: !!m.graded, metrics: {}, note: {}, transcript: [], events: [{ t: 'ring', at: t }] } };
+        this.save(r2);
+        phones.forEach((w) => this.setAtt(w, { call: r2.id, hand: false, handAt: 0 }));
+        const view = traineeView(s);
+        phones.forEach((w) => this.send(w, { t: 'ai-incoming', callId: r2.id, scenario: view, line, lineLabel: LINES[line].label, lineNumber: LINES[line].number,
+          callerId: view.callerId, trainer: me.name, graded: !!m.graded }));
+        this.tellTrainers({ t: 'ai-call', call: this.aiBrief(r2) });
+        await this.armAlarm(t + (Math.min(15, Math.max(2, Number(this.env.AI_MAX_MINUTES) || 8)) + 2) * 60000);
+        this.presence();
+        return;
+      }
+      case 'ai-answer': {   // the trainee picked up (the other tabs stop ringing)
+        if (!party || r.mode !== 'ai' || !r.data.assigned || r.status !== 'live') return;
+        r.data.assigned.answeredAt = t; r.answered_at = t;
+        this.save(r);
+        for (const w of this.open('u:' + me.id)) if (w !== ws) { this.setAtt(w, { call: null }); this.send(w, { t: 'taken', callId: r.id }); }
+        this.tellTrainers({ t: 'ai-call', call: this.aiBrief(r) });
+        return;
+      }
+      case 'ai-decline': {   // not answered: declined, busy, or rang out
+        if (!party || r.mode !== 'ai' || !r.data.assigned || r.status !== 'live' || r.data.assigned.answeredAt) return;
+        const why = ['declined', 'busy', 'no-answer'].includes(m.reason) ? m.reason : 'declined';
+        r.status = why === 'no-answer' ? 'missed' : why === 'declined' ? 'declined' : 'cancelled'; r.ended_at = t;
+        r.data.assigned.outcome = why;
+        this.save(r);
+        this.freePhones(r);
+        this.tellTrainers({ t: 'ai-call', call: this.aiBrief(r) });
+        return;
+      }
+      case 'ai-line': {   // what was said, as it's transcribed, for the trainer following the call
+        if (!party || me.role !== 't' || r.mode !== 'ai' || !r.data.assigned || r.status !== 'live') return;
+        this.tellTrainers({ t: 'ai-line', callId: r.id, who: m.who === 'caller' ? 'caller' : 'trainee', id: String(m.id || '').slice(0, 40), text: String(m.text || '').slice(0, 2000) });
+        return;
+      }
+      case 'ai-stop': {   // a trainer ends an AI call they're following
+        if (me.role !== 'a' || !r || r.mode !== 'ai' || !r.data.assigned || r.status !== 'live') return;
+        for (const w of this.open('u:' + r.trainee_id)) this.send(w, { t: 'ai-stop', callId: r.id });
+        return;
+      }
 
       /* ----- the trainer rings a trainee ----- */
       case 'ring': {
@@ -517,7 +582,7 @@ export class Switchboard extends DurableObject {
     if (who.role !== 'a' && !mine) return { error: 'Not allowed' };
     const d = r.data;
     if (mine) {
-      if (p.note && !d.noteSubmittedAt) d.note = cleanNote(r.track, p.note);
+      if (p.note && !d.noteSubmittedAt) { d.note = cleanNote(r.track, p.note); if (d.assigned) r._tell = true; }
       if (p.submit && !d.noteSubmittedAt && r.status !== 'live') { d.noteSubmittedAt = now(); r._grade = 'note'; }
       if (p.seen && d.review && !d.review.seenAt) d.review.seenAt = now();
       if (r.mode === 'ai' && r.status === 'live') {
@@ -529,7 +594,7 @@ export class Switchboard extends DurableObject {
             transfers: (Array.isArray(m.transfers) ? m.transfers : []).slice(0, 10).map((x) => ({ to: String(x.to || '').slice(0, 80), ext: String(x.ext || '').slice(0, 8), result: String(x.result || '').slice(0, 20) })),
             voice: m.voice === 'text' ? 'text' : 'voice' };
         }
-        if (p.end) { r.status = 'ended'; r.ended_at = now(); r._grade = 'end'; }
+        if (p.end) { r.status = 'ended'; r.ended_at = now(); r._grade = 'end'; if (d.assigned) r._freed = true; }
       }
     }
     // The trainee only ever sees the review that was sent; a saved draft stays with the trainer until sent.
@@ -550,7 +615,10 @@ export class Switchboard extends DurableObject {
       } else d.reviewDraft = rev;
     }
     const why = r._grade; delete r._grade;
+    const tell = r._tell || r._freed, freed = r._freed; delete r._tell; delete r._freed;
     this.save(r);
+    if (freed) this.freePhones(r);
+    if (tell) this.tellTrainers({ t: 'ai-call', call: this.aiBrief(r) });
     // The note is in (or a practice call ended): the call may be ready to grade. A note submitted after
     // the AI already graded without it is graded again, unless a trainer has started on the review.
     if (why) this.scheduleGrade(r.id, { again: why === 'note' && !d.review && !d.reviewDraft }).catch(() => {});
@@ -626,6 +694,24 @@ export class Switchboard extends DurableObject {
     this.tellGraded(r);
     return r;
   }
+  // 🤖 AI calls a trainer sent: what the console shows, and the phones that were ringing.
+  aiBrief(r) {
+    const d = r.data || {}, a = d.assigned || {};
+    const status = r.status === 'live' ? (a.answeredAt ? 'live' : 'ringing') : r.status;
+    return { callId: r.id, traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, ext: (this.trainee(r.trainee_id) || {}).ext || '', title: r.title, track: r.track,
+      status, outcome: a.outcome || '', by: a.by || r.trainer || '', createdAt: r.created_at, answeredAt: a.answeredAt || null, endedAt: r.ended_at || null, graded: !!d.graded,
+      note: d.note || {}, grade: (d.autograde && d.autograde.state) || '', score: r.score == null ? null : r.score };
+  }
+  freePhones(r) {
+    for (const w of this.open('u:' + r.trainee_id)) if (this.att(w).call === r.id) this.setAtt(w, { call: null });
+    this.presence();
+  }
+  tellTrainers(msg) { for (const w of this.open('r:a')) this.send(w, msg); }
+  assignedCalls() {
+    return this.sql.exec(`SELECT * FROM calls WHERE mode = 'ai' AND created_at > ? AND json_extract(data, '$.assigned') IS NOT NULL ORDER BY created_at DESC LIMIT 60`, now() - 12 * 3600000)
+      .toArray().map((r) => { r.data = JSON.parse(r.data || '{}'); return this.aiBrief(r); });
+  }
+
   // Open pages of the trainer and the trainee update when a call's grade changes.
   tellGraded(r) {
     const msg = { t: 'graded', callId: r.id, state: (r.data.autograde || {}).state || '' };
@@ -669,17 +755,17 @@ export class Switchboard extends DurableObject {
   gradedCalls(f) {
     f = f || {};
     const args = [];
-    let where = `mode = 'live' AND status = 'ended'`;
+    let where = `status = 'ended' AND (mode = 'live' OR json_extract(data, '$.assigned') IS NOT NULL)`;
     if (f.batch) { where += ' AND batch = ?'; args.push(f.batch); }
     const rows = this.sql.exec(`SELECT * FROM calls WHERE ${where} ORDER BY created_at DESC LIMIT 2000`, ...args).toArray();
     const out = [];
     for (const r of rows) {
       const d = JSON.parse(r.data || '{}');
       if (!d.graded) continue;
-      const card = (d.review && d.review.sentAt ? d.review : null) || d.aiDraft || null;
-      out.push({ id: r.id, createdAt: r.created_at, traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, track: r.track, title: r.title, trainer: r.trainer,
-        status: d.review && d.review.sentAt ? (d.review.ai ? 'released' : 'reviewed') : d.aiDraft ? 'ai' : (d.autograde && d.autograde.state) || 'pending',
-        score: r.reviewed ? r.score : d.aiScore != null ? d.aiScore : null, avg: card ? card.avg : null,
+      const card = (d.review && d.review.sentAt ? d.review : null) || d.aiDraft || d.ai || null;
+      out.push({ ai: r.mode === 'ai', id: r.id, createdAt: r.created_at, traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, track: r.track, title: r.title, trainer: r.trainer,
+        status: d.review && d.review.sentAt ? (d.review.ai ? 'released' : 'reviewed') : d.ai ? 'released' : d.aiDraft ? 'ai' : (d.autograde && d.autograde.state) || 'pending',
+        score: r.reviewed || d.ai ? r.score : d.aiScore != null ? d.aiScore : null, avg: card ? card.avg : null,
         criteria: card ? card.criteria : [], verdict: card ? card.verdict : '', summary: card ? card.summary : '',
         talkMs: d.metrics && d.metrics.talkMs, recording: !!d.recording, noteSubmitted: !!d.noteSubmittedAt });
     }

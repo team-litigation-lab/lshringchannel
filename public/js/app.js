@@ -37,6 +37,21 @@
     return { ticket, admin };
   }
 
+  /* ⬇ Install: Ring Channel as its own app (Chrome and Edge): its own window, icon, and Start menu / Dock / taskbar
+     entry, no browser bars. The browser offers it once the page qualifies (manifest.webmanifest, sw.js). */
+  App.installed = () => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };
+  App.installPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); App.installPrompt = e; App.header(); const g = document.getElementById('gateInstall'); if (g) g.classList.remove('hidden'); });
+  window.addEventListener('appinstalled', () => { App.installPrompt = null; App.header(); U.toast('Installed: open LSH Ring Channel from your Start menu, Dock or taskbar.', 'ok'); });
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  App.install = async function () {
+    const e = App.installPrompt;
+    if (!e) return U.toast('In Chrome or Edge, open the browser menu (⋮) → "Install LSH Ring Channel" (or "Apps → Install this site as an app").');
+    e.prompt();
+    try { await e.userChoice; } catch (err) { /* closed */ }
+    App.installPrompt = null; App.header();
+  };
+
   App.boot = async function () {
     window.addEventListener('hashchange', () => App.go());
     const portal = fromPortal();
@@ -74,7 +89,8 @@
     const nav = document.getElementById('nav'), who = document.getElementById('who');
     if (!App.me) { nav.innerHTML = ''; who.innerHTML = ''; return; }
     nav.innerHTML = App.navItems().map(([k, l]) => `<a href="#/${k}" class="${App.route.name === k ? 'on' : ''}">${l}${k === 'calls' && App.unread ? '<span class="dot"></span>' : ''}</a>`).join('');
-    who.innerHTML = `${App.trainer() && App.cfg && App.cfg.portal ? `<a class="hdr-btn" href="${esc(App.cfg.portal)}" title="LSH Training Portal (Training Directory)" aria-label="LSH Training Portal">🏠</a>` : ''}<span class="chip">${App.trainer() ? '🎓 Trainer' : '🎧 Trainee'} · ${esc(App.me.name)}${App.me.batch ? ' · ' + esc(App.me.batch) : ''}</span><button type="button" title="Signed in as ${esc(App.me.name)}" onclick="App.logout()">Log out</button>`;
+    const install = App.installPrompt && !App.installed() ? '<button type="button" class="hdr-install" onclick="App.install()" title="Install Ring Channel as an app: its own window and icon">⬇ Install</button>' : '';
+    who.innerHTML = `${install}${App.trainer() && App.cfg && App.cfg.portal ? `<a class="hdr-btn" href="${esc(App.cfg.portal)}" title="LSH Training Portal (Training Directory)" aria-label="LSH Training Portal">🏠</a>` : ''}<span class="chip">${App.trainer() ? '🎓 Trainer' : '🎧 Trainee'} · ${esc(App.me.name)}${App.me.batch ? ' · ' + esc(App.me.batch) : ''}</span><button type="button" title="Signed in as ${esc(App.me.name)}" onclick="App.logout()">Log out</button>`;
   };
 
   App.go = function () {
@@ -122,6 +138,7 @@
         <h2>🏠 Open Ring Channel from the LSH Training Portal</h2>
         <p>There's no separate sign-in. Sign in on the Portal, then open <b>☎ LSH Ring Channel</b> from the Training Directory (trainers: also from Master Control). You arrive signed in: trainees on their phone, trainers on the console.</p>
         <a class="btn btn-orange btn-lg" id="toPortal" href="${esc(portal)}">Go to the LSH Training Portal →</a>
+        <p class="small ${App.installPrompt && !App.installed() ? '' : 'hidden'}" id="gateInstall" style="margin:14px auto 0"><button type="button" class="btn btn-sm" onclick="App.install()">⬇ Install Ring Channel as an app</button> its own window and icon, like a desktop phone app.</p>
         <details class="gate-fallback" ${opts.trainer ? 'open' : ''}><summary>Trainer: is the Portal down?</summary>
           <form id="fTrainer" style="margin-top:10px">
             <div class="field"><label class="f" for="an">Your name (trainees see it)</label><input class="input" id="an" autocomplete="name" placeholder="e.g. Coach Ana" required></div>
@@ -174,7 +191,7 @@
     const bar = document.getElementById('oncall');
     const c = App.trainer() ? App.t : App.p;
     const active = c && ['ringing', 'connecting', 'live'].includes(c.status);
-    const home = App.trainer() ? 'console' : c && c.mode === 'ai' ? 'practice' : 'phone';
+    const home = App.trainer() ? 'console' : c && c.mode === 'ai' && !c.assigned ? 'practice' : 'phone';
     if (!active || App.route.name === home) { bar.classList.add('hidden'); return; }
     const who = App.trainer() ? (c.trainee && c.trainee.name) : (c.callerId && c.callerId.name);
     bar.innerHTML = `<span>📞 ${c.status === 'ringing' ? 'Ringing' : 'On a call'}${who ? ' · ' + esc(who) : ''}</span><span data-since="${c.answeredAt || c.ringAt || ''}">${U.since(c.answeredAt || c.ringAt)}</span><a href="#/${home}">Go back to the call →</a>`;

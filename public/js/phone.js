@@ -89,6 +89,24 @@
     catch (e) { return [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }]; }
   }
 
+  /* A clear voice: Opus in full band at a speech-friendly 64 kbps with loss recovery, and no DTX (discontinuous
+     transmission, which clips the starts of words and makes the far end sound muffled and far away). */
+  function clear(desc) {
+    const sdp = String(desc.sdp || '');
+    const pt = (/a=rtpmap:(\d+) opus\/48000/i.exec(sdp) || [])[1];
+    if (!pt) return desc;
+    const want = { maxaveragebitrate: '64000', useinbandfec: '1', usedtx: '0', maxplaybackrate: '48000', 'sprop-maxcapturerate': '48000', stereo: '0' };
+    const re = new RegExp('a=fmtp:' + pt + ' ([^\\r\\n]*)');
+    let out;
+    if (re.test(sdp)) out = sdp.replace(re, (all, params) => {
+      const p = {}; params.split(';').map((x) => x.trim()).filter(Boolean).forEach((x) => { const [k, v] = x.split('='); p[k] = v; });
+      Object.assign(p, want);
+      return 'a=fmtp:' + pt + ' ' + Object.entries(p).map(([k, v]) => (v === undefined ? k : k + '=' + v)).join(';');
+    });
+    else out = sdp.replace(new RegExp('(a=rtpmap:' + pt + ' opus\\/48000[^\\r\\n]*\\r?\\n)'), '$1a=fmtp:' + pt + ' ' + Object.entries(want).map(([k, v]) => k + '=' + v).join(';') + '\r\n');
+    return { type: desc.type, sdp: out };
+  }
+
   class RtcCall {
     /* opts: { board, callId, offerer, iceServers, stream, onRemote(stream), onState(state), onQuality(q) } */
     constructor(o) {
@@ -112,7 +130,7 @@
     async start() {
       if (!this.o.offerer) return;
       const offer = await this.pc.createOffer();
-      await this.pc.setLocalDescription(offer);
+      await this.pc.setLocalDescription(clear(offer));
       this.signal({ sdp: this.pc.localDescription.toJSON() });
     }
     async handle(data) {
@@ -127,7 +145,7 @@
           for (const c of p) await pc.addIceCandidate(c).catch(() => {});
           if (data.sdp.type === 'offer') {
             const ans = await pc.createAnswer();
-            await pc.setLocalDescription(ans);
+            await pc.setLocalDescription(clear(ans));
             this.signal({ sdp: pc.localDescription.toJSON() });
           }
         } else if (data.candidate) {
@@ -144,7 +162,7 @@
       this.restarts++;
       try {
         const offer = await this.pc.createOffer({ iceRestart: true });
-        await this.pc.setLocalDescription(offer);
+        await this.pc.setLocalDescription(clear(offer));
         this.signal({ sdp: this.pc.localDescription.toJSON() });
       } catch (e) { console.warn('ice restart', e); }
     }

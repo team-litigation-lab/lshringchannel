@@ -27,6 +27,26 @@ There's **no sign-in form**: everyone comes in from the Portal, signed in there.
 - **Opening Ring Channel's own link**, or signing out, shows **🏠 Open Ring Channel from the LSH Training Portal** with a button there. Trainers get a **🏠** button in the top bar back to the Portal's Training Directory.
 - **If the Portal is down**, *Trainer: is the Portal down?* (folded away on that page) opens the console with the trainer passphrase (`ADMIN_PASSPHRASE`). Trainees wait for the Portal.
 
+## As an app (its own window)
+
+Ring Channel installs as an app from Chrome or Edge: its own window with no browser bars, its own icon, and an entry in the Start menu, Dock or taskbar. It's still the same site underneath, so updates arrive by themselves.
+- **⬇ Install** in the top bar (or on the "Open Ring Channel from the LSH Training Portal" page), or the browser menu (⋮) → **Install LSH Ring Channel** (Edge: **Apps → Install this site as an app**).
+- **Opening it** goes straight in while the sign-in lasts (30 days for trainees, 12 hours for trainers). After that, **Go to the LSH Training Portal** opens the Portal in the app window, and opening Ring Channel there comes back signed in.
+- The files: `public/manifest.webmanifest`, `public/sw.js` (no offline caching, since calls need the network; just a "you're offline" page) and `public/icons/`.
+
+## 🤖 AI calls: the AI plays the caller
+
+A trainee can take a call where the AI plays the caller, two ways:
+- **The trainee starts it:** **🎧 Practice** (see *AI practice callers*).
+- **The trainer sends it:** on the dialer, dial the trainee's extension and press **🤖 AI caller**.
+  - The AI plays the call picked under the dialer, or a random call on the line when none is picked. Live-only calls can't be sent.
+  - **The trainee's own phone (My phone) rings** like any call, with the caller ID on the line. They answer and talk out loud (Hold, Transfer, Case lookup and the note all work), and **AI CALLER** shows once they answer. It rings out after 45 seconds.
+  - **🤖 AI calls**, under the switchboard, lists them: ringing, on the call (with the time), missed or declined, then the AI's score. Trainers can send AI callers to several trainees at once.
+  - **👂 Follow** shows what's being said (both sides, as it's transcribed) and the trainee's note, live. **⏹** ends the call.
+  - **The AI reviews it** when the trainee submits the note (from the recording), on the line's Mock Calls Metrics. The trainee sees the scorecard straight away; the trainer can review it too (**📋 Review**) and send their own. With **📋 Graded** on, it's in **📋 Graded calls**.
+- Both need the Gemini keys (`GEMINI_API_KEY5` … `9`); without them, 🎧 Practice and 🤖 AI caller are off.
+- **From the Portal:** the Simulators link **🤖 Take an AI call** opens Ring Channel on 🎧 Practice, and **🎛 Send AI callers** opens the console.
+
 ## How a live mock call works
 
 **Trainee** (📞 My phone)
@@ -64,6 +84,12 @@ There's **no sign-in form**: everyone comes in from the Portal, signed in there.
    - a verdict, a summary and "next time" tips.
 
    When the AI's grade is in, the scorecard holds it: **✅ Approve the AI grade & send**, or change any score or feedback and **📨 Send to the trainee**. **✨ Grade again with AI** re-grades the call.
+
+## Sound
+
+- **Live calls** use Opus in full band at 64 kbps with loss recovery and without DTX (which clips word starts and makes a voice sound muffled and far away).
+- **The AI caller's voice** goes through a gentle compressor and is lifted, so it sounds close and clear.
+- The microphone keeps echo cancellation and noise suppression on (needed on a speaker). A headset still sounds best.
 
 ## The speaker key
 
@@ -279,7 +305,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - the trainees are on the switchboard and in 👥 Trainees;
   - the trainers' passphrase fallback still opens the console.
 - `portal-unit.mjs`: the Portal's ticket checked with the shared secret (a trainee, an administrator, the wrong secret, expired, too long, tampered).
-- `e2e-ai.js`: a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, autograding, a typed practice call, the trainer's **Grade again with AI**, and a live-only call that can't be practiced.
+- `e2e-ai.js`: the trainer's **🤖 AI caller** (it rings the trainee's own phone; they answer and talk with the AI; the trainer follows the transcript and the note live; the AI's review reaches both, and 📋 Graded calls); a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, autograding, a typed practice call, the trainer's **Grade again with AI**, and a live-only call that can't be practiced.
 
 **Checks on GitHub** (`.github/workflows/checks.yml`): every pull request and every push to `main` builds the Worker without deploying (`npm run check`) and runs all of the tests above (`tests/run.sh`). A red **Checks** status means something broke; the log says which step.
 
@@ -297,7 +323,8 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `src/auth.js` | Sign-in tokens and trainee ids (the same shapes as the other LSH platforms). |
 | `public/index.html`, `public/css/app.css` | The app shell and its look (LSH navy and orange, IBM Plex). |
 | `public/_headers` | Response headers for the app's files (microphone allowed on this site only, no caching of the page). |
-| `public/js/phone.js` | The VOIP engine: the Switchboard connection, the WebRTC call (with ICE restart), the call recorder, the mic, and the 🔊 speaker key (which audio output the call plays on). |
+| `public/js/phone.js` | The VOIP engine: the Switchboard connection, the WebRTC call (with ICE restart and a clear Opus voice), the call recorder, the mic, and the 🔊 speaker key (which audio output the call plays on). |
+| `public/manifest.webmanifest`, `public/sw.js`, `public/icons/` | Ring Channel as an installable app (its own window and icon). |
 | `public/js/sounds.js` | Ringing, ringback, the keypad tones, the hang-up tone and hold music, all synthesized. |
 | `public/js/ai-call.js` | The AI practice caller (Gemini Live voice, or typed). |
 | `public/js/app.js` | Sign-in, pages, the phone screen, the note form, case lookup, the directory. |

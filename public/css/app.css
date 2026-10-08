@@ -37,6 +37,7 @@ p { margin: 0 0 .7em; }
 .who button { background: transparent; border: 1px solid rgba(255, 255, 255, .25); color: #e2e8f0; border-radius: 8px; padding: 5px 10px; cursor: pointer; }
 .who .hdr-btn { border: 1px solid rgba(255, 255, 255, .25); color: #e2e8f0; border-radius: 8px; padding: 4px 9px; text-decoration: none; line-height: 1.3; }
 .who .hdr-btn:hover { background: rgba(255, 255, 255, .08); }
+.who button.hdr-install { background: var(--orange); border-color: var(--orange); color: #0f172a; font-weight: 700; }
 .login form.card.pick { box-shadow: 0 0 0 3px rgba(249, 115, 22, .35); border-color: var(--orange); }
 .netbar { background: var(--amber-soft); color: #7c2d12; text-align: center; padding: 6px; font-size: 13px; font-weight: 600; }
 .oncall-bar { position: sticky; top: 58px; z-index: 29; background: var(--green); color: #fff; padding: 8px 20px; display: flex; gap: 12px; align-items: center; font-weight: 600; }
@@ -44,7 +45,7 @@ p { margin: 0 0 .7em; }
 /* The trainer's top bar is full: give the tabs room as the window narrows, then a row of their own. */
 @media (max-width: 1600px) { .brand small { display: none; } .who .chip { max-width: 170px; overflow: hidden; text-overflow: ellipsis; } }
 @media (max-width: 1440px) { .top { gap: 12px; } .nav a { padding: 7px 9px; } .who .chip { display: none; } }
-@media (max-width: 1240px) and (min-width: 761px) {
+@media (max-width: 1320px) and (min-width: 761px) {
   .top { flex-wrap: wrap; height: auto; gap: 4px 12px; padding: 8px 20px 6px; }
   .nav { order: 3; width: 100%; }
   .oncall-bar { top: 0; }
@@ -217,8 +218,17 @@ table.list tr.click:hover td { background: #f8fafc; }
 .console { display: grid; grid-template-columns: 310px 1fr; gap: 20px; align-items: start; }
 @media (max-width: 1000px) { .console { grid-template-columns: minmax(0, 1fr); } }
 .console > *, .dial-stage > *, .dial-side > * { min-width: 0; }
-.roster { position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow: auto; }
-@media (max-width: 1000px) { .roster { position: static; max-height: none; } }
+.console-side { position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow: auto; }
+.console-side > .card + .card { margin-top: 16px; }
+@media (max-width: 1000px) { .console-side { position: static; max-height: none; } }
+.aic { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 8px 4px; border-bottom: 1px solid var(--line); }
+.aic .aic-who { flex: 1 1 170px; min-width: 0; }
+.aic:last-child { border-bottom: 0; }
+.aic .nm { font-weight: 600; font-size: 13.5px; } .aic .bt { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dev-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.dev-btns .dev-btn { margin-top: 0; }
+.dev-btn.ai { border-color: #6d28d9; color: #ddd6fe; } .dev-btn.ai:hover { background: rgba(139, 92, 246, .15); }
+.dev-btn:disabled { opacity: .45; cursor: not-allowed; }
 .tr { display: flex; align-items: center; gap: 10px; padding: 9px 8px; border-radius: 10px; cursor: pointer; }
 .tr:hover { background: #f8fafc; } .tr.sel { background: var(--orange-soft); }
 .tr .nm { font-weight: 600; font-size: 14px; } .tr .bt { font-size: 12px; color: var(--muted); }

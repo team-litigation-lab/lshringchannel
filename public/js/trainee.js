@@ -15,7 +15,8 @@
   const T = window.Trainee = {};
   const remote = () => document.getElementById('remoteAudio');
   const active = (p) => p && ['ringing', 'connecting', 'live'].includes(p.status);
-  const onPage = () => (App.route.name === 'phone' && (!App.p || App.p.mode === 'live')) || (App.route.name === 'practice' && App.p && App.p.mode === 'ai');
+  // My phone draws live calls and the AI calls a trainer sent; 🎧 Practice draws the trainee's own practice calls.
+  const onPage = () => (App.route.name === 'phone' && (!App.p || App.p.mode === 'live' || !!App.p.assigned)) || (App.route.name === 'practice' && App.p && App.p.mode === 'ai' && !App.p.assigned);
 
   /* =========================================================
      Switchboard messages
@@ -52,7 +53,9 @@
     const mine = p && p.mode === 'live' && p.callId === m.callId;
     switch (m.t) {
       case 'incoming': return incoming(m);
-      case 'taken': if (mine && p.status === 'ringing') { stopAlerts(); App.p = null; U.toast('Answered on another tab.'); renderAll(); } return;
+      case 'ai-incoming': return aiIncoming(m);
+      case 'ai-stop': if (p && p.mode === 'ai' && p.callId === m.callId && active(p)) { endAi('caller', 'stopped', 'Your trainer ended the call'); U.toast('Your trainer ended the AI call.'); } return;
+      case 'taken': if ((mine || (p && p.assigned && p.callId === m.callId)) && p.status === 'ringing') { clearTimeout(p.ringTimer); stopAlerts(); App.p = null; U.toast('Answered on another tab.'); renderAll(); } return;
       case 'moved': if (mine) { stopAlerts(); cleanupLive(p); App.p = null; App.ownCall(null); U.toast('The call moved to your other tab.'); renderAll(); App.onCallBar(); } return;
       case 'transfer-cancel': return;
       case 'gone': if (mine && p.status !== 'ended') { stopAlerts(); cleanupLive(p); App.p = null; U.toast('That call is no longer on the line.'); renderAll(); } return;
@@ -102,6 +105,29 @@
     App.flashTitle(true, '📞 Incoming call…');
     if (App.route.name !== 'phone') App.nav('#/phone'); else renderAll();
     App.onCallBar();
+  }
+  /* 🤖 An AI caller a trainer sent: it rings My phone like any call. On answer, this page runs the conversation (as on
+     🎧 Practice: the AI plays the caller), streams the transcript to the trainer, and the AI reviews it when the note is in. */
+  function aiIncoming(m) {
+    if (App.p && active(App.p)) { App.board.send({ t: 'ai-decline', callId: m.callId, reason: 'busy' }); U.toast(`Your trainer sent an AI caller (${m.lineLabel}). Finish this call to take the next one.`, 'error'); return; }
+    const p = App.p = { mode: 'ai', assigned: { trainer: m.trainer }, graded: !!m.graded, status: 'ringing', ringAt: Date.now(), callId: m.callId, scenario: m.scenario, surprise: true,
+      line: m.line, lineLabel: m.lineLabel, lineNumber: m.lineNumber, callerId: m.callerId || { name: 'WIRELESS CALLER', number: '' }, track: m.scenario.track, hideCases: m.scenario.hideCases || [],
+      note: {}, lines: [], muted: false, held: false, rec: App.cfg.features.recordings, metrics: { holds: [], transfers: [] } };
+    App.hand = false;
+    Sounds.ring();
+    App.notify('📞 Incoming call', `${m.lineLabel}: ${p.callerId.name} ${p.callerId.number}`);
+    App.flashTitle(true, '📞 Incoming call…');
+    // Rings out like a live call: a missed call after 45 seconds.
+    p.ringTimer = setTimeout(() => { if (App.p === p && p.status === 'ringing') { stopAlerts(); App.board.send({ t: 'ai-decline', callId: p.callId, reason: 'no-answer' }); App.p = null; U.toast(`Missed call from ${p.callerId.name}.`); renderAll(); App.onCallBar(); } }, 45000);
+    if (App.route.name !== 'phone') App.nav('#/phone'); else renderAll();
+    App.onCallBar();
+  }
+  // The transcript, line by line, to the trainer following an AI call they sent (a few updates a second at most).
+  function aiLine(p, who, text, id) {
+    if (!p.assigned) return;
+    p.outLines = p.outLines || {}; p.outLines[id] = { who, text };
+    if (p.lineTimer) return;
+    p.lineTimer = setTimeout(() => { p.lineTimer = null; const o = p.outLines; p.outLines = {}; Object.entries(o).forEach(([k, v]) => App.board.send({ t: 'ai-line', callId: p.callId, id: k, who: v.who, text: v.text })); }, 400);
   }
   function stopAlerts() { Sounds.stop(); App.flashTitle(false); App.clearNotify(); }
 
@@ -167,6 +193,7 @@
   function decline() {
     const p = App.p; if (!p || p.status !== 'ringing') return;
     stopAlerts();
+    if (p.mode === 'ai' && p.assigned) { clearTimeout(p.ringTimer); App.board.send({ t: 'ai-decline', callId: p.callId, reason: 'declined' }); App.p = null; renderAll(); App.onCallBar(); return; }
     if (p.mode === 'ai') { endAi('trainee', 'declined'); return; }
     App.board.send({ t: 'decline', callId: p.callId });
     App.p = null; renderAll();
@@ -299,6 +326,7 @@
   async function answerAi() {
     const p = App.p;
     stopAlerts();
+    if (p.assigned) { clearTimeout(p.ringTimer); App.board.send({ t: 'ai-answer', callId: p.callId }); }
     p.status = 'connecting'; p.answeredAt = Date.now(); p.metrics.ringMs = p.answeredAt - p.ringAt;
     if (!p.note.when) p.note.when = U.stamp();
     renderAll();
@@ -309,7 +337,7 @@
         if (st === 'live' && p.status === 'connecting') { p.status = 'live'; p.answeredAt = Date.now(); renderAll(); }
         if (st === 'ended' && p.status !== 'ended') endAi('caller', 'limit');
       },
-      onLine: (who, text, id) => { if (App.p !== p) return; const x = p.lines.find((l) => l.id === id); if (x) x.text = text; else p.lines.push({ id, who, text }); drawLine(who, text, id); },
+      onLine: (who, text, id) => { if (App.p !== p) return; const x = p.lines.find((l) => l.id === id); if (x) x.text = text; else p.lines.push({ id, who, text }); drawLine(who, text, id); aiLine(p, who, text, id); },
       onError: (msg) => U.toast(msg, 'error'),
       onNotice: (msg) => { p.notice = msg; renderDevice(); },
       onBusy: (b) => { const el = U.$('#typeBusy'); if (el) el.classList.toggle('hidden', !b); }
@@ -393,10 +421,15 @@
       : { state: 'Ready', title: 'Waiting for a call', sub: App.hand ? '✋ Your trainer can see you asked for a mock call.' : `Your trainer will ring this phone${App.myExt ? ` (ext ${esc(App.myExt)})` : ''}.` };
   }
 
+  // My phone shows live calls and the AI calls a trainer sent; 🎧 Practice shows the trainee's own practice calls.
+  function shown() {
+    const p = App.p; if (!p) return null;
+    return App.route.name === 'practice' ? (p.mode === 'ai' && !p.assigned ? p : null) : (p.mode === 'live' || p.assigned ? p : null);
+  }
   function renderDevice() {
     const el = U.$('#device'); if (!el) return;
     const mode = App.route.name === 'practice' ? 'ai' : 'live';
-    const p = App.p && App.p.mode === mode ? App.p : null;
+    const p = shown();
     const status = p ? (p.status === 'waiting' ? 'idle' : p.status) : 'idle';
     const led = !App.connected && mode === 'live' ? 'offline' : status === 'ringing' ? 'ringing' : ['connecting', 'live'].includes(status) ? 'live' : mode === 'live' ? App.status : 'available';
     const idleKeys = mode === 'live'
@@ -437,7 +470,7 @@
   function renderWork() {
     const el = U.$('#work'); if (!el) return;
     const mode = App.route.name === 'practice' ? 'ai' : 'live';
-    const p = App.p && App.p.mode === mode ? App.p : null;
+    const p = shown();
     if (!p || p.status === 'waiting') {
       if (mode === 'ai' && p) { el.innerHTML = briefHTML(p); return; }
       el.innerHTML = mode === 'live' ? welcomeHTML() : '';
@@ -503,6 +536,7 @@
     if (p.grading) return `<div class="note-box" style="margin-bottom:14px">⏳ The AI is grading your call on the ${esc((App.cfg.tracks[p.track] || {}).sheet || 'Mock Calls Metrics')}${p.voice === 'voice' ? ' (it listens to the recording)' : ''}…</div>`;
     if (p.gradeError) return `<div class="err-box" style="margin-bottom:14px">The AI couldn't score this call: ${esc(p.gradeError)} <button class="btn btn-sm" data-act="regrade">Try again</button> <a href="#/call/${esc(p.callId)}">Open the call</a></div>`;
     const g = p.grade; if (!g) return '';
+    p.seenGrade = true;
     return `<div class="card" style="margin-bottom:14px;border-color:#fed7aa">
       <div class="row"><div class="score-big">${p.score != null ? p.score + '%' : '–'}</div><div style="flex:1"><div class="verdict">${esc(g.verdict)}${g.avg != null ? ` <span class="badge">Weighted average ${g.avg} / 5</span>` : ''}</div><div class="small">${esc(g.summary)}</div></div></div>
       <div class="row" style="margin-top:12px"><a class="btn btn-primary" href="#/call/${esc(p.callId)}">See the full scorecard →</a><button class="btn" data-act="next">Take another call</button></div></div>`;
@@ -562,8 +596,9 @@
     trainee: true,
     render() {
       const app = U.$('#app');
-      if (App.p && App.p.mode === 'ai' && active(App.p)) { location.hash = '#/practice'; return; }
-      if (App.p && App.p.mode === 'ai') App.p = null;
+      if (App.p && App.p.mode === 'ai' && !App.p.assigned && active(App.p)) { location.hash = '#/practice'; return; }
+      if (App.p && App.p.mode === 'ai' && !App.p.assigned) App.p = null;
+      if (App.p && App.p.assigned && App.p.status === 'ended' && App.p.submitted && !App.p.grading && App.p.seenGrade) App.p = null;
       if (App.p && App.p.status === 'ended' && App.p.submitted) App.p = null;   // finished and submitted: ready for the next call
       app.innerHTML = `<div class="phone-layout"><div class="device" id="device"></div><div class="work card" id="work"></div></div>`;
       bindPage(app.firstChild);
@@ -574,7 +609,8 @@
   App.register('practice', {
     render() {
       const app = U.$('#app');
-      if (App.p && App.p.mode === 'live' && active(App.p)) { U.toast('You are on a live call.'); location.hash = '#/' + (App.trainer() ? 'console' : 'phone'); return; }
+      if (App.p && (App.p.mode === 'live' || App.p.assigned) && active(App.p)) { U.toast('You are on a call.'); location.hash = '#/' + (App.trainer() ? 'console' : 'phone'); return; }
+      if (App.p && App.p.assigned && !active(App.p)) App.p = null;   // a finished AI call a trainer sent stays in My calls
       if (App.p && App.p.mode === 'ai' && App.p.status === 'ended' && App.p.submitted && !App.p.grading) App.p = null;   // finished: back to the picker
       if (App.p && App.p.mode === 'ai') {
         app.innerHTML = `<div class="phone-layout"><div class="device" id="device"></div><div class="work card" id="work"></div></div>`;

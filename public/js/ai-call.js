@@ -149,12 +149,21 @@
     if (!pcm.length) return;
     const buf = ctx.createBuffer(1, pcm.length, rate), ch = buf.getChannelData(0);
     for (let i = 0; i < pcm.length; i++) ch[i] = pcm[i] / 0x8000;
-    const src = ctx.createBufferSource(); src.buffer = buf; src.connect(ctx.destination);
+    const src = ctx.createBufferSource(); src.buffer = buf; src.connect(voiceOut(call));
     if (call.recDest) src.connect(call.recDest);
     const at = Math.max(ctx.currentTime + 0.03, call.playAt);
     src.start(at); call.playAt = at + buf.duration;
     call.playing.push(src);
     src.onended = () => { call.playing = call.playing.filter((s) => s !== src); };
+  }
+  // The caller's voice: evened out (a gentle compressor) and lifted, so it sounds close and clear, not faint and far away.
+  function voiceOut(call) {
+    if (call.voiceOut) return call.voiceOut;
+    const ctx = call.ctx, comp = ctx.createDynamicsCompressor(), gain = ctx.createGain();
+    comp.threshold.value = -24; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.005; comp.release.value = 0.2;
+    gain.gain.value = 1.8;
+    comp.connect(gain); gain.connect(ctx.destination);
+    return (call.voiceOut = comp);
   }
   function flush(call) { call.playing.forEach((s) => { try { s.stop(); } catch (e) {} }); call.playing = []; call.playAt = 0; }
 

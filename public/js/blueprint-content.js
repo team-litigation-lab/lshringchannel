@@ -88,7 +88,8 @@
           '🎭 You are the caller: the opening line, what the caller knows and how they act, the situation, who is out.',
           '✅ Live checklist: the call\'s goals, ticked as they happen.',
           '📝 The trainee\'s note, as they type it.',
-          'The dialer: the timer, REC, the trainee\'s hold and mute, the connection; Mute, 🔊 Speaker and End call.'],
+          'The dialer: the timer, REC, the trainee\'s hold and mute, the connection; Mute, 🔊 Speaker and End call.',
+          '🤖 AI caller (on the dialer) rings the trainee with the AI playing the caller: follow it live from 🤖 AI calls; the AI reviews it.'],
         where: '🎛 Console, during a call.',
         tip: 'Stay in character: the script says what the caller knows and doesn\'t.' },
       { icon: '🔀', title: 'Transfers and coaching time-outs', points: [
