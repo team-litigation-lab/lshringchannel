@@ -175,11 +175,14 @@ table.list tr.click:hover td { background: #f8fafc; }
 .key:disabled { opacity: .35; cursor: not-allowed; }
 .key.on { background: #f59e0b; color: #1c1917; } .key.on.mute { background: #8b5cf6; color: #fff; }
 .key.wide { grid-column: 1 / -1; flex-direction: row; gap: 10px; font-size: 16px; min-height: 56px; }
+.key.wide:not(.hang):not(.answer) { font-size: 14px; min-height: 48px; }
 .key.answer { background: var(--green); color: #fff; } .key.answer:hover { background: #15803d; }
 .key.answer.pulse { animation: pulse 1.2s infinite; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, .6); } 70% { box-shadow: 0 0 0 14px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
 .key.hang { background: var(--red); color: #fff; } .key.hang:hover { background: #b91c1c; }
 .key.hand.on { background: var(--orange); color: #fff; }
+.dev-hint { margin: 10px 2px 0; font-size: 11.5px; line-height: 1.5; color: #64748b; text-align: center; }
+.dev-hint b { color: #94a3b8; font-weight: 600; }
 .dev-foot { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 12px; color: #94a3b8; padding: 0 4px; }
 .dev-foot input[type=range] { flex: 1; accent-color: var(--orange); }
 .dev-status { display: flex; gap: 6px; margin-top: 12px; }
@@ -226,9 +229,33 @@ table.list tr.click:hover td { background: #f8fafc; }
 /* ---------- trainer console ---------- */
 .console { display: grid; grid-template-columns: var(--sl, 290px) minmax(0, 1fr) var(--sr, 290px); column-gap: 0; row-gap: 18px; align-items: start; }
 .console-side.right { margin-left: 18px; }
-/* ☎ the switchboard runs into the dialer: flush edges, so the two read as one desk */
-.console-side .side-brand, .console-side .roster { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.console-side .roster { border-right: 0; }
+/* ☎ the switchboard runs into the dialer: the same dark case, flush edges, no seam between them,
+   so the logo, the board and the phone read as one piece of desk equipment. */
+.console-side .side-brand { margin-bottom: 0; border-radius: 18px 0 0 0; padding-bottom: 16px; }
+.console-side .roster {
+  background: linear-gradient(160deg, #13254d, #0a1530 70%); color: #cbd5e1; border: 0;
+  border-radius: 0 0 0 18px; box-shadow: 0 20px 50px rgba(8, 18, 38, .35), inset 0 1px 0 rgba(255, 255, 255, .06);
+  padding: 4px 14px 16px;
+}
+.console-side .roster h3, .console-side .roster .nm { color: #e2e8f0; }
+.console-side .roster .bt, .console-side .roster .muted, .console-side .roster .side-h, .console-side .roster .empty { color: #94a3b8; }
+.console-side .roster .my-line { background: rgba(255, 255, 255, .05); border-color: #22386a; }
+.console-side .roster .my-line .nm { color: #fff; }
+.console-side .roster .tr:hover { background: rgba(255, 255, 255, .06); }
+.console-side .roster .tr.sel { background: rgba(249, 115, 22, .18); }
+.console-side .roster .input { background: #0a1530; border-color: #22386a; color: #e2e8f0; }
+.console-side .roster .fold-btn { background: transparent; border-color: #22386a; color: #94a3b8; }
+.console-side .roster .fold-btn:hover { border-color: var(--orange); color: #fff; }
+.console-side .roster .btn { background: transparent; border-color: #22386a; color: #cbd5e1; }
+.console-side .roster .btn-green { background: var(--green); border-color: var(--green); color: #fff; }
+.console-side .roster summary { color: #94a3b8; }
+/* the phone's left side is open where the board meets it */
+.dial-home .dialer, .dial-stage > .dialer { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+@media (max-width: 1140px) {
+  .console-side .side-brand { margin-bottom: 14px; border-radius: 16px; }
+  .console-side .roster { border-radius: var(--radius); }
+  .dial-home .dialer, .dial-stage > .dialer { border-radius: 26px; }
+}
 .console.l-folded { --sl: 52px; }
 .console.r-folded { --sr: 52px; }
 @media (max-width: 1340px) { .console { --sl: 250px; --sr: 250px; gap: 14px; } }
@@ -239,8 +266,11 @@ table.list tr.click:hover td { background: #f8fafc; }
 @media (max-width: 1140px) { .console-side { position: static; max-height: none; } .console-side.right { order: 3; } }
 
 /* the two sidebars fold away to a rail, and the trainee's switchboard with them */
-.fold-btn { border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 7px; width: 24px; height: 24px; line-height: 1; cursor: pointer; font-weight: 700; }
-.fold-btn:hover { border-color: var(--blue); color: var(--navy); }
+.fold-btn { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 8px; padding: 4px 9px; line-height: 1; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.fold-btn .fb-ic { font-size: 13px; }
+.fold-btn:hover { border-color: var(--orange); color: var(--navy); background: var(--orange-soft); }
+.rail .rail-max { font-size: 10.5px; font-weight: 700; color: var(--orange); writing-mode: vertical-rl; letter-spacing: .3px; }
+@media (max-width: 1140px) { .rail .rail-max { writing-mode: horizontal-tb; } }
 .rail { width: 100%; border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 12px 4px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--navy); font: inherit; }
 .rail:hover { border-color: var(--blue); box-shadow: 0 4px 14px rgba(37, 99, 235, .08); }
 .rail .rail-ic { font-size: 20px; }
@@ -255,6 +285,10 @@ table.list tr.click:hover td { background: #f8fafc; }
 .my-line .bt { font-size: 12px; color: var(--muted); }
 .side-h { text-transform: uppercase; letter-spacing: .5px; font-weight: 700; margin: 12px 0 4px; }
 .side-card { margin: 0; }
+/* how the next call is placed, on the switchboard beside the dialer */
+.board-opts { margin-top: 14px; border-top: 1px solid #22386a; padding-top: 10px; }
+.board-opts .side-h { margin: 0 0 6px; }
+.board-opts .soft-keys { margin-top: 0; }
 /* the sidebars are narrow: their headings wrap instead of pushing the minimize key off the card */
 .tside .card-head, .console-side .card-head { flex-wrap: wrap; row-gap: 6px; }
 .tside .card-head h3, .console-side .card-head h3 { font-size: 15px; }

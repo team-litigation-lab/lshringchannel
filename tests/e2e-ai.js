@@ -99,7 +99,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.waitForSelector('#dialer .dialpad');
   for (const d of ext) await tr.click(`#dialer [data-dk="${d}"]`);
   await tr.click('#pkList .scen[data-sid="ft_rc_appt"]');
-  await tr.click('#dialer [data-act="airing"]');
+  await tr.click('#roster [data-act="airing"]');
   await te.waitForSelector('#device .lcd.ringing', { timeout: 10000 });
   if (!/SANTOS MARIA/.test(await te.textContent('#device .lcd'))) throw new Error('The AI call should show the caller ID: ' + await te.textContent('#device .lcd'));
   await tr.waitForFunction(() => /Ringing/.test(document.querySelector('#aiCalls').textContent));
