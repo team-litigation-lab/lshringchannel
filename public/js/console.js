@@ -639,15 +639,30 @@
   /* The switchboard and the dialer stand side by side as one desk, so they end at the same line and
      the board is the same size whoever is on it: the trainees scroll inside it, and the keys for how
      the next call is placed stay at its foot, always on screen. */
+  let deckWatch = null;
+  // Measured once, the board goes stale the moment anything reflows the phone (a web font arriving
+  // and rewrapping its text, the window resizing, a key appearing), so it follows the dialer instead.
+  function fitBoard() {
+    const card = U.$('#sideL .roster'), dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
+    if (!card || !dialer) return;
+    if (window.innerWidth <= 1140) { card.style.height = ''; return; }
+    const want = dialer.getBoundingClientRect().height - (brand ? brand.getBoundingClientRect().height : 0);
+    const h = Math.max(Math.round(want), 420) + 'px';
+    if (card.style.height !== h) card.style.height = h;
+  }
   function matchHeights() {
     requestAnimationFrame(() => {
-      const card = U.$('#sideL .roster'), dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
-      if (!card || !dialer) return;
-      if (window.innerWidth <= 1140) { card.style.height = ''; return; }
-      const want = dialer.getBoundingClientRect().height - (brand ? brand.getBoundingClientRect().height : 0);
-      card.style.height = Math.max(Math.round(want), 420) + 'px';
+      fitBoard();
+      const dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
+      if (!dialer || !window.ResizeObserver) return;
+      if (deckWatch) deckWatch.disconnect();
+      deckWatch = new ResizeObserver(() => fitBoard());
+      deckWatch.observe(dialer);
+      if (brand) deckWatch.observe(brand);
     });
   }
+  window.addEventListener('resize', () => { if (App.route.name === 'console') fitBoard(); });
+  try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (App.route.name === 'console') fitBoard(); }); } catch (e) {}
 
   // The stage. Before a call: ☎ the dialer, and the call to play (optional) under it. During a call: the
   // dialer beside the script, checklist and live note. After it: the dialer beside the scorecard link.

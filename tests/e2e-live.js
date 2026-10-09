@@ -384,6 +384,15 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   if (!deck.previewBeside) throw new Error('The call picked should sit beside the dialer: ' + JSON.stringify(deck));
   if (!deck.endsTogether) throw new Error('The switchboard and the dialer should end on the same line: ' + JSON.stringify(deck));
   if (!deck.listScrolls || !deck.optsOnScreen) throw new Error('The board should be one size, with the trainees scrolling inside it and the call\'s settings always on screen: ' + JSON.stringify(deck));
+  // A late reflow of the phone (a web font arriving, the window changing) must not leave the board short.
+  const reflow = await tr.evaluate(async () => {
+    const hint = document.querySelector('#dialer .dev-hint');
+    if (hint) hint.textContent += ' ' + 'A longer line that rewraps the phone and makes it taller. '.repeat(3);
+    await new Promise((r) => setTimeout(r, 400));
+    const d = document.querySelector('#dialer').getBoundingClientRect(), sb = document.querySelector('#roster').getBoundingClientRect();
+    return Math.round(Math.abs(sb.bottom - d.bottom));
+  });
+  if (reflow > 2) throw new Error('The board should follow the dialer when it reflows, not stay at the height it was first measured at: ' + reflow);
   ok('The console is one desk: the switchboard attached to the dialer and ending on the same line, the trainees scrolling inside it with the call\'s settings always on screen, the call picked beside the dialer, and 🎭 the calls to play on the right');
   await tr.click('#pkList .scen.open');
   await tr.click('#dialer [data-line="intake"]');
