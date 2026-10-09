@@ -607,11 +607,13 @@
         <div style="flex:1;min-width:0"><div class="nm">🎓 ${esc(d.name)}</div><div class="bt">${d.ext ? `ext <span class="mono">${esc(d.ext)}</span> · ` : ''}${d.call ? 'on a call' : 'free'}</div></div></div>`).join('')}` : ''}
       <div class="side-h small muted">Trainees</div>
       <select class="input" id="batchSel" style="margin-bottom:10px"><option value="">All batches</option>${batches.map((b) => `<option ${b === pick.batch ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>
+      <div class="board-scroll">
       ${shown.map((x) => `<div class="tr ${x.id === pick.traineeId ? 'sel' : ''}" data-tid="${esc(x.id)}">
           <span class="led ${x.call ? 'ringing' : x.status}"></span>
           <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)} ${x.hand ? '<span class="hand-wave" title="Asked for a mock call">✋</span>' : ''}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''} · ${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}${x.tabs > 1 ? ` · ${x.tabs} tabs` : ''}</div></div>
           <button class="btn btn-sm ${x.call ? '' : 'btn-green'}" data-ring="${esc(x.id)}" ${x.call || active(App.t) ? 'disabled' : ''}>📞</button></div>`).join('') || '<div class="empty small">Nobody is online. Trainees open <b>📞 My phone</b> to take calls.</div>'}
       ${offline.length ? `<details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">${offline.length} offline</summary>${offline.map((x) => `<div class="tr" style="cursor:default"><span class="led"></span><div><div class="nm" style="font-weight:500">${esc(x.name)}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''}${x.last_seen ? ' · seen ' + U.when(x.last_seen) : ''}</div></div></div>`).join('')}</details>` : ''}
+      </div>
       ${optionsHTML()}`;
     matchHeights();
   }
@@ -636,16 +638,16 @@
       </div></div>`;
   }
 
-  /* The switchboard and the dialer stand side by side as one desk, so they end at the same line:
-     the board grows to the phone's height (and the phone to the board's, when the board is longer). */
+  /* The switchboard and the dialer stand side by side as one desk, so they end at the same line and
+     the board is the same size whoever is on it: the trainees scroll inside it, and the keys for how
+     the next call is placed stay at its foot, always on screen. */
   function matchHeights() {
     requestAnimationFrame(() => {
       const card = U.$('#sideL .roster'), dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
       if (!card || !dialer) return;
-      card.style.minHeight = '';
-      if (window.innerWidth <= 1140) return;
+      if (window.innerWidth <= 1140) { card.style.height = ''; return; }
       const want = dialer.getBoundingClientRect().height - (brand ? brand.getBoundingClientRect().height : 0);
-      if (want > card.getBoundingClientRect().height) card.style.minHeight = Math.round(want) + 'px';
+      card.style.height = Math.max(Math.round(want), 420) + 'px';
     });
   }
 
