@@ -19,7 +19,7 @@
   const active = (t) => t && ['ringing', 'connecting', 'live'].includes(t.status);
   const pick = C.pick = { dial: '', traineeId: '', scenarioId: '', track: 'reception', record: true, withhold: false, batch: '', graded: null, voice: '', aiPool: [] };
   // The two sidebars beside the dialer, each of which the trainer can minimize to a rail.
-  const FOLD_L = 'conL', FOLD_R = 'conR';
+  const FOLD_R = 'conR';
   // 📋 Graded mock call: starts as ⚙️ Setup says, then as the trainer last left it (on this computer).
   const gradedPick = () => {
     if (pick.graded === null) { let v = null; try { v = localStorage.getItem('mcv_graded'); } catch (e) {} pick.graded = v === null ? !!(App.cfg.settings && App.cfg.settings.defaultGraded) : v === '1'; }
@@ -582,10 +582,6 @@
   // The left sidebar: the LSH mark, then ☎ the switchboard (every phone that's open, by batch).
   function renderRoster() {
     const side = U.$('#sideL'); if (!side) return;
-    const grid = U.$('#consoleGrid');
-    const folded = App.folded(FOLD_L);
-    if (grid) grid.classList.toggle('l-folded', folded);
-    if (folded) { side.innerHTML = App.railHTML(FOLD_L, 'Switchboard', '☎'); return; }
     if (!U.$('#roster', side)) {
       side.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="150" height="40">
         <div class="sb-sub">Ring Channel · Switchboard</div></div><div class="card roster" id="roster"></div>`;
@@ -598,20 +594,18 @@
     const offline = (C.roster || []).filter((x) => !online.has(x.id) && !x.archived && (!pick.batch || x.batch === pick.batch));
     const hands = all.filter((x) => x.hand).length;
     const desks = (App.desks || []).filter((d) => d.name !== App.me.name);
-    el.innerHTML = `<div class="card-head"><h3>☎ Switchboard</h3><span class="spacer"></span><span class="badge green">${all.length} online</span>${hands ? `<span class="badge orange">✋ ${hands}</span>` : ''}${App.foldKey(FOLD_L, 'the switchboard')}</div>
+    el.innerHTML = `<div class="card-head"><h3>☎ Switchboard</h3><span class="spacer"></span><span class="badge green">${all.length} online</span>${hands ? `<span class="badge orange">✋ ${hands}</span>` : ''}</div>
       <div class="my-line"><div class="small muted">My trainer line</div><div class="nm">🎓 ${esc(App.me.name)}</div>
         <div class="bt">${App.myExt ? `ext <span class="mono">${esc(App.myExt)}</span> · ` : ''}${active(App.t) ? 'on a call' : 'free'}</div></div>
       ${desks.length ? `<div class="side-h small muted">Other trainers on</div>${desks.map((d) => `<div class="tr" style="cursor:default"><span class="led ${d.call ? 'ringing' : 'available'}"></span>
         <div style="flex:1;min-width:0"><div class="nm">🎓 ${esc(d.name)}</div><div class="bt">${d.ext ? `ext <span class="mono">${esc(d.ext)}</span> · ` : ''}${d.call ? 'on a call' : 'free'}</div></div></div>`).join('')}` : ''}
       <div class="side-h small muted">Trainees</div>
       <select class="input" id="batchSel" style="margin-bottom:10px"><option value="">All batches</option>${batches.map((b) => `<option ${b === pick.batch ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>
-      <div class="board-scroll">
       ${shown.map((x) => `<div class="tr ${x.id === pick.traineeId ? 'sel' : ''}" data-tid="${esc(x.id)}">
           <span class="led ${x.call ? 'ringing' : x.status}"></span>
           <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)} ${x.hand ? '<span class="hand-wave" title="Asked for a mock call">✋</span>' : ''}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''} · ${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}${x.tabs > 1 ? ` · ${x.tabs} tabs` : ''}</div></div>
           <button class="btn btn-sm ${x.call ? '' : 'btn-green'}" data-ring="${esc(x.id)}" ${x.call || active(App.t) ? 'disabled' : ''}>📞</button></div>`).join('') || '<div class="empty small">Nobody is online. Trainees open <b>📞 My phone</b> to take calls.</div>'}
       ${offline.length ? `<details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">${offline.length} offline</summary>${offline.map((x) => `<div class="tr" style="cursor:default"><span class="led"></span><div><div class="nm" style="font-weight:500">${esc(x.name)}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''}${x.last_seen ? ' · seen ' + U.when(x.last_seen) : ''}</div></div></div>`).join('')}</details>` : ''}
-      </div>
       ${optionsHTML()}`;
     matchHeights();
   }
@@ -636,19 +630,19 @@
       </div></div>`;
   }
 
-  /* The switchboard and the dialer stand side by side as one desk, so they end at the same line and
-     the board is the same size whoever is on it: the trainees scroll inside it, and the keys for how
-     the next call is placed stay at its foot, always on screen. */
+  /* The switchboard and the dialer are one piece: the board's case reaches down to the foot of the
+     phone however short the batch is, and simply grows past it when the batch is long — it never
+     scrolls inside itself. */
   let deckWatch = null;
   // Measured once, the board goes stale the moment anything reflows the phone (a web font arriving
   // and rewrapping its text, the window resizing, a key appearing), so it follows the dialer instead.
   function fitBoard() {
     const card = U.$('#sideL .roster'), dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
     if (!card || !dialer) return;
-    if (window.innerWidth <= 1140) { card.style.height = ''; return; }
+    if (window.innerWidth <= 1140) { card.style.minHeight = ''; return; }
     const want = dialer.getBoundingClientRect().height - (brand ? brand.getBoundingClientRect().height : 0);
     const h = Math.max(Math.round(want), 420) + 'px';
-    if (card.style.height !== h) card.style.height = h;
+    if (card.style.minHeight !== h) card.style.minHeight = h;
   }
   function matchHeights() {
     requestAnimationFrame(() => {
@@ -986,7 +980,7 @@
     trainer: true,
     async render() {
       const app = U.$('#app');
-      app.innerHTML = `<div class="console ${App.folded(FOLD_L) ? 'l-folded' : ''} ${App.folded(FOLD_R) ? 'r-folded' : ''}" id="consoleGrid">
+      app.innerHTML = `<div class="console ${App.folded(FOLD_R) ? 'r-folded' : ''}" id="consoleGrid">
         <aside class="console-side" id="sideL"></aside><div id="stage"></div><aside class="console-side right" id="sideR"></aside></div>`;
       App.leave = () => { document.removeEventListener('keydown', onKey); if (App.t && App.t.status === 'ended' && App.t.upload !== 'saving') App.t = null; };
       app.firstChild.addEventListener('click', onClick);
@@ -1001,7 +995,7 @@
 
   function onClick(e) {
     const fold = e.target.closest('[data-fold]');
-    if (fold) { const k = fold.dataset.fold; App.folded(k, !App.folded(k)); if (k === FOLD_L) renderRoster(); else renderPicker(); return; }
+    if (fold) { App.folded(fold.dataset.fold, !App.folded(fold.dataset.fold)); renderPicker(); return; }
     // The switchboard is the phone's contact list: a trainee's row puts their extension on the dialer; 📞 also rings.
     const ringBtn = e.target.closest('[data-ring]');
     if (ringBtn) { if (App.t) return; pickTrainee(ringBtn.dataset.ring); ring(); return; }
