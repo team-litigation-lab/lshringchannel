@@ -235,8 +235,13 @@ table.list tr.click:hover td { background: #f8fafc; }
 .console-side .roster {
   background: linear-gradient(160deg, #13254d, #0a1530 70%); color: #cbd5e1; border: 0;
   border-radius: 0 0 0 18px; box-shadow: 0 20px 50px rgba(8, 18, 38, .35), inset 0 1px 0 rgba(255, 255, 255, .06);
-  padding: 4px 14px 16px;
+  padding: 4px 14px 16px; display: flex; flex-direction: column; overflow: hidden;
 }
+/* only the trainees scroll: the board keeps its size, and the keys under it stay on screen */
+.board-scroll { flex: 1 1 auto; min-height: 48px; overflow-y: auto; overflow-x: hidden; margin: 0 -4px; padding: 0 4px; }
+.board-scroll::-webkit-scrollbar { width: 8px; }
+.board-scroll::-webkit-scrollbar-thumb { background: #22386a; border-radius: 4px; }
+.board-scroll::-webkit-scrollbar-track { background: transparent; }
 .console-side .roster h3, .console-side .roster .nm { color: #e2e8f0; }
 .console-side .roster .bt, .console-side .roster .muted, .console-side .roster .side-h, .console-side .roster .empty { color: #94a3b8; }
 .console-side .roster .my-line { background: rgba(255, 255, 255, .05); border-color: #22386a; }
@@ -286,7 +291,7 @@ table.list tr.click:hover td { background: #f8fafc; }
 .side-h { text-transform: uppercase; letter-spacing: .5px; font-weight: 700; margin: 12px 0 4px; }
 .side-card { margin: 0; }
 /* how the next call is placed, on the switchboard beside the dialer */
-.board-opts { margin-top: 14px; border-top: 1px solid #22386a; padding-top: 10px; }
+.board-opts { flex: none; margin-top: 20px; border-top: 1px solid #22386a; padding-top: 16px; }
 .board-opts .side-h { margin: 0 0 6px; }
 .board-opts .soft-keys { margin-top: 0; }
 /* the sidebars are narrow: their headings wrap instead of pushing the minimize key off the card */
