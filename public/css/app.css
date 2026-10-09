@@ -239,14 +239,10 @@ table.list tr.click:hover td { background: #f8fafc; }
 .console-side .roster {
   background: var(--deck); color: #cbd5e1; border: 0;
   border-radius: 0 0 0 18px; box-shadow: -10px 22px 44px -20px rgba(8, 18, 38, .5);
-  padding: 4px 14px 16px; display: flex; flex-direction: column; overflow: hidden;
+  padding: 4px 14px 16px; display: flex; flex-direction: column;
 }
 .dial-home .dialer, .dial-stage > .dialer { background: var(--deck); box-shadow: 10px 22px 44px -16px rgba(8, 18, 38, .5); }
-/* only the trainees scroll: the board keeps its size, and the keys under it stay on screen */
-.board-scroll { flex: 1 1 auto; min-height: 48px; overflow-y: auto; overflow-x: hidden; margin: 0 -4px; padding: 0 4px; }
-.board-scroll::-webkit-scrollbar { width: 8px; }
-.board-scroll::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 4px; }
-.board-scroll::-webkit-scrollbar-track { background: transparent; }
+/* nothing scrolls inside the board: it runs as long as the batch does, and the keys follow it */
 .console-side .roster h3, .console-side .roster .nm { color: #e2e8f0; }
 .console-side .roster .bt, .console-side .roster .muted, .console-side .roster .side-h, .console-side .roster .empty { color: #94a3b8; }
 .console-side .roster .my-line { background: rgba(255, 255, 255, .05); border-color: var(--orange); }
@@ -266,11 +262,10 @@ table.list tr.click:hover td { background: #f8fafc; }
   .console-side .roster { border-radius: var(--radius); }
   .dial-home .dialer, .dial-stage > .dialer { border-radius: 26px; }
 }
-.console.l-folded { --sl: 52px; }
 .console.r-folded { --sr: 52px; }
 @media (max-width: 1420px) { .console { --sl: 260px; --sr: 300px; } }
 @media (max-width: 1240px) { .console { --sl: 240px; --sr: 265px; } }
-@media (max-width: 1140px) { .console, .console.l-folded, .console.r-folded { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1140px) { .console, .console.r-folded { grid-template-columns: minmax(0, 1fr); } }
 .console > *, .dial-stage > *, .dial-side > * { min-width: 0; }
 .console-side { position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow: auto; }
 .console-side > .card + .card { margin-top: 16px; }
@@ -298,7 +293,8 @@ table.list tr.click:hover td { background: #f8fafc; }
 .side-h { text-transform: uppercase; letter-spacing: .5px; font-weight: 700; margin: 12px 0 4px; }
 .side-card { margin: 0; }
 /* how the next call is placed, on the switchboard beside the dialer */
-.board-opts { flex: none; margin-top: 20px; border-top: 1px solid var(--orange); padding-top: 16px; }
+.board-opts { flex: none; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--orange); }
+.board-opts .side-h:first-child { margin-top: 4px; }
 .board-opts .side-h { margin: 0 0 6px; }
 .board-opts .soft-keys { margin-top: 0; }
 /* the sidebars are narrow: their headings wrap instead of pushing the minimize key off the card */

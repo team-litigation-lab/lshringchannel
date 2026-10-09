@@ -211,12 +211,15 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await te.waitForSelector('#tside .rail');
   await te.click('#tside .rail');
   await te.waitForSelector('#tside .roster');
-  await tr.click('#roster [data-fold]');
-  await tr.waitForSelector('#sideL .rail');
-  if (!(await tr.evaluate(() => document.querySelector('#consoleGrid').classList.contains('l-folded')))) throw new Error('The console switchboard should fold away');
-  await tr.click('#sideL .rail');
-  await tr.waitForSelector('#roster .tr');
-  ok('☎ The trainee has the switchboard beside their phone (their batch, their line, the trainers on), and both the console sidebars minimize to a rail and back');
+  // The console's switchboard is part of the phone: it stays put, and only 🎭 the calls to play fold away.
+  if (await tr.$('#roster [data-fold]')) throw new Error('The switchboard is part of the phone: it should not fold away');
+  await tr.click('#sideR [data-fold]');
+  await tr.waitForSelector('#sideR .rail');
+  if (!(await tr.evaluate(() => document.querySelector('#consoleGrid').classList.contains('r-folded')))) throw new Error('🎭 The calls to play should fold away');
+  if (!(await tr.$('#roster .tr'))) throw new Error('The switchboard should still be there with the calls to play folded');
+  await tr.click('#sideR .rail');
+  await tr.waitForSelector('#pkList');
+  ok('☎ The trainee has the switchboard beside their phone (their batch, their line, the trainers on); on the console the switchboard stays with the phone and only 🎭 the calls to play minimize to a rail and back');
 
   // Transfer → trainer answers "no answer"
   await te.click('[data-act="transfer"]');
@@ -373,17 +376,17 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   const deck = await tr.evaluate(() => {
     const r = (s) => { const el = document.querySelector(s); return el ? el.getBoundingClientRect() : null; };
     const d = r('#dialer'), sb = r('#roster'), pk = r('#pkList'), pv = r('#scenPreview'), op = r('.board-opts');
-    const sc = document.querySelector('.board-scroll');
+    const sc = document.querySelector('#roster');
     return { gap: d.left - sb.right, pkBeside: pk.left >= d.right && Math.abs(pk.top - d.top) < 400,
       previewBeside: pv.left >= d.right && Math.abs(pv.top - d.top) < 200,
       endsTogether: Math.abs(sb.bottom - d.bottom) <= 2, optsOnScreen: !!op && op.bottom <= sb.bottom + 1 && op.top >= sb.top,
-      listScrolls: !!sc && getComputedStyle(sc).overflowY === 'auto' };
+      noScroll: !!sc && sc.scrollHeight <= sc.clientHeight + 1 && !/auto|scroll/.test(getComputedStyle(sc).overflowY) };
   });
   if (deck.gap > 2) throw new Error('The switchboard should be attached to the dialer, with no gap: ' + deck.gap);
   if (!deck.pkBeside) throw new Error('🎭 The calls to play should sit beside the dialer, not under it: ' + JSON.stringify(deck));
   if (!deck.previewBeside) throw new Error('The call picked should sit beside the dialer: ' + JSON.stringify(deck));
   if (!deck.endsTogether) throw new Error('The switchboard and the dialer should end on the same line: ' + JSON.stringify(deck));
-  if (!deck.listScrolls || !deck.optsOnScreen) throw new Error('The board should be one size, with the trainees scrolling inside it and the call\'s settings always on screen: ' + JSON.stringify(deck));
+  if (!deck.noScroll || !deck.optsOnScreen) throw new Error('The board should run as one piece with the phone, never scrolling inside itself: ' + JSON.stringify(deck));
   // A late reflow of the phone (a web font arriving, the window changing) must not leave the board short.
   const reflow = await tr.evaluate(async () => {
     const hint = document.querySelector('#dialer .dev-hint');
@@ -393,7 +396,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
     return Math.round(Math.abs(sb.bottom - d.bottom));
   });
   if (reflow > 2) throw new Error('The board should follow the dialer when it reflows, not stay at the height it was first measured at: ' + reflow);
-  ok('The console is one desk: the switchboard attached to the dialer and ending on the same line, the trainees scrolling inside it with the call\'s settings always on screen, the call picked beside the dialer, and 🎭 the calls to play on the right');
+  ok('The console is one desk: the switchboard and the dialer as one piece ending on the same line with nothing scrolling inside, the call picked beside the dialer, and 🎭 the calls to play on the right');
   await tr.click('#pkList .scen.open');
   await tr.click('#dialer [data-line="intake"]');
   await tr.waitForFunction(() => /Open call: no script/.test(document.querySelector('#dialer .lcd-cid').textContent) && /Intake Line/.test(document.querySelector('#dialer .lcd-cid').textContent));
