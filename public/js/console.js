@@ -433,9 +433,7 @@
     if (!U.$('#aiCalls', box)) box.innerHTML = '<div class="card" id="aiCalls"></div>';
     const el = U.$('#aiCalls', box); if (!el) return;
     const list = [...C.ai.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
-    el.innerHTML = `<div class="card-head"><h3 title="Calls where the AI plays the caller">🤖 AI calls</h3></div>
-      <div class="row" style="margin-bottom:10px"><button class="btn btn-sm btn-primary" data-act="aisetup" ${App.cfg.features.ai ? '' : 'disabled'} title="Choose the calls, the voice and who to ring">🎭 Send AI callers…</button></div>
-      ${list.length ? '' : `<div class="empty small">${App.cfg.features.ai ? 'No AI calls yet. <b>🎭 Send AI callers…</b> rings one or several trainees with an AI caller.' : 'AI callers need the Gemini keys (see ⚙️ Setup).'}</div>`}
+    el.innerHTML = `${list.length ? '' : `<div class="empty">${App.cfg.features.ai ? 'No AI calls yet. <b>🎭 Send AI callers…</b> rings one or several trainees with an AI caller.' : 'AI callers need the Gemini keys (see ⚙️ Setup).'}</div>`}
       ${list.map((c) => `<div class="aic"><div class="aic-who"><div class="nm">${esc(c.traineeName)} ${aiLabel(c)}</div><div class="bt">${esc(c.title)}${c.voice ? ' · 🎚 ' + esc(c.voice) : ''}${c.graded ? ' · 📋 graded' : ''}</div></div>
         ${['ringing', 'live'].includes(c.status) ? `<button class="btn btn-sm" data-aifollow="${esc(c.callId)}">👂 Follow</button><button class="btn btn-sm" data-aistop="${esc(c.callId)}" title="End this AI call">⏹</button>`
           : c.status === 'ended' ? `<a class="btn btn-sm" href="#/call/${esc(c.callId)}">📋 Review</a>` : ''}</div>`).join('')}`;
@@ -662,15 +660,14 @@
       return;
     }
     if (!t) {
-      el.innerHTML = `<div class="dial-home"><div class="device dialer" id="dialer"></div></div>
-        <div class="dial-bottom two" id="callerBox"><div id="scenPreview"></div><div id="aiBox"></div></div>`;
-      renderDialer(); renderPicker(); renderPreview(); renderAiCalls();
+      el.innerHTML = `<div class="dial-stage"><div class="device dialer" id="dialer"></div><div class="dial-side" id="scenPreview"></div></div>`;
+      renderDialer(); renderPicker(); renderPreview();
       return;
     }
     el.innerHTML = `<div class="dial-stage"><div class="device dialer" id="dialer"></div><div class="dial-side" id="dialSide"></div></div>`;
     const side = U.$('#dialSide');
     renderPicker();
-    if (t.status === 'ended') { renderEndedSide(side); renderDialer(); renderAiCalls(); return; }
+    if (t.status === 'ended') { renderEndedSide(side); renderDialer(); return; }
     const s = t.scenario;
     const scriptCard = s.open ? `<div class="card script-card">
         <div class="card-head"><h3>🎙 Open call: no script</h3><span class="spacer"></span>${App.trackBadge(s.track)}</div>
@@ -694,7 +691,6 @@
         ${(s.unavailable || []).length ? `<p class="small">🚫 Not available for transfers: ${s.unavailable.map((x) => { const d = App.dirEntry(x); return d ? `<b>${esc(d.name)}</b> (${esc(x)})` : esc(x); }).join(', ')}</p>` : ''}
         ${s.caseId ? `<details><summary class="small" style="cursor:pointer">📁 Case file ${esc(s.caseId)}${(s.hideCases || []).includes(s.caseId) ? ' (not on file for the trainee: a first call)' : ''}</summary><pre class="case">${esc((App.cfg.cases[s.caseId] || {}).text || '')}</pre></details>` : ''}
       </div>`}
-      <div id="aiBox"></div>
       <div class="live-cols">
         <div class="card">
           <div class="card-head"><h3>✅ Live checklist</h3><span class="spacer"></span><span class="small muted">Tick as it happens</span></div>
@@ -779,7 +775,12 @@
         <div class="dialpad">${PAD.map(([k, l]) => `<button type="button" class="dk" data-dk="${k}" aria-label="${k}"><b>${k}</b><small>${l || '&nbsp;'}</small></button>`).join('')}</div>
         <div class="dial-row">${spkKey()}<button type="button" class="dial-call" data-act="ring" title="Ring the trainee (Enter)" aria-label="Call">📞</button>
           <button type="button" class="key" data-act="backspace" title="Delete a digit (Esc clears)" ${pick.dial ? '' : 'disabled'}><span class="ic">⌫</span>Delete</button></div>
-        <p class="dev-hint">Once the call is connected, the keys here are <b>⏸ Coaching time-out</b>, <b>👥 Merge call</b> to bring another trainee in, and <b>↪ Transfer on</b> to hand the caller over — and when the trainee transfers, you answer it here.</p>`;
+        <div class="dev-keys three idle-keys" role="group" aria-label="On the call">
+          <button type="button" class="key" data-act="coach" disabled title="Pause the role-play to coach the trainee, then resume (once the call is connected)"><span class="ic">⏸</span>Coaching time-out</button>
+          <button type="button" class="key conf" data-act="merge" disabled title="Merge another trainee into the call: their phone rings, and once they answer everyone hears everyone (once the call is connected)"><span class="ic">👥</span>Merge call</button>
+          <button type="button" class="key" data-act="handover" disabled title="Hand the caller to another trainee: their phone rings, and when they answer this trainee's call ends and you carry on with the new one (once the call is connected)"><span class="ic">↪</span>Transfer on</button>
+        </div>
+        <p class="dev-hint">These come alive once the call is connected — and when the trainee transfers, you answer it here.</p>`;
     } else if (status === 'ended') {
       main = `<div class="lcd-state">Call ended</div><div class="lcd-name">${esc(t.trainee.name)}</div><div class="lcd-timer" style="color:#94a3b8">${U.dur(t.endedAt - t.answeredAt)}</div><div class="lcd-sub">${esc(t.endNote || '')}</div>`;
       cid = `Played <b>${esc(t.scenario.title)}</b>`;
@@ -840,8 +841,7 @@
       <p><b>${esc(t.trainee.name)}</b> · ${esc(t.scenario.title)}${t.endNote ? ' · ' + esc(t.endNote) : ''}</p>
       <div id="endedInfo"></div>
       <div class="row" style="margin-top:12px"><a class="btn btn-orange" id="scoreBtn" href="#/call/${esc(t.callId)}">📋 Score this call →</a></div>
-      <p class="small muted" style="margin-top:12px">The trainee is finishing and submitting their note; you'll see it on the scorecard. <b>📞 New call</b> on the dialer places the next one.</p></div>
-      <div id="aiBox"></div>`;
+      <p class="small muted" style="margin-top:12px">The trainee is finishing and submitting their note; you'll see it on the scorecard. <b>📞 New call</b> on the dialer places the next one.</p></div>`;
     if (!t.grade && t.graded) t.grade = 'waiting';
     renderEnded();
   }
@@ -947,6 +947,25 @@
   // On a conference the class hears every trainee on the line (the trainer's own voice goes through Meet).
   C.remoteStream = () => (App.t && App.t.mix ? App.t.mix.voices() : (App.t && App.t.rtc && App.t.rtc.remote) || null);
 
+  /* ---------- 🤖 AI calls: its own page ----------
+     The calls where the AI plays the caller: the ones ringing or on the line, the ones that ended and
+     their scores, 👂 Follow for the transcript and the note live, and 🎭 Send AI callers… to start more.
+     They run beside the trainer's own line, so they have the page to themselves. */
+  App.register('aicalls', {
+    trainer: true,
+    render() {
+      const app = U.$('#app');
+      app.innerHTML = `<div class="ai-page">
+        <div class="card-head"><h2>🤖 AI calls</h2><span class="spacer"></span>
+          <button class="btn btn-primary" data-act="aisetup" ${App.cfg.features.ai ? '' : 'disabled'} title="Choose the calls, the voice and who to ring">🎭 Send AI callers…</button></div>
+        <p class="muted">Calls where the AI plays the caller and the trainee takes it on their own phone. Send them to one trainee or to a whole batch; follow a call as it happens, and read the AI's review when it's over. The trainer's own line is free the whole time.</p>
+        <div id="aiBox"></div></div>`;
+      app.firstChild.addEventListener('click', onClick);
+      renderAiCalls();
+      C.loadAi();
+    }
+  });
+
   /* ---------- page ---------- */
   App.register('console', {
     trainer: true,
@@ -960,7 +979,7 @@
       app.firstChild.addEventListener('input', onInput);
       document.addEventListener('keydown', onKey);
       render();
-      renderPicker(); renderAiCalls(); C.loadAi();
+      renderPicker();
       try { C.roster = (await API.post('/api/trainees')).trainees; renderRoster(); if (!App.t) { syncDial(); renderDialer(); } } catch (e) {}
     }
   });

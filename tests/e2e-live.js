@@ -368,23 +368,23 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.goto(B + '/#/console');
   await tr.waitForSelector('#roster .tr[data-tid]');
   // An open call: no script picked. The line key picks the line (Intake), and the trainer improvises the caller.
-  /* The console as a desk: ☎ the switchboard attached to the dialer on the left, 🎭 the calls to play
-     beside it on the right, and under the dialer the call picked next to 🤖 the AI calls. */
+  /* The console as a desk: ☎ the switchboard attached to the dialer on the left, the call picked
+     beside the dialer, and 🎭 the calls to play on the right. */
   const deck = await tr.evaluate(() => {
     const r = (s) => { const el = document.querySelector(s); return el ? el.getBoundingClientRect() : null; };
-    const d = r('#dialer'), sb = r('#roster'), pk = r('#pkList'), pv = r('#scenPreview'), ai = r('#aiBox'), op = r('.board-opts');
+    const d = r('#dialer'), sb = r('#roster'), pk = r('#pkList'), pv = r('#scenPreview'), op = r('.board-opts');
     const sc = document.querySelector('.board-scroll');
     return { gap: d.left - sb.right, pkBeside: pk.left >= d.right && Math.abs(pk.top - d.top) < 400,
-      previewUnder: pv.top > d.top + 300, aiBeside: Math.abs(ai.top - pv.top) < 80 && ai.left >= pv.right,
+      previewBeside: pv.left >= d.right && Math.abs(pv.top - d.top) < 200,
       endsTogether: Math.abs(sb.bottom - d.bottom) <= 2, optsOnScreen: !!op && op.bottom <= sb.bottom + 1 && op.top >= sb.top,
       listScrolls: !!sc && getComputedStyle(sc).overflowY === 'auto' };
   });
   if (deck.gap > 2) throw new Error('The switchboard should be attached to the dialer, with no gap: ' + deck.gap);
   if (!deck.pkBeside) throw new Error('🎭 The calls to play should sit beside the dialer, not under it: ' + JSON.stringify(deck));
-  if (!deck.previewUnder || !deck.aiBeside) throw new Error('The call picked should sit under the dialer with 🤖 AI calls beside it: ' + JSON.stringify(deck));
+  if (!deck.previewBeside) throw new Error('The call picked should sit beside the dialer: ' + JSON.stringify(deck));
   if (!deck.endsTogether) throw new Error('The switchboard and the dialer should end on the same line: ' + JSON.stringify(deck));
   if (!deck.listScrolls || !deck.optsOnScreen) throw new Error('The board should be one size, with the trainees scrolling inside it and the call\'s settings always on screen: ' + JSON.stringify(deck));
-  ok('The console is one desk: the switchboard attached to the dialer and ending on the same line, the trainees scrolling inside it with the call\'s settings always on screen, 🎭 the calls to play beside the dialer, and the call picked under it with 🤖 AI calls alongside');
+  ok('The console is one desk: the switchboard attached to the dialer and ending on the same line, the trainees scrolling inside it with the call\'s settings always on screen, the call picked beside the dialer, and 🎭 the calls to play on the right');
   await tr.click('#pkList .scen.open');
   await tr.click('#dialer [data-line="intake"]');
   await tr.waitForFunction(() => /Open call: no script/.test(document.querySelector('#dialer .lcd-cid').textContent) && /Intake Line/.test(document.querySelector('#dialer .lcd-cid').textContent));
