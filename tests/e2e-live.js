@@ -216,7 +216,6 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.click('#sideL .rail');
   await tr.waitForSelector('#roster .tr');
   ok('☎ The trainee has the switchboard beside their phone (their batch, their line, the trainers on), and both the console sidebars minimize to a rail and back');
-  await te2.close();
 
   // Transfer → trainer answers "no answer"
   await te.click('[data-act="transfer"]');
@@ -402,6 +401,42 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   ok('Open call with no script: the Intake line key rings WIRELESS CALLER on the Intake Line; the trainer gets an open-call card (case files to play from) and the trainee the Intake note');
   await te.goto(B + '/#/phone');
   await te.waitForSelector('#device .lcd');
+  // A fresh call to hand on: the trainer rings Jamie with a scripted call.
+  await tr.click('#pkTrack [data-track="reception"]');
+  await tr.click('#pkList .scen[data-sid="ft_rc_appt"]');
+  for (const d of '7001') await tr.click(`#dialer [data-dk="${d}"]`);
+  await tr.click('[data-act="ring"]');
+  await te.waitForSelector('.lcd.ringing', { timeout: 20000 });
+  await te.click('[data-act="answer"]');
+  await tr.waitForSelector('#dialer .lcd-timer', { timeout: 20000 });
+  /* ↪ Transfer on: the trainer hands the caller to another trainee. Their phone rings, and when they
+     answer the first trainee's call ends (scored as it stands) and the line carries on with the new one. */
+  const firstCall = await tr.evaluate(() => App.t.callId);
+  await tr.click('#dialer [data-act="handover"]');
+  await tr.waitForSelector('.modal [data-merge]');
+  await tr.click('.modal [data-merge]');
+  await te2.waitForSelector('.lcd.ringing', { timeout: 20000 });
+  if (!/transferred to you/i.test(await te2.textContent('#device'))) throw new Error('The transferred-to trainee should be told where the call came from');
+  await sleep(600);
+  await te2.click('[data-act="answer"]');
+  await te2.waitForSelector('.lcd.live', { timeout: 20000 });
+  await tr.waitForFunction((id) => App.t && App.t.callId !== id && App.t.status === 'live', firstCall, { timeout: 25000 });
+  await te.waitForFunction(() => /passed the caller to another desk/.test(document.querySelector('#work').textContent), null, { timeout: 20000 });
+  const moved = await tr.evaluate(() => ({ name: App.t.trainee.name, from: App.t.handoverFrom, legs: (App.t.legs || []).length, mix: !!App.t.mix }));
+  if (moved.name !== 'Riley Santos' || moved.from !== 'Jamie Cruz' || moved.legs || moved.mix) throw new Error('The line should carry on with the trainee the caller was transferred to: ' + JSON.stringify(moved));
+  await sleep(2500);
+  const h1 = await inb(te2, 'p');
+  if (!(h1.bytes > 2000)) throw new Error('No audio after the transfer: ' + JSON.stringify(h1));
+  const handed = await tr.evaluate(async (id) => (await API.post('/api/call', { id })).call, firstCall);
+  if (handed.status !== 'ended') throw new Error("The first trainee's call should have ended when the caller was transferred on: " + handed.status);
+  ok(`↪ Transferred the caller to a second trainee: their phone rang and told them who it came from, the first call ended and is scored as it stands, and the line carries on (${h1.bytes} B)`);
+  await tr.click('[data-act="hangup"]');
+  await te2.waitForFunction(() => !document.querySelector('.lcd.live'), null, { timeout: 20000 });
+  await tr.waitForSelector('#dialer [data-act="newcall"]');
+  await tr.click('#dialer [data-act="newcall"]');
+  await te.goto(B + '/#/phone');
+  await te.waitForSelector('#device .lcd');
+  await te2.close();
   // Typing on the keyboard dials too; a firm extension isn't a trainee; Esc clears; Enter rings
   await tr.click('#pkTrack [data-track="reception"]');
   await tr.click('#pkList .scen[data-sid="ft_rc_appt"]');

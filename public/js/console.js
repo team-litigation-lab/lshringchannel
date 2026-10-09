@@ -66,7 +66,7 @@
       case 'conf-ringing':
         if (!t || m.parent !== t.callId) return;
         t.legs = (t.legs || []).filter((l) => l.callId !== m.callId);
-        t.legs.push({ callId: m.callId, trainee: m.trainee, status: 'ringing', ringAt: m.createdAt || Date.now() });
+        t.legs.push({ callId: m.callId, trainee: m.trainee, status: 'ringing', handover: !!m.handover, ringAt: m.createdAt || Date.now() });
         Sounds.beep();
         renderConf(); renderDialer();
         return;
@@ -74,6 +74,7 @@
         U.toast(m.reason, 'error');
         return;
       case 'conf-parties': return;   // the trainees' own phones show who else is on the call
+      case 'handover': return;        // the line already moved when the next trainee answered
       case 'conf-state': {
         if (!t || m.callId !== t.callId) return;
         const keep = new Set((m.legs || []).map((x) => x.callId));
@@ -178,20 +179,41 @@
      ordinary way; this browser then mixes the voices (VoIP.Mixer) and sends each person the trainer's
      microphone plus everyone else, so all three (or four) hear one another. The conference is recorded
      as one call on the trainer's side; the merged legs aren't graded of their own. */
-  function confPick() {
+  /* ↪ Transfer: the trainer hands the caller to another trainee, the way a switchboard passes a call
+     on. Their phone rings; when they answer, the first trainee's call ends (graded on its own, so how
+     they handed the call over is part of their score) and the caller carries on with the new one. */
+  function confPick(over) {
     const t = App.t;
-    if (!t || t.status !== 'live') return U.toast('Merge works once a call is connected.', 'error');
+    if (!t || t.status !== 'live') return U.toast(`${over ? 'Transfer' : 'Merge'} works once a call is connected.`, 'error');
     const on = (t.legs || []).map((l) => l.trainee.id);
+    if (over && on.length) return U.toast('Drop the merged trainees before you transfer the caller on.', 'error');
     const list = (App.presence.trainees || []).filter((x) => !x.call && x.id !== t.trainee.id && !on.includes(x.id));
-    const m = App.modal({ title: '👥 Merge another trainee into this call',
-      body: `<p class="small muted">Their phone rings like any call. Once they answer, everyone on the call hears everyone: you (the caller), ${esc(t.trainee.name)}${(t.legs || []).length ? ', ' + (t.legs || []).map((l) => esc(l.trainee.name)).join(', ') : ''} and them. Up to two more trainees.</p>
+    const m = App.modal({ title: over ? '↪ Transfer the caller to another trainee' : '👥 Merge another trainee into this call',
+      body: `<p class="small muted">${over
+        ? `Their phone rings like any call. When they answer, <b>${esc(t.trainee.name)}</b>'s call ends and you carry on with them, still as the same caller — so you can see whether the call was handed over properly. ${esc(t.trainee.name)}'s call is scored as it stands.`
+        : `Their phone rings like any call. Once they answer, everyone on the call hears everyone: you (the caller), ${esc(t.trainee.name)}${(t.legs || []).length ? ', ' + (t.legs || []).map((l) => esc(l.trainee.name)).join(', ') : ''} and them. Up to two more trainees.`}</p>
         ${list.map((x) => `<div class="dir-row"><span class="ext mono">${esc(x.ext || '')}</span><div style="flex:1"><b>${esc(x.name)}</b><div class="small muted">${esc(x.batch)} · ${x.status === 'available' ? 'available' : 'away'}${x.hand ? ' · ✋ asked for a call' : ''}</div></div>
-          <button class="btn btn-sm btn-green" data-merge="${esc(x.id)}">👥 Merge in</button></div>`).join('') || '<div class="empty small">No other trainee is free right now.</div>'}` });
+          <button class="btn btn-sm btn-green" data-merge="${esc(x.id)}">${over ? '↪ Transfer to them' : '👥 Merge in'}</button></div>`).join('') || '<div class="empty small">No other trainee is free right now.</div>'}` });
     m.el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-merge]'); if (!b) return;
-      App.board.send({ t: 'conf-ring', callId: t.callId, traineeId: b.dataset.merge });
+      App.board.send({ t: 'conf-ring', callId: t.callId, traineeId: b.dataset.merge, handover: !!over });
       m.close();
     });
+  }
+
+  // The next trainee answered a transfer: the first call ends, and the line carries on with them.
+  async function handover(l) {
+    const old = App.t; if (!old) return;
+    old.legs = (old.legs || []).filter((x) => x !== l);
+    const base = { scenario: old.scenario, line: old.line, lineLabel: old.lineLabel, callerId: old.callerId, record: old.record, graded: old.graded };
+    endCall({ by: 'trainer', reason: 'handover' });
+    App.t = Object.assign({}, base, { callId: l.callId, status: 'connecting', trainee: l.trainee, handoverFrom: old.trainee.name,
+      ringAt: l.ringAt || Date.now(), answeredAt: Date.now(), note: {}, ticks: [], metrics: {},
+      traineeHeld: false, traineeMuted: false, muted: false, transfer: null, coaching: false, legs: [] });
+    App.ownCall(App.t.callId);
+    U.toast(`↪ ${old.trainee.name}'s call is scored as it stands; you're on the line with ${l.trainee.name} now.`, 'ok');
+    connect(App.t, Date.now());
+    render(); App.onCallBar();
   }
 
   function onLeg(l, m) {
@@ -199,6 +221,7 @@
     switch (m.t) {
       case 'accepted':
         l.status = 'connecting'; l.answeredAt = Date.now();
+        if (l.handover) { handover(l); return; }
         legConnect(l, Date.now());
         renderConf(); renderDialer();
         return;
@@ -308,7 +331,7 @@
     el.innerHTML = `<div class="card conf-card"><div class="card-head"><h3>👥 Conference</h3><span class="spacer"></span><span class="badge green">${legs.filter((l) => l.status === 'live').length + 1} trainees on the line</span></div>
       <div class="conf-row"><span class="led live"></span><div style="flex:1"><b>${esc(t.trainee.name)}</b><div class="small muted">${esc(t.trainee.batch || '')}${t.trainee.ext ? ' · ext ' + esc(t.trainee.ext) : ''} · took the call</div></div></div>
       ${legs.map((l) => `<div class="conf-row"><span class="led ${l.status === 'live' ? 'live' : 'ringing'}"></span>
-        <div style="flex:1"><b>${esc(l.trainee.name)}</b><div class="small muted">${esc(l.trainee.batch || '')}${l.trainee.ext ? ' · ext ' + esc(l.trainee.ext) : ''} · ${l.status === 'ringing' ? 'ringing…' : l.status === 'connecting' ? 'connecting…' : 'merged in'}${l.held ? ' · on hold' : ''}${l.muted ? ' · muted' : ''}${l.lost ? ' · reconnecting' : ''}</div></div>
+        <div style="flex:1"><b>${esc(l.trainee.name)}</b><div class="small muted">${esc(l.trainee.batch || '')}${l.trainee.ext ? ' · ext ' + esc(l.trainee.ext) : ''} · ${l.handover ? '↪ transferring the caller to them…' : l.status === 'ringing' ? 'ringing…' : l.status === 'connecting' ? 'connecting…' : 'merged in'}${l.held ? ' · on hold' : ''}${l.muted ? ' · muted' : ''}${l.lost ? ' · reconnecting' : ''}</div></div>
         <button class="btn btn-sm" data-drop="${esc(l.callId)}" title="Take them off the call">⏏ Drop</button></div>`).join('')}
       <p class="small muted" style="margin:8px 0 0">Everyone hears everyone: your voice goes to all of them, and their voices to each other. The recording has every voice in it.</p></div>`;
   }
@@ -727,7 +750,8 @@
         </div>
         <div class="dev-btns"><button type="button" class="dev-btn ai" data-act="airing" title="Ring the trainee with an AI caller: the AI plays ${s ? 'this call\'s caller' : 'a random caller on this line'}, you follow it live, and the AI reviews it" ${App.cfg.features.ai ? '' : 'disabled'}>🤖 AI caller</button>
           <button type="button" class="dev-btn" data-act="aisetup" title="Choose the calls the AI may play, the voice it speaks with, and the trainees to ring (several at once)" ${App.cfg.features.ai ? '' : 'disabled'}>🎭 Choose…</button>
-          <button type="button" class="dev-btn wide ${C.classOn() ? 'on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view'}</button></div>`;
+          <button type="button" class="dev-btn wide ${C.classOn() ? 'on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view'}</button></div>
+        <p class="dev-hint">Once the call is connected: <b>👥 Merge</b> another trainee in · <b>↪ Transfer on</b> to hand the caller over · <b>⏸ Coaching time-out</b>. When the trainee transfers, you answer it here.</p>`;
     } else if (status === 'ended') {
       main = `<div class="lcd-state">Call ended</div><div class="lcd-name">${esc(t.trainee.name)}</div><div class="lcd-timer" style="color:#94a3b8">${U.dur(t.endedAt - t.answeredAt)}</div><div class="lcd-sub">${esc(t.endNote || '')}</div>`;
       cid = `Played <b>${esc(t.scenario.title)}</b>`;
@@ -736,7 +760,7 @@
       const live = status === 'live';
       const st = status === 'ringing' ? `Calling · <span data-rings="${t.ringAt}">${U.ringText(t.ringAt)}</span>`
         : status === 'connecting' ? (t.slow ? 'Still connecting the audio…' : 'Connecting…') : t.coaching ? 'Coaching time-out' : t.traineeHeld ? 'You\'re on hold' : 'Connected';
-      main = `<div class="lcd-state ${live ? 'ok' : ''}">${st}</div><div class="lcd-name">${esc(t.trainee.name)}</div><div class="lcd-num">${t.trainee.ext ? 'Ext ' + esc(t.trainee.ext) + ' · ' : ''}${esc(t.trainee.batch || '')}</div>${live ? `<div class="lcd-timer t" data-since="${t.answeredAt}">${U.since(t.answeredAt)}</div>` : ''}`;
+      main = `<div class="lcd-state ${live ? 'ok' : ''}">${st}</div><div class="lcd-name">${t.handoverFrom ? '↪ ' : ''}${esc(t.trainee.name)}</div><div class="lcd-num">${t.trainee.ext ? 'Ext ' + esc(t.trainee.ext) + ' · ' : ''}${esc(t.trainee.batch || '')}</div>${live ? `<div class="lcd-timer t" data-since="${t.answeredAt}">${U.since(t.answeredAt)}</div>` : ''}`;
       cid = `As <b>${esc(t.callerId.name)} ${esc(t.callerId.number)}</b> · ${esc(t.lineLabel)}`;
       keys = `<div class="dev-keys two">
           <button type="button" class="key mute ${t.muted ? 'on' : ''}" data-act="mute" ${live ? '' : 'disabled'}><span class="ic">${t.muted ? '🔇' : '🎙'}</span>${t.muted ? 'Unmute' : 'Mute'}</button>
@@ -744,6 +768,7 @@
           <button type="button" class="key coach ${t.coaching ? 'on' : ''}" data-act="coach" ${live ? '' : 'disabled'} title="Pause the role-play to coach the trainee, then resume"><span class="ic">${t.coaching ? '▶' : '⏸'}</span>${t.coaching ? 'Resume role-play' : 'Coaching time-out'}</button>
           <button type="button" class="key cls ${C.classOn() ? 'on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script"><span class="ic">📺</span>${C.classOn() ? 'Class view on' : 'Class view'}</button>
           <button type="button" class="key conf ${confCount() ? 'on' : ''}" data-act="merge" ${live ? '' : 'disabled'} title="Merge another trainee into this call: their phone rings, and once they answer everyone hears everyone"><span class="ic">👥</span>${confCount() ? 'Merge another' : 'Merge call'}</button>
+          <button type="button" class="key" data-act="handover" ${live && !confCount() ? '' : 'disabled'} title="Hand the caller to another trainee: their phone rings, and when they answer this trainee's call ends and you carry on with the new one"><span class="ic">↪</span>Transfer on</button>
           <button type="button" class="key hang wide" data-act="hangup"><span class="ic">☎</span>${status === 'ringing' ? 'Cancel call' : 'End call'}</button></div>`;
     }
     el.innerHTML = `<div class="dev-head"><span class="led ${led}"></span><b>Trainer line</b>${App.myExt ? ` <span class="mono" title="Your own trainer extension on this switchboard">ext ${esc(App.myExt)}</span>` : ''}<span class="spacer"></span><span>${esc(App.me.name)}</span></div>
@@ -944,7 +969,8 @@
     else if (act === 'hangup') hangup();
     else if (act === 'mute') toggleMute();
     else if (act === 'coach') toggleCoach();
-    else if (act === 'merge') confPick();
+    else if (act === 'merge') confPick(false);
+    else if (act === 'handover') confPick(true);
     else if (act === 'miccheck') App.micCheck();
     else if (act === 'newcall') { App.t = null; pick.dial = ''; syncDial(); render(); }   // the screen clears for the next call
     else if (act === 'takehere') takeHere();

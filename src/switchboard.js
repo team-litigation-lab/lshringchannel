@@ -146,7 +146,8 @@ export class Switchboard extends DurableObject {
     const b = { callId: r.id, status: r.status, line, lineLabel: LINES[line].label, lineNumber: LINES[line].number, track: s.track,
       callerId: r.data.withheld ? { name: 'PRIVATE CALLER', number: 'Unknown' } : { name: s.caller.idName, number: s.caller.number },
       createdAt: r.created_at, answeredAt: r.answered_at || null, recording: !!r.data.record, trainer: r.trainer, live: r.data.live || {} };
-    if (r.data.conf) b.conf = { parent: r.data.conf.parent };
+    if (r.data.conf) b.conf = { parent: r.data.conf.parent, handover: !!r.data.conf.handover, from: r.data.conf.from || '' };
+    if (r.data.handoverFrom) b.handoverFrom = r.data.handoverFrom;
     if (role === 'a') Object.assign(b, { scenario: s, graded: !!r.data.graded, trainee: { id: r.trainee_id, name: r.trainee_name, batch: r.batch, ext: (this.trainee(r.trainee_id) || {}).ext || '' }, note: r.data.note || {}, ticks: r.data.ticks || [], metrics: r.data.metrics || {}, traineeCid: r.data.traineeCid || null });
     else Object.assign(b, { trainerCid: r.data.trainerCid || null, note: r.data.note || {}, hideCases: s.hideCases || [], caseId: r.data.caseId || '' });
     return b;
@@ -406,7 +407,22 @@ export class Switchboard extends DurableObject {
         if (!trainer) { r.data.lost = { a: t }; this.save(r); await this.armAlarm(t + GRACE_MS); }
         await this.armAlarm(t + MAX_CALL_MS);
         this.presence();
-        if (r.data.conf) this.confTell(this.row(r.data.conf.parent));
+        if (r.data.conf) {
+          const parent = this.row(r.data.conf.parent);
+          if (!r.data.conf.handover) this.confTell(parent);
+          else {
+            // ↪ The caller is handed over: the first trainee's call ends (and is graded on its own),
+            // and this one becomes the call on the trainer's line.
+            const from = r.data.conf.from || (parent ? parent.trainee_name : '');
+            if (parent) { parent.data.legs = (parent.data.legs || []).filter((id) => id !== r.id); this.save(parent); if (parent.status === 'live') this.endCall(parent, 'trainer', 'handover'); }
+            delete r.data.conf;
+            r.data.handoverFrom = from;
+            this.save(r);
+            const trainerWs = this.byCid(r.data.trainerCid);
+            if (trainerWs) this.setAtt(trainerWs, { call: r.id });
+            this.send(trainerWs, { t: 'handover', callId: r.id, from, parent: parent ? parent.id : '' });
+          }
+        }
         return;
       }
       case 'decline':   // busy: the trainee is on a practice call
@@ -527,25 +543,28 @@ export class Switchboard extends DurableObject {
       case 'conf-ring': {
         if (me.role !== 'a') return;
         const p = r;
-        if (!p || p.mode !== 'live' || p.status !== 'live' || p.data.trainerCid !== me.cid) return err('Start a call first, then merge another trainee into it.');
+        const over = !!m.handover;   // ↪ hand the caller to another trainee, instead of merging them in
+        if (!p || p.mode !== 'live' || p.status !== 'live' || p.data.trainerCid !== me.cid) return err(`Start a call first, then ${over ? 'transfer it' : 'merge another trainee into it'}.`);
         if (p.data.conf) return err('Merge from the first call on the line, not from a merged one.');
         const tr = this.trainee(String(m.traineeId || ''));
         if (!tr || tr.archived) return this.send(ws, { t: 'conf-failed', callId: p.id, reason: 'Dial the trainee you want to merge in.' });
         const legs = this.legsOf(p);
         if (legs.length >= MAX_CONF) return this.send(ws, { t: 'conf-failed', callId: p.id, reason: `A conference holds you and ${MAX_CONF + 1} trainees.` });
         if (tr.id === p.trainee_id || legs.some((x) => x.trainee_id === tr.id)) return this.send(ws, { t: 'conf-failed', callId: p.id, reason: `${tr.name} is already on this call.` });
+        if (over && legs.length) return this.send(ws, { t: 'conf-failed', callId: p.id, reason: 'Drop the merged trainees before you transfer the caller on.' });
         const phones = this.open('u:' + tr.id).filter((w) => this.att(w).role === 't');
         if (!phones.length) return this.send(ws, { t: 'conf-failed', callId: p.id, reason: `${tr.name}'s phone isn't open.` });
         if (phones.some((w) => { const a = this.att(w); if (!a.call) return false; const c = this.row(a.call); return c && ['ringing', 'live'].includes(c.status); })) return this.send(ws, { t: 'conf-failed', callId: p.id, reason: `${tr.name} is on another call.` });
         const s = p.data.scenario;
-        const r2 = { id: newId(), mode: 'live', track: s.track, scenario_id: s.id, title: s.title + ' (conference)', trainee_id: tr.id, trainee_name: tr.name, batch: tr.batch, trainer: me.name,
-          status: 'ringing', created_at: t, data: { scenario: s, trainerCid: me.cid, graded: false, record: false, withheld: !!p.data.withheld,
-            conf: { parent: p.id }, metrics: {}, note: {}, ticks: [], events: [{ t: 'ring', at: t }] } };
+        // A transferred call is a call of the trainee's own: graded and recorded like any other.
+        const r2 = { id: newId(), mode: 'live', track: s.track, scenario_id: s.id, title: s.title + (over ? ' (transferred)' : ' (conference)'), trainee_id: tr.id, trainee_name: tr.name, batch: tr.batch, trainer: me.name,
+          status: 'ringing', created_at: t, data: { scenario: s, trainerCid: me.cid, graded: over ? !!p.data.graded : false, record: over ? !!p.data.record : false, withheld: !!p.data.withheld,
+            conf: { parent: p.id, handover: over, from: p.trainee_name }, metrics: {}, note: {}, ticks: [], events: [{ t: 'ring', at: t }] } };
         this.save(r2);
         p.data.legs = [...legs.map((x) => x.id), r2.id];
         this.save(p);
         phones.forEach((w) => { this.setAtt(w, { call: r2.id, hand: false, handAt: 0 }); this.send(w, Object.assign({ t: 'incoming' }, this.brief(r2, 't'))); });
-        this.send(ws, Object.assign({ t: 'conf-ringing', parent: p.id }, this.brief(r2, 'a')));
+        this.send(ws, Object.assign({ t: 'conf-ringing', parent: p.id, handover: over }, this.brief(r2, 'a')));
         await this.armAlarm(t + RING_MS);
         this.presence();
         this.confTell(p);

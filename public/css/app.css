@@ -180,6 +180,8 @@ table.list tr.click:hover td { background: #f8fafc; }
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, .6); } 70% { box-shadow: 0 0 0 14px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
 .key.hang { background: var(--red); color: #fff; } .key.hang:hover { background: #b91c1c; }
 .key.hand.on { background: var(--orange); color: #fff; }
+.dev-hint { margin: 10px 2px 0; font-size: 11.5px; line-height: 1.5; color: #64748b; text-align: center; }
+.dev-hint b { color: #94a3b8; font-weight: 600; }
 .dev-foot { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 12px; color: #94a3b8; padding: 0 4px; }
 .dev-foot input[type=range] { flex: 1; accent-color: var(--orange); }
 .dev-status { display: flex; gap: 6px; margin-top: 12px; }
@@ -226,9 +228,33 @@ table.list tr.click:hover td { background: #f8fafc; }
 /* ---------- trainer console ---------- */
 .console { display: grid; grid-template-columns: var(--sl, 290px) minmax(0, 1fr) var(--sr, 290px); column-gap: 0; row-gap: 18px; align-items: start; }
 .console-side.right { margin-left: 18px; }
-/* ☎ the switchboard runs into the dialer: flush edges, so the two read as one desk */
-.console-side .side-brand, .console-side .roster { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.console-side .roster { border-right: 0; }
+/* ☎ the switchboard runs into the dialer: the same dark case, flush edges, no seam between them,
+   so the logo, the board and the phone read as one piece of desk equipment. */
+.console-side .side-brand { margin-bottom: 0; border-radius: 18px 0 0 0; padding-bottom: 16px; }
+.console-side .roster {
+  background: linear-gradient(160deg, #13254d, #0a1530 70%); color: #cbd5e1; border: 0;
+  border-radius: 0 0 0 18px; box-shadow: 0 20px 50px rgba(8, 18, 38, .35), inset 0 1px 0 rgba(255, 255, 255, .06);
+  padding: 4px 14px 16px;
+}
+.console-side .roster h3, .console-side .roster .nm { color: #e2e8f0; }
+.console-side .roster .bt, .console-side .roster .muted, .console-side .roster .side-h, .console-side .roster .empty { color: #94a3b8; }
+.console-side .roster .my-line { background: rgba(255, 255, 255, .05); border-color: #22386a; }
+.console-side .roster .my-line .nm { color: #fff; }
+.console-side .roster .tr:hover { background: rgba(255, 255, 255, .06); }
+.console-side .roster .tr.sel { background: rgba(249, 115, 22, .18); }
+.console-side .roster .input { background: #0a1530; border-color: #22386a; color: #e2e8f0; }
+.console-side .roster .fold-btn { background: transparent; border-color: #22386a; color: #94a3b8; }
+.console-side .roster .fold-btn:hover { border-color: var(--orange); color: #fff; }
+.console-side .roster .btn { background: transparent; border-color: #22386a; color: #cbd5e1; }
+.console-side .roster .btn-green { background: var(--green); border-color: var(--green); color: #fff; }
+.console-side .roster summary { color: #94a3b8; }
+/* the phone's left side is open where the board meets it */
+.dial-home .dialer, .dial-stage > .dialer { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+@media (max-width: 1140px) {
+  .console-side .side-brand { margin-bottom: 14px; border-radius: 16px; }
+  .console-side .roster { border-radius: var(--radius); }
+  .dial-home .dialer, .dial-stage > .dialer { border-radius: 26px; }
+}
 .console.l-folded { --sl: 52px; }
 .console.r-folded { --sr: 52px; }
 @media (max-width: 1340px) { .console { --sl: 250px; --sr: 250px; gap: 14px; } }

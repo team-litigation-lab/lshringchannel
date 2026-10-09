@@ -94,7 +94,9 @@
 
   const fromBrief = (m) => ({ mode: 'live', callId: m.callId, line: m.line, lineLabel: m.lineLabel, lineNumber: m.lineNumber, callerId: m.callerId, track: m.track,
     hideCases: m.hideCases || [], rec: !!m.recording, trainer: m.trainer, note: {}, muted: false, held: false, caseId: m.caseId || '',
-    merged: !!m.conf });   // merged: this phone was rung into a call the trainer already had on the line
+    // merged: rung into a call the trainer already had on the line. handedFrom: the caller was transferred here.
+    merged: !!(m.conf && !m.conf.handover),
+    handedFrom: (m.conf && m.conf.handover ? m.conf.from : '') || m.handoverFrom || '' });
 
   function incoming(m) {
     if (App.p && active(App.p)) {
@@ -280,7 +282,7 @@
     cleanupLive(p);
     p.status = 'ended'; p.endedAt = Date.now();
     if (!p.answeredAt) p.answeredAt = p.endedAt;
-    p.endNote = m.reason === 'transferred' ? `Transferred to ${p.transfer ? p.transfer.to : 'the extension'}` : m.reason === 'disconnected' ? 'The line dropped' : m.by === 'trainer' ? 'The caller hung up' : m.by === 'trainee' ? 'You hung up' : '';
+    p.endNote = m.reason === 'handover' ? 'Your trainer passed the caller to another desk' : m.reason === 'transferred' ? `Transferred to ${p.transfer ? p.transfer.to : 'the extension'}` : m.reason === 'disconnected' ? 'The line dropped' : m.by === 'trainer' ? 'The caller hung up' : m.by === 'trainee' ? 'You hung up' : '';
     p.held = false; p.muted = false; p.coaching = false;
     Sounds.endTone();
     renderAll(); App.onCallBar();
@@ -484,6 +486,7 @@
         : `<div class="dev-msg transfer">📵 No answer at ext ${esc(tx.ext)} (${esc(tx.to)}). ${p.mode === 'ai' ? 'You are back with the caller.' : 'Press <b>Resume</b> to go back to the caller.'}</div>`;
     } else if (p && p.peerLost) msg = `<div class="dev-msg lost">The caller's connection dropped. Waiting for them to come back…</div>`;
     else if (p && p.slow && p.status === 'connecting') msg = `<div class="dev-msg lost">Still connecting the audio… If it doesn't connect, your network may be blocking calls: tell your trainer (the TURN relay fixes this).</div>`;
+    else if (p && p.handedFrom && ['ringing', 'live'].includes(p.status)) msg = `<div class="dev-msg transfer">↪ <b>A call transferred to you</b> from ${esc(p.handedFrom)}. The caller has already spoken to them: pick the call up, find out where they got to, and take it from there.</div>`;
     else if (p && p.conf && p.status === 'live') msg = `<div class="dev-msg coach">👥 <b>Conference call.</b> On the line with you: ${esc(p.conf.others.join(', ') || 'your trainer')}${p.conf.trainer ? ' and ' + esc(p.conf.trainer) + ' (the caller)' : ''}. Everyone hears everyone.</div>`;
     else if (p && p.notice && p.status === 'live') msg = `<div class="dev-msg">${esc(p.notice)}</div>`;
     else if (p && p.classOn && p.status === 'live') msg = `<div class="dev-msg coach">🎧 <b>Your class is listening in Google Meet.</b> If you're in the Meet too, mute your Meet mic and the Meet tab (right-click the tab → Mute site) until the call ends, so there's no echo.</div>`;
