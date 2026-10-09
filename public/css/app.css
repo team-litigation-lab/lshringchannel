@@ -25,8 +25,9 @@ p { margin: 0 0 .7em; }
 /* ---------- top bar ---------- */
 .top { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 18px; padding: 0 20px; height: 58px; background: var(--navy-deep); color: #fff; border-bottom: 3px solid var(--orange); }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .2px; white-space: nowrap; }
-/* the standard LSH logo, as the other LSH sites show it; on white, because its wordmark is navy */
-.brand .logo { height: 36px; width: auto; border-radius: 8px; background: #fff; padding: 3px 7px; box-sizing: border-box; display: block; }
+/* the standard LSH logo, as the other LSH sites show it: drawn for a navy background, so it sits
+   straight on the top bar with no white square behind it */
+.brand .logo { height: 36px; width: auto; display: block; }
 .brand small { font-weight: 600; color: #94a3b8; font-size: 12px; }
 .nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .nav a { color: #cbd5e1; text-decoration: none; padding: 7px 12px; border-radius: 9px; font-weight: 600; font-size: 14px; white-space: nowrap; position: relative; }
