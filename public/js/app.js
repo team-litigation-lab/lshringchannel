@@ -81,7 +81,7 @@
 
   App.navItems = function () {
     return App.trainer()
-      ? [['console', '🎛 Console'], ['calls', '🗂 Call log'], ['graded', '📋 Graded calls'], ['scenarios', '📚 Scenarios'], ['trainees', '👥 Trainees'], ['practice', '🎧 Try practice'], ['setup', '⚙️ Setup']]
+      ? [['console', '🎛 Console'], ['aicalls', '🤖 AI calls'], ['calls', '🗂 Call log'], ['graded', '📋 Graded calls'], ['scenarios', '📚 Scenarios'], ['trainees', '👥 Trainees'], ['practice', '🎧 Try practice'], ['setup', '⚙️ Setup']]
       : [['phone', '📞 My phone'], ['practice', '🎧 Practice'], ['calls', '🗂 My calls']];
   };
 
