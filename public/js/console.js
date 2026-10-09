@@ -632,7 +632,9 @@
 
   /* The switchboard and the dialer are one piece: the board's case reaches down to the foot of the
      phone however short the batch is, and simply grows past it when the batch is long — it never
-     scrolls inside itself. */
+     scrolls inside itself. The call-to-play card on the right follows the same rule: it's capped to
+     the dialer's own height, so the whole console reads as one screen, and its own list of calls
+     scrolls inside the card instead of stretching the page past the dialer. */
   let deckWatch = null;
   // Measured once, the board goes stale the moment anything reflows the phone (a web font arriving
   // and rewrapping its text, the window resizing, a key appearing), so it follows the dialer instead.
@@ -644,13 +646,20 @@
     const h = Math.max(Math.round(want), 420) + 'px';
     if (card.style.minHeight !== h) card.style.minHeight = h;
   }
+  function fitRight() {
+    const card = U.$('#pkCard'), dialer = U.$('#dialer');
+    if (!card || !dialer) return;
+    if (window.innerWidth <= 1140) { card.style.height = ''; return; }
+    const h = Math.max(Math.round(dialer.getBoundingClientRect().height), 420) + 'px';
+    if (card.style.height !== h) card.style.height = h;
+  }
   function matchHeights() {
     requestAnimationFrame(() => {
-      fitBoard();
+      fitBoard(); fitRight();
       const dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
       if (!dialer || !window.ResizeObserver) return;
       if (deckWatch) deckWatch.disconnect();
-      deckWatch = new ResizeObserver(() => fitBoard());
+      deckWatch = new ResizeObserver(() => { fitBoard(); fitRight(); });
       deckWatch.observe(dialer);
       if (brand) deckWatch.observe(brand);
     });
@@ -884,7 +893,7 @@
     const list = App.cfg.scenarios.filter((x) => x.track === pick.track);
     const s = App.scen[pick.scenarioId];
     const line = lineOf(pick.track).label;
-    side.innerHTML = `<div class="card picker">
+    side.innerHTML = `<div class="card picker" id="pkCard">
       <div class="card-head"><h3>🎭 The call to play</h3><span class="spacer"></span>${App.foldKey(FOLD_R, 'the calls to play')}</div>
       <div class="pill-tabs" id="pkTrack">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === pick.track ? 'on' : ''}" title="${esc(t.label)} calls, on the ${esc(lineOf(k).label)}">${t.icon} ${esc(t.label)}</button>`).join('')}</div>
       <div class="callers compact" id="pkList">
@@ -894,6 +903,7 @@
           <div class="cav">${esc((x.caller.name || '?').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase())}</div>
           <div class="cbody"><h4>${esc(x.title)}</h4><p>${App.levelBadge(x.level)}${x.caseId ? `<span class="badge">${esc(x.caseId)}</span>` : ''}${x.custom ? '<span class="badge blue">Yours</span>' : ''}</p></div></div>`).join('')}</div>
       <p class="small muted" style="margin:10px 0 0">Optional: the call the trainer plays. <a href="#/scenarios">📚 Write your own call</a></p></div>`;
+    matchHeights();
   }
 
   // Under the dialer: the call picked on the right, ready to play.
