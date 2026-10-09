@@ -209,9 +209,9 @@
     } catch (e) {}
     return !!set;
   };
-  App.foldKey = (key, label, title) => `<button type="button" class="fold-btn" data-fold="${esc(key)}" title="${esc(title || ('Minimize ' + label))}" aria-label="${esc(title || ('Minimize ' + label))}">${App.folded(key) ? '»' : '«'}</button>`;
+  App.foldKey = (key, label, title) => `<button type="button" class="fold-btn" data-fold="${esc(key)}" title="${esc(title ? 'Minimize ' + title : 'Minimize ' + label)}" aria-label="${esc('Minimize ' + (title || label))}" aria-expanded="true"><span class="fb-ic">«</span> Minimize</button>`;
   // The thin rail a folded panel leaves behind: click it to bring the panel back.
-  App.railHTML = (key, label, icon) => `<button type="button" class="rail" data-fold="${esc(key)}" title="Open ${esc(label)}"><span class="rail-ic">${icon}</span><span class="rail-label">${esc(label)}</span></button>`;
+  App.railHTML = (key, label, icon) => `<button type="button" class="rail" data-fold="${esc(key)}" title="Maximize ${esc(label)}" aria-label="Maximize ${esc(label)}" aria-expanded="false"><span class="rail-ic">${icon}</span><span class="rail-label">${esc(label)}</span><span class="rail-max">» Maximize</span></button>`;
 
   /* ---------- dialogs ---------- */
   App.modal = function ({ title, body, foot, wide, onClose }) {

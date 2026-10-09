@@ -50,6 +50,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.click('#pkList .scen[data-sid="ft_rc_offer"]');
   if (!/LIBERTY CREST INS/.test(await tr.textContent('#dialer .lcd-cid'))) throw new Error('The dialer should show the caller ID the trainee will see');
   if (!(await tr.isChecked('#pkGraded'))) throw new Error('New live calls should start as graded mock calls');
+  if (!(await tr.$('#roster #pkGraded')) || !(await tr.$('#roster [data-act="airing"]'))) throw new Error('How the call is placed (graded, record, hide ID, the AI callers, the Class view) belongs on the switchboard');
   ok('Dialer: 7001 on the keypad finds Jamie Cruz ("Ready to call"), with the caller ID the trainee will see');
   // 🔊 Speaker on the dialer: lights up, shows on the screen, sends the call audio to the speaker output
   await tr.click('#dialer [data-act="speaker"]');
@@ -129,7 +130,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   ok('Trainer sees the trainee\'s note as it is typed');
 
   // 📺 Class view for Google Meet: plays the trainee's side of the call, shows the note, never the script
-  const [cv] = await Promise.all([tr.context().waitForEvent('page'), tr.click('#dialer [data-act="classview"]')]);
+  const [cv] = await Promise.all([tr.context().waitForEvent('page'), tr.click('#roster [data-act="classview"]')]);
   cv.on('pageerror', (e) => console.log('CLASS VIEW ERROR', e.message));
   await cv.waitForSelector('#cvStart');
   await cv.click('#cvStart');
