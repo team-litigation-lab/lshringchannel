@@ -401,15 +401,19 @@ table.list tr.click:hover td { background: #f8fafc; }
 .callers .scen h4 { font-size: 14px; } .callers .scen p { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .callers .scen .meta { flex: none; justify-content: flex-end; }
 /* the sidebar list: a line per call, the title and its badges */
-.picker { border-color: var(--orange); }
+/* the call-to-play card is capped to the dialer's own height (set in JS, matchHeights/fitRight) so the
+   console reads as one screen; the list of calls is the part that scrolls, not the card or the page */
+.picker { border-color: var(--orange); display: flex; flex-direction: column; min-height: 0; }
 .picker .pill-tabs { flex-wrap: wrap; }
+.picker .card-head, .picker > .pill-tabs, .picker > p { flex: none; }
 .picker .callers.compact { border-top: 1px solid #fed7aa; padding-top: 8px; }
-.callers.compact { grid-template-columns: minmax(0, 1fr); gap: 4px; margin-top: 10px; max-height: calc(100vh - 300px); overflow-y: auto; overflow-x: hidden; }
+.callers.compact { grid-template-columns: minmax(0, 1fr); gap: 4px; margin-top: 10px; overflow-y: auto; overflow-x: hidden; }
+.picker .callers.compact { flex: 1 1 auto; min-height: 60px; }
 .callers.compact .scen { padding: 7px 9px; gap: 9px; }
 .callers.compact .scen .cav { width: 28px; height: 28px; font-size: 11px; }
 .callers.compact .scen h4 { font-size: 13.5px; line-height: 1.25; white-space: normal; }
 .callers.compact .scen p { margin-top: 3px; display: flex; gap: 4px; flex-wrap: wrap; white-space: normal; }
-@media (max-width: 1140px) { .callers.compact { max-height: none; } }
+@media (max-width: 1140px) { .picker { display: block; } .picker .callers.compact { max-height: 50vh; } }
 .dial-side > .card + .card { margin-top: 16px; }
 .live-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
 .live-cols .card { margin: 0; }
