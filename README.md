@@ -288,9 +288,16 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
 - **Practice scores are self-practice.** The trainee's browser runs the call, so **📊 Trainee Monitoring** shows the practice figures apart from the live ones (the live average counts reviewed live calls only). A typed practice call's conversation is kept on the server.
 
 
-## 🧭 How Ring Channel works (the Blueprint)
+## 🧭 Blueprint (how Ring Channel works, for trainees and for trainers)
 
-The Blueprint lives on the **LSH Training Portal**, with every other LSH platform's. Ring Channel has no 🧭 button of its own and ships no slides: one deck, in one place, kept with the rest of the training material. Trainers and trainees open it from the Portal.
+The **No Blueprint rule:** Ring Channel shows no 🧭 Blueprint button. The blueprints live on the Main Portal's 🧭 Blueprint page; its "📚 Program blueprints…" menu (admins) opens this full-screen slide deck through `#/blueprint` (a trainee who follows that address gets no deck).
+- **Trainee blueprint** (a cover and 9 slides), for trainees: what Ring Channel is, opening it from the Portal, ☎ the Console, answering a call, the tools during a call, the phone's keys (Mute, Speaker, Hold, Transfer, Hang up), after the call, practice with an AI caller, and when the class is listening.
+- **Trainer blueprint** (trainers only; a cover and 9 slides): opening the console from the Portal, the dialer and the Switchboard, on the call, transfers and coaching time-outs, Class view in Meet, graded calls and autograding, Call Logs and Trainee Monitoring, the Scenario Picker, and Setup and AI practice.
+- A trainer gets both decks as tabs. Neither shows in the 📺 Class view.
+- **Moving around:** ◀ ▶, the ← → keys or the contents strip. Esc closes it.
+- **Numbering:** the cover is ★ Cover (the counter says "Cover · 9 slides"); the slides are 1 to 9 everywhere: the contents strip, the counter ("9 / 9" on the last), the slide's heading and footer, and the PDF's page footers.
+- **⬇ Download PDF:** the deck that's showing, as a landscape PDF with one page per slide. It's made from the deployed site each time, stamped with the deploy (the page's ETag) and the date.
+- **Files:** the slides are in `public/js/blueprint-content.js`. `public/js/lsh-blueprint.js` (the page and the PDFs) is the same file on every LSH platform: change it in one, copy it to all. Test: `tests/blueprint.cjs`.
 
 ## Deploy (Cloudflare)
 
@@ -351,6 +358,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - the trainee reads the scorecard and the weighted average (the caller's script and unsent drafts never reach the trainee);
   - an open call with no script on the Intake line (WIRELESS CALLER on the Intake Line, the open-call card with the case files, the Intake note);
   - dialing on the keyboard (201 is a firm extension, Esc clears, 7001 + Enter rings) and a declined call.
+- `blueprint.cjs`: the 🧭 Blueprint. No 🧭 button for anyone; `#/blueprint` opens it for a trainer only, with both decks; every slide fits on a laptop and on a phone; both PDFs have a page per slide; the numbers match everywhere (Cover, then 1 to n, never n + 1).
 - `e2e-portal.js`: opening Ring Channel from the LSH Training Portal (`mock-gemini.js` stands in for the Portal's `/api/verify-ticket`). It checks that:
   - a trainee's ticket lands them on their phone, and the ticket leaves the address;
   - a used ticket signs nobody in, and expired and forged tickets are refused;
@@ -386,6 +394,8 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `public/js/trainee.js` | ☎ The trainee's Console: the switchboard, their phone (live calls, the AI calls a trainer sends, and their own practice calls) and the workspace beside it, plus the 🎧 Practice picker. |
 | `public/js/console.js` | 🎛 The trainer's Console: the switchboard joined to ☎ the dialer, and the call (script, checklist, live note). |
 | `public/js/review.js` | 🗂 Call Logs, a call's review and scorecard (recording playback and download, approving the AI's grade), 📋 Graded Calls (and the CSV), 🎭 the Scenario Picker, 📊 Trainee Monitoring (and its CSV), ⚙️ Setup. |
+| `public/js/blueprint-content.js` | 🧭 The Blueprint's slides: the trainee deck and the trainer deck. |
+| `public/js/lsh-blueprint.js` | 🧭 The Blueprint page and its PDFs (the same file on every LSH platform). |
 | `public/js/screens.js` | The two screens the top bar opens: 🗂 Call Logs & Scenario Picker and 🛡 Admin — a strip of tabs, with the open tab's own page under it. |
 | `public/js/classview.js` | 📺 The Class view: a tab to present in Google Meet (plays the call, shows the live note, never the script). |
 | `tests/` | The end-to-end tests. |

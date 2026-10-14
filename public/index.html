@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LSH Ring Channel</title>
 <meta name="description" content="A training phone system for Receptionist and Intake mock calls: live calls between trainer and trainee, and AI practice callers.">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.png" type="image/png">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="theme-color" content="#081226">
@@ -39,6 +39,11 @@
 <script src="js/review.js"></script>
 <!-- the screens the top bar opens: 🗂 Call Logs & Scenario Picker, and 🛡 Admin -->
 <script src="js/screens.js"></script>
+<!-- 🧭 the Blueprint's slides. There is no 🧭 button here: the Main Portal's 🧭 Blueprint page is where
+     the blueprints live, and it opens this deck through #/blueprint (trainers only).
+     blueprint-content.js is this site's slides; lsh-blueprint.js is the same file on every LSH platform. -->
+<script src="js/blueprint-content.js"></script>
+<script src="js/lsh-blueprint.js"></script>
 <script src="js/classview.js"></script>
 <script>
 App.boot();
