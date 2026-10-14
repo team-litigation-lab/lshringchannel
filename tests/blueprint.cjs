@@ -1,7 +1,8 @@
 // The 🧭 Blueprint (public/js/lsh-blueprint.js with public/js/blueprint-content.js), against the local wrangler dev
 // server run.sh starts. jsPDF is served from node_modules in place of cdnjs.
-// Checks: a trainee has 🧭 Blueprint in the header and gets the Trainee blueprint only (no Trainer tab, no trainer
-// words); a trainer gets both decks as tabs; ◀ ▶ and the keys go through every slide; every slide fits its frame on a
+// Checks: the No Blueprint rule: no 🧭 Blueprint button for anyone; the deck opens only from #/blueprint (the Main
+// Portal's 🧭 Blueprint page links there), for a trainer, and a trainee who follows that link gets no deck. The
+// trainee deck has no Trainer tab and no trainer words; a trainer gets both decks as tabs; ◀ ▶ and the keys go through every slide; every slide fits its frame on a
 // laptop and on a phone; ⬇ Download PDF saves each deck with a page per slide and the deploy stamp; Esc closes it.
 // Numbering: the cover is "Cover" (★), the slides 1 to n on the contents buttons, the counter, the slide's heading and
 // footer, and the PDF's page footers; the last slide is "n / n", as its button, and nothing ever says n + 1.
@@ -70,8 +71,11 @@ async function walk(page, label) {
   // ---- a trainee ----
   let te = await mk({ width: 1366, height: 768 });
   await te.goto(Portal.trainee(B, 'Blue Print', 'B093026')); await te.waitForSelector('#device .lcd');
-  await te.waitForSelector('#lbp-open-btn', { timeout: 5000 }).catch(() => fail('a trainee has no 🧭 Blueprint button'));
-  await te.click('#lbp-open-btn'); await te.waitForTimeout(300);
+  await te.waitForTimeout(300);
+  if (await te.$('#lbp-open-btn')) fail('a trainee has a 🧭 Blueprint button (the No Blueprint rule: the blueprint lives on the Main Portal)');
+  await te.evaluate(() => { location.hash = '#/blueprint'; }); await te.waitForTimeout(400);
+  if (await te.evaluate(() => LSHBlueprint.isOpen())) fail('#/blueprint opened the Blueprint for a trainee');
+  await te.evaluate(() => LSHBlueprint.open('trainee')); await te.waitForTimeout(300);
   const t = await te.evaluate(() => ({ deck: document.getElementById('lbp-slide').dataset.deck, tabs: !!document.getElementById('lbp-tabs').offsetParent }));
   if (t.deck !== 'trainee' || t.tabs) fail(`a trainee should get the trainee deck only: ${JSON.stringify(t)}`);
   if (await te.evaluate(() => { LSHBlueprint.deck('trainer'); return document.getElementById('lbp-slide').dataset.deck; }) !== 'trainee') fail('a trainee could switch to the Trainer blueprint');
@@ -89,15 +93,18 @@ async function walk(page, label) {
   if (!numbered(pdf, tn)) fail(`the trainee PDF's page numbers don't match the slides (expected "Cover", then 1 / ${tn} to ${tn} / ${tn}, never ${tn + 1} / ${tn + 1})`);
   await te.keyboard.press('Escape');
   if (await te.evaluate(() => LSHBlueprint.isOpen())) fail('Esc didn\'t close the Blueprint');
-  // the header is drawn again on another page: the button is still there
+  // the header is drawn again on another page: still no button
   await te.click('a[href="#/calls"]'); await te.waitForTimeout(200);
-  if (!(await te.isVisible('#lbp-open-btn'))) fail('the 🧭 Blueprint button went missing on another page');
+  if (await te.$('#lbp-open-btn')) fail('a 🧭 Blueprint button appeared on another page');
   await te.context().close();
 
   // ---- a trainer, on a laptop and on a phone ----
   let tr = await mk({ width: 1366, height: 768 });
-  await tr.goto(Portal.trainer(B, 'Coach Print')); await tr.waitForSelector('#roster');
-  await tr.click('#lbp-open-btn'); await tr.waitForTimeout(300);
+  // from the Main Portal's 🧭 Blueprint page: the admin ticket and #/blueprint
+  await tr.goto(Portal.trainer(B, 'Coach Print') + '#/blueprint'); await tr.waitForSelector('#roster');
+  await tr.waitForTimeout(400);
+  if (await tr.$('#lbp-open-btn')) fail('a trainer has a 🧭 Blueprint button (the No Blueprint rule)');
+  if (!(await tr.evaluate(() => LSHBlueprint.isOpen()))) fail('#/blueprint from the Portal did not open the Blueprint for a trainer');
   const a = await tr.evaluate(() => ({ deck: document.getElementById('lbp-slide').dataset.deck, tabs: [...document.querySelectorAll('#lbp-tabs button')].filter(b => b.offsetParent).map(b => b.textContent.trim()) }));
   if (a.deck !== 'trainer' || a.tabs.join() !== 'Trainer blueprint,Trainee blueprint') fail(`a trainer should get both decks: ${JSON.stringify(a)}`);
   const aw = await walk(tr, 'trainer 1366px'); aw.out.forEach(fail);
@@ -115,5 +122,5 @@ async function walk(page, label) {
 
   await browser.close();
   if (failures.length) { console.log(`\n${failures.length} failure(s):`); failures.forEach((f, i) => console.log(`${i + 1}. ${f}`)); process.exit(1); }
-  console.log(`✅ Blueprint: trainee deck ${tw.total} slides and its PDF, trainer deck ${aw.total} slides and its PDF; every slide fits on a laptop and a phone; Cover, then 1 to n everywhere (never n + 1).`);
+  console.log(`✅ Blueprint: no 🧭 button anywhere, the trainer deck opens from #/blueprint only; trainee deck ${tw.total} slides and its PDF, trainer deck ${aw.total} slides and its PDF; every slide fits on a laptop and a phone; Cover, then 1 to n everywhere (never n + 1).`);
 })().catch(e => { console.error(e); process.exit(1); });

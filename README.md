@@ -256,10 +256,10 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
 
 ## 🧭 Blueprint (how Ring Channel works, for trainees and for trainers)
 
-**🧭** in the header (next to the name and Log out; its name shows on hover) opens the Blueprint, a full-screen slide deck.
+The No Blueprint rule: Ring Channel shows no 🧭 Blueprint button. The blueprints live on the Main Portal's 🧭 Blueprint page; its "📚 Program blueprints…" menu (admins) opens this full-screen slide deck through `#/blueprint` (a trainee who follows that address gets no deck).
 - **Trainee blueprint** (a cover and 9 slides), for trainees: what Ring Channel is, opening it from the Portal, My phone, answering a call, the tools during a call, the phone's keys (Mute, Speaker, Hold, Transfer, Hang up), after the call, practice with an AI caller, and when the class is listening.
 - **Trainer blueprint** (trainers only; a cover and 9 slides): opening the console from the Portal, the Switchboard and the dialer, on the call, transfers and coaching time-outs, Class view in Meet, graded calls and autograding, the Call log and Trainees, Scenarios, and Setup and AI practice.
-- Trainers get both decks as tabs; trainees only ever get the Trainee blueprint. Neither shows in the 📺 Class view.
+- A trainer gets both decks as tabs. Neither shows in the 📺 Class view.
 - **Moving around:** ◀ ▶, the ← → keys or the contents strip. Esc closes it.
 - **Numbering:** the cover is ★ Cover (the counter says "Cover · 9 slides"); the slides are 1 to 9 everywhere: the contents strip, the counter ("9 / 9" on the last), the slide's heading and footer, and the PDF's page footers.
 - **⬇ Download PDF:** the deck that's showing, as a landscape PDF with one page per slide. It's made from the deployed site each time, stamped with the deploy (the page's ETag) and the date.
@@ -324,7 +324,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - the trainee reads the scorecard and the weighted average (the caller's script and unsent drafts never reach the trainee);
   - an open call with no script on the Intake line (WIRELESS CALLER on the Intake Line, the open-call card with the case files, the Intake note);
   - dialing on the keyboard (201 is a firm extension, Esc clears, 7001 + Enter rings) and a declined call.
-- `blueprint.cjs`: the 🧭 Blueprint. A trainee gets the trainee deck only and a trainer both; every slide fits on a laptop and on a phone; both PDFs have a page per slide; the numbers match everywhere (Cover, then 1 to n, never n + 1).
+- `blueprint.cjs`: the 🧭 Blueprint. No 🧭 button for anyone; `#/blueprint` opens it for a trainer only, with both decks; every slide fits on a laptop and on a phone; both PDFs have a page per slide; the numbers match everywhere (Cover, then 1 to n, never n + 1).
 - `e2e-portal.js`: opening Ring Channel from the LSH Training Portal (`mock-gemini.js` stands in for the Portal's `/api/verify-ticket`). It checks that:
   - a trainee's ticket lands them on their phone, and the ticket leaves the address;
   - a used ticket signs nobody in, and expired and forged tickets are refused;
