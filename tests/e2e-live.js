@@ -11,12 +11,18 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
    beside it are reached from the dialer's own keys: 🎭 Call to play opens the Scenario Picker on
    🗂 Call Logs & Scenario Picker (the next screen), and ☎ Switchboard folds the board out. */
 const playCall = async (pg, sid) => {
-  await pg.click('#dialer a[href="#/logs/scenarios"]');
-  await pg.waitForSelector('.screen-tabs a.on');
-  const track = await pg.evaluate((id) => (App.scen[id] || {}).track, sid);
-  await pg.click(`#stk [data-track="${track}"]`);
-  await pg.click(`[data-pick="${sid}"]`);
-  await pg.click('.screen a[href="#/console"]');
+  // 🎭 Call to play opens the Scenario Picker in a tab of its own: the Console stays where it is, and
+  // the call picked over there reaches the dialer on its own.
+  const was = await pg.evaluate(() => location.hash);
+  const [picker] = await Promise.all([pg.context().waitForEvent('page'), pg.click('#dialer [data-act="playpick"]')]);
+  await picker.waitForSelector('.screen-tabs a.on');
+  const track = await picker.evaluate((id) => (App.scen[id] || {}).track, sid);
+  await picker.click(`#stk [data-track="${track}"]`);
+  await picker.click(`[data-pick="${sid}"]`);
+  await picker.waitForSelector('[data-act="done"]');
+  await picker.close();
+  await pg.waitForFunction((id) => Console.pick.scenarioId === id, sid, { timeout: 10000 });
+  if ((await pg.evaluate(() => location.hash)) !== was) throw new Error('🎭 Call to play should leave the Console where it is, not navigate away from it');
   await pg.waitForSelector('#dialer .dialpad');
 };
 const openBoard = async (pg) => { if (!(await pg.$('#roster'))) { await pg.click('#dialer [data-act="switchboard"]'); await pg.waitForSelector('#roster .tr'); } };
@@ -71,7 +77,7 @@ const openTraineeBoard = async (pg) => { if (!(await pg.$('#tside .roster'))) { 
   for (const d of '7001') await tr.click(`#dialer [data-dk="${d}"]`);
   await tr.waitForFunction(() => /Ready to call/.test(document.querySelector('#dialer .lcd').textContent) && /Jamie Cruz/.test(document.querySelector('#dialer .lcd').textContent));
   if ((await tr.textContent('#dlNum')).trim() !== '7001') throw new Error('The dialer shows ' + await tr.textContent('#dlNum'));
-  ok('Dialer: the Scenario Picker put the call on it, and 7001 on the keypad finds Jamie Cruz ("Ready to call") with the caller ID the trainee will see');
+  ok('🎭 Call to play opened the Scenario Picker in its own tab, the Console stayed put, and the call picked there reached the dialer — then 7001 on the keypad finds Jamie Cruz ("Ready to call") with the caller ID the trainee will see');
   // 🔊 Speaker on the dialer: lights up, shows on the screen, sends the call audio to the speaker output
   await tr.click('#dialer [data-act="speaker"]');
   await tr.waitForSelector('#dialer .key.spk.on');
@@ -443,7 +449,7 @@ const openTraineeBoard = async (pg) => { if (!(await pg.$('#tside .roster'))) { 
     return { solo: !!document.querySelector('.dial-stage.solo'), beside,
       board: !!r('#roster'), picker: !!r('#pkList'), preview: !!r('#scenPreview'),
       opts: !!r('#dialer .board-opts'), sbKey: !!r('#dialer [data-act="switchboard"]'),
-      playKey: !!document.querySelector('#dialer a[href="#/logs/scenarios"]'),
+      playKey: !!document.querySelector('#dialer [data-act="playpick"]'),
       centered: (() => { const st = stage.getBoundingClientRect(); return Math.abs((d.left + d.right) / 2 - (st.left + st.right) / 2) < 40; })() };
   });
   if (!deck.solo || deck.beside) throw new Error('The Console\'s main screen should be the dialer alone, with nothing beside it: ' + JSON.stringify(deck));

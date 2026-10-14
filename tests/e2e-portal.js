@@ -75,10 +75,15 @@ const openBoard = async (pg) => { if (!(await pg.$('#roster'))) { await pg.click
   await tr.waitForFunction(() => /Riley Santos/.test(document.querySelector('#app').textContent) && /Portal/.test(document.querySelector('#app').textContent) && !/PIN/.test(document.querySelector('#app').textContent));
   // 🛡 Admin's tabs, in the order the platform spec sets: Call Logs, Trainee Monitoring, Graded Calls, then the trainer's own tools.
   const tabs = await tr.evaluate(() => [...document.querySelectorAll('.screen-tabs a')].map((a) => a.getAttribute('href')));
-  const want = ['#/admin/calls', '#/admin/monitoring', '#/admin/graded', '#/admin/aicalls', '#/admin/practice', '#/admin/setup'];
+  const want = ['#/admin/calls', '#/admin/monitoring', '#/admin/graded', '#/admin/aicalls', '#/admin/setup'];
   if (tabs.join() !== want.join()) throw new Error('🛡 Admin\'s tabs: ' + JSON.stringify(tabs));
   if (!(await tr.$('.screen-tabs a.on[href="#/admin/monitoring"]'))) throw new Error('📊 Trainee Monitoring should be the open tab');
-  ok('The trainee is on the trainer\'s switchboard with their extension, and in 🛡 Admin → 📊 Trainee Monitoring, whose tabs are Call Logs · Trainee Monitoring · Graded Calls · AI calls · Try practice · Setup (no PINs anywhere)');
+  // 🎧 Try practice is a button on 🤖 AI calls, not a tab beside it, and it lights that tab up.
+  await tr.goto(B + '/#/admin/practice');
+  await tr.waitForSelector('.screen-tabs a.on');
+  const lit = await tr.evaluate(() => [...document.querySelectorAll('.screen-tabs a')].map((a) => a.getAttribute('href')).concat((document.querySelector('.screen-tabs a.on') || {}).getAttribute('href')));
+  if (lit.join() !== want.concat('#/admin/aicalls').join()) throw new Error('🎧 Try practice should be a button on 🤖 AI calls, lighting that tab: ' + JSON.stringify(lit));
+  ok('The trainee is on the trainer\'s switchboard with their extension, and in 🛡 Admin → 📊 Trainee Monitoring, whose tabs are Call Logs · Trainee Monitoring · Graded Calls · AI calls · Setup — with 🎧 Try practice a button on 🤖 AI calls rather than a tab of its own (no PINs anywhere)');
 
   // The Portal being down: the trainers' passphrase still opens the console (?admin=1 from an older Portal opens it too)
   const fb = await mk();

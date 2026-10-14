@@ -42,9 +42,9 @@ The top bar is the whole of the platform, and it is short on purpose: **the main
 
 | Button | What it opens |
 |---|---|
-| 🎛 **Console** | **☎ The dialer, and nothing else on the main screen.** Everything a call is placed with is a key on the phone itself: the line keys, the keypad, 🔊 Speaker, how the next call is placed (📋 Graded · Record · 🙈 Hide ID · 🤖 AI caller · 🎭 Choose… · 📺 Class view), **☎ Switchboard**, which folds the board out beside the dialer, and **🎭 Call to play**, which opens the Scenario Picker on the next screen. On a call the dialer is joined by what the trainer needs to play the caller: the script, the live checklist, the trainee's note and the case file they opened. |
+| 🎛 **Console** | **☎ The dialer, and nothing else on the main screen.** Everything a call is placed with is a key on the phone itself: the line keys, the keypad, 🔊 Speaker, how the next call is placed (📋 Graded · Record · 🙈 Hide ID · 🤖 AI caller · 🎭 Choose… · 📺 Class view), **☎ Switchboard**, which folds the board out beside the dialer, and **🎭 Call to play**, which opens the Scenario Picker **in a tab of its own** so the Console is never left behind. On a call the dialer is joined by what the trainer needs to play the caller: the script, the live checklist, the trainee's note and the case file they opened. |
 | 🗂 **Call Logs & Scenario Picker** | The next screen, two tabs: **📞 Call Logs** (every call, its recording and its scorecard) and **🎭 Scenario Picker** (every call to play, by line and level: **☎ Play on the Console** puts one on the dialer, and ＋ Write a new call writes your own). |
-| 🛡 **Admin** | **🗂 Call Logs · 📊 Trainee Monitoring · 📋 Graded Calls**, then the trainer's own tools: **🤖 AI calls · 🎧 Try practice · ⚙️ Setup**. |
+| 🛡 **Admin** | **🗂 Call Logs · 📊 Trainee Monitoring · 📋 Graded Calls**, then the trainer's own tools: **🤖 AI calls** (with **🎧 Try one yourself** on it: the trainer takes a practice call the way a trainee does) and **⚙️ Setup**. |
 | 🏠 **Main Portal** | Back to the LSH Training Portal's Training Directory. |
 
 **Trainee view**
@@ -105,7 +105,7 @@ A trainee can take a call where the AI plays the caller, two ways:
 1. Opens **☎ LSH Ring Channel** from the Portal (Training Directory or Master Control) and lands on the console, signed in under their Portal name.
 2. **The console's main screen is ☎ the dialer and nothing else** — one desk phone in the middle of the screen, with everything a call is placed with on its own keys:
    - **☎ Switchboard** folds the board out beside the dialer, in the same dark case and joined to it with nothing between them — one piece of equipment: the board's case reaches down to the foot of the phone however short the batch is, and follows it when the phone reflows. It holds: the trainer's own line with **their own extension** (8001, 8002, … one per trainer account, so a batch with two trainers on sees which line each is calling from), the other trainers who are on, and every trainee online by batch with their extension: available, away, on a call, or ✋ asking for a call. It works as the phone's contact list: clicking a trainee puts their extension on the dialer. It starts closed and stays as the trainer leaves it on that computer; **« Close** (or the key again) folds it away.
-   - **🎭 Call to play** opens the **Scenario Picker** on the next screen (🗂 Call Logs & Scenario Picker): the calls on each line, one card each, with **☎ Play on the Console** — the opening line, what the caller knows and how they act, what a good call does and the situation. The call picked comes back on the dialer's own screen and on its 🎭 key.
+   - **🎭 Call to play** opens the **Scenario Picker** (🗂 Call Logs & Scenario Picker) **in a tab of its own**, so a trainer never loses the Console mid-session: the calls on each line, one card each, with **☎ Play on the Console** — the opening line, what the caller knows and how they act, what a good call does and the situation. The call picked comes straight back to the dialer's own screen and its 🎭 key, and **✓ Done** closes the picker's tab. It's one tab, reused and brought to the front, and the two tabs agree because the call picked is kept on that computer (`mcv_play`) and the browser's own storage event tells the Console the moment it changes.
    - **🤖 AI calls** is a tab of 🛡 Admin (see *🤖 AI calls*): those calls run on the trainees' phones, not the trainer's line.
 3. The **☎ dialer** is a desk phone on screen:
    - **Dial the trainee's extension** on the keypad (or type it; Backspace deletes, Esc clears). The screen says who it reaches: *Ready to call* with the trainee's name, *Not signed in*, a firm extension (201 is Atty. Reyes), or *No such extension*.
@@ -268,7 +268,7 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
 
 ## AI practice callers and AI scoring (optional)
 
-- **🎧 Practice** (trainees: 🗂 Call Logs & Scenario Picker → 🎭 Scenario Picker, and the call runs on ☎ their Console; trainers: 🛡 Admin → 🎧 Try practice):
+- **🎧 Practice** (trainees: 🗂 Call Logs & Scenario Picker → 🎭 Scenario Picker, and the call runs on ☎ their Console; trainers: 🛡 Admin → 🤖 AI calls → **🎧 Try one yourself**):
   - pick a call, or **🎲 Surprise me** for a random call on a line (the trainee doesn't see which call it is until after);
   - the practice phone rings, and the caller talks back out loud in a natural voice (Gemini Live), following the same script the trainer plays;
   - Hold and Transfer work: the AI is told it's on hold, and a transfer to someone who is out doesn't go through;
@@ -337,7 +337,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 
 `SHOTS=<folder>` keeps the screenshots the tests take; `LIVE_ONLY=1` runs only the live-call test; `ONLY=<test file>` runs just that one (e.g. `ONLY=e2e-portal.js`); `PORT=<port>` if 8799 is taken. Google Meet itself can't be driven in a test: the tests check that the Class view plays the call's audio, which is what Meet's "share tab audio" sends.
 
-- `e2e-live.js`: the trainer dials the trainee's extension (7001) on the dialer's keypad and rings, the trainee answers, and audio flows both ways. Then it runs:
+- `e2e-live.js`: the trainer picks the call to play (🎭 Call to play opens the Scenario Picker in its own tab, the Console stays put, and the call picked there reaches the dialer), dials the trainee's extension (7001) on the keypad and rings, the trainee answers, and audio flows both ways. Then it runs:
   - 🔊 Speaker on the dialer and on the trainee's phone (the call keeps playing), and the audio check's output choices;
   - the ✋ request, the live note, hold with hold music, a transfer answered "no answer", a coaching time-out;
   - the 📺 Class view: it plays the call (the console goes quiet), the trainee is told the class is listening, it shows the live note and hold but never the script, and closing it brings the audio back to the console;
@@ -356,7 +356,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - a used ticket signs nobody in, and expired and forged tickets are refused;
   - signed out, the page shows the way to the Portal, with no sign-in form;
   - an administrator's ticket lands them on the console under their Portal name, and 🏠 goes back to the Portal;
-  - the top bar is the four buttons (🎛 Console, 🗂 Call Logs & Scenario Picker, 🛡 Admin, 🏠 Main Portal) and 🛡 Admin's tabs are in order;
+  - the top bar is the four buttons (🎛 Console, 🗂 Call Logs & Scenario Picker, 🛡 Admin, 🏠 Main Portal), 🛡 Admin's tabs are in order, and 🎧 Try practice is a button on 🤖 AI calls rather than a tab of its own;
   - the trainees are on the switchboard and in 🛡 Admin → 📊 Trainee Monitoring;
   - the trainers' passphrase fallback still opens the console.
 - `portal-unit.mjs`: the Portal's ticket checked with the shared secret (a trainee, an administrator, the wrong secret, expired, too long, tampered).

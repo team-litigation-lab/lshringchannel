@@ -27,7 +27,12 @@ p { margin: 0 0 .7em; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .2px; white-space: nowrap; }
 /* the standard LSH logo, as the other LSH sites show it: drawn for a navy background, so it sits
    straight on the top bar with no white square behind it */
-.brand .logo { height: 36px; width: auto; display: block; }
+/* a window on the logo, showing the mark alone: the wordmark under it can't be read at this size,
+   and "LSH Ring Channel" beside it already says the name */
+/* half the mark is LSH navy, which disappears on the navy bar, so it sits on a light tile */
+.logo-mark { display: block; flex: none; width: 38px; height: 38px; overflow: hidden; background: #fff; border-radius: 10px; padding: 4px; }
+/* the mark is x 170-473, y 8-310 of the 646x397 file: at 47px tall that is 36px square, 20px in and 1px down */
+.brand .logo { height: 47px; width: auto; display: block; margin: 0 0 0 -19px; }
 .brand small { font-weight: 600; color: #94a3b8; font-size: 12px; }
 .nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .nav a { color: #cbd5e1; text-decoration: none; padding: 7px 12px; border-radius: 9px; font-weight: 600; font-size: 14px; white-space: nowrap; position: relative; }
@@ -321,7 +326,8 @@ table.list tr.click:hover td { background: #f8fafc; }
 @media (max-width: 1140px) { .rail .rail-label { writing-mode: horizontal-tb; } .rail { flex-direction: row; justify-content: center; } }
 /* the LSH mark over the switchboard */
 .side-brand { background: linear-gradient(160deg, #13254d, #0a1530 70%); border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; text-align: center; }
-.side-brand img { max-width: 100%; height: auto; display: block; margin: 0 auto 6px; }
+/* the same on the switchboard's deck: the mark and LEGAL SUPPORT HELP are navy, the deck is navy */
+.side-brand img { width: 160px; max-width: 100%; height: auto; display: block; margin: 0 auto 8px; background: #fff; border-radius: 12px; padding: 10px 14px; box-sizing: border-box; }
 .side-brand .sb-sub { font-size: 11.5px; letter-spacing: .5px; text-transform: uppercase; color: #94a3b8; font-weight: 700; }
 .my-line { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; background: #f8fafc; }
 .my-line .nm { font-weight: 700; font-size: 14px; }

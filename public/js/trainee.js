@@ -693,7 +693,7 @@
       const track = T.track || 'reception';
       const list = App.cfg.scenarios.filter((s) => s.track === track && s.ai !== false);
       app.innerHTML = `<div class="card">
-        <div class="card-head"><h2>🎭 ${App.trainer() ? 'Try a practice call' : 'Practice with an AI caller'}</h2></div>
+        <div class="card-head"><h2>🎭 ${App.trainer() ? 'Try a practice call' : 'Practice with an AI caller'}</h2>${App.trainer() ? '<span class="spacer"></span><a class="btn btn-sm" href="#/admin/aicalls">← 🤖 AI calls</a>' : ''}</div>
         <p class="muted">An AI caller rings your practice phone and talks with you out loud, like a real caller (use a headset). Handle the call, take the note, and the AI scores it with the same rubric your trainer uses. Calls last up to ${App.cfg.features.aiMinutes} minutes.</p>
         <div class="row" style="margin:12px 0 16px">
           <div class="pill-tabs" id="trk">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === track ? 'on' : ''}">${t.icon} ${esc(t.label)}</button>`).join('')}</div>

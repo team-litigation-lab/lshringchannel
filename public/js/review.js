@@ -416,15 +416,18 @@
     trainer: true,
     render() {
       const app = App.host();
+      const picked = Console.pickedCall();   // reads the call the Console's tab last put on the dialer
       const track = App.scenTrack || Console.pick.track || 'reception';
       const list = App.cfg.scenarios.filter((s) => s.track === track);
-      const picked = Console.pickedCall();
       const line = (k) => App.cfg.lines[k === 'intake' ? 'intake' : 'main'];
+      // Opened from the dialer's 🎭 Call to play, this is a tab of its own: it closes when it's done.
+      let own = false; try { own = !!window.opener; } catch (e) {}
       app.innerHTML = `<div class="card"><div class="card-head"><h2>🎭 Scenario Picker</h2><span class="spacer"></span><button class="btn btn-orange" data-act="new">＋ Write a new call</button></div>
         <p class="muted small">The calls you play live (and the AI plays in practice). <b>☎ Play on the Console</b> puts one on the dialer for your next call; the built-in calls come from the Foundational call pack on the CMS Training Library cases, so copy one to change it, or write your own.</p>
         <div class="${picked ? 'ok-box' : 'note-box'}" style="margin:0 0 14px">☎ The Console will play <b>${picked ? esc(picked.title) : '🎙 an open call: no script'}</b>${picked ? ` · ${esc(picked.caller.name)} on the ${esc(line(picked.track).label)}` : ' — any caller you like'}.
           ${picked ? '<button class="btn btn-sm" data-pick="" style="margin-left:8px">Clear it</button>' : ''}
-          <a class="btn btn-sm" href="#/console" style="margin-left:6px">☎ Go to the Console →</a></div>
+          ${own ? '<button class="btn btn-sm btn-orange" data-act="done" style="margin-left:6px" title="Close this tab and go back to the Console">✓ Done — close this tab</button>'
+                : '<a class="btn btn-sm" href="#/console" style="margin-left:6px">☎ Go to the Console →</a>'}</div>
         <div class="pill-tabs" id="stk" style="margin:10px 0 14px">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === track ? 'on' : ''}" title="${esc(t.label)} calls, on the ${esc(line(k).label)}">${t.icon} ${esc(t.label)} (${App.cfg.scenarios.filter((s) => s.track === k).length})</button>`).join('')}</div>
         <div class="scen-grid">${list.map((s) => `<div class="scen ${picked && picked.id === s.id ? 'sel' : ''}" style="cursor:default">
           <div class="meta">${App.levelBadge(s.level)}${s.caseId ? `<span class="badge">${esc(s.caseId)}</span>` : ''}${s.custom ? '<span class="badge blue">Yours</span>' : '<span class="badge">Built in</span>'}${s.ai === false ? '<span class="badge">Live only</span>' : ''}${picked && picked.id === s.id ? '<span class="badge green">On the Console</span>' : ''}</div>
@@ -432,6 +435,7 @@
           <div class="row"><button class="btn btn-sm btn-green" data-pick="${esc(s.id)}" title="Play this call on your next Console call">☎ Play on the Console</button><button class="btn btn-sm" data-view="${esc(s.id)}">👁 View</button><button class="btn btn-sm" data-copy="${esc(s.id)}">⧉ Copy</button>${s.custom ? `<button class="btn btn-sm" data-edit="${esc(s.id)}">✏️ Edit</button><button class="btn btn-sm" data-del="${esc(s.id)}">🗑</button>` : ''}</div></div>`).join('') || '<div class="empty">No calls here yet.</div>'}</div></div>`;
       app.onclick = async (e) => {
         const g = (a) => { const b = e.target.closest(`[data-${a}]`); return b ? b.dataset[a] : null; };
+        if (e.target.closest('[data-act="done"]')) { try { window.close(); } catch (err) {} return; }
         const pk = e.target.closest('[data-pick]');
         if (pk) {
           Console.pickCall(pk.dataset.pick);

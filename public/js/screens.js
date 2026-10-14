@@ -20,23 +20,26 @@
     { k: 'calls', label: '📞 Call Logs', view: 'calls' },
     { k: 'scenarios', label: '🎭 Scenario Picker', view: App.trainer() ? 'scenarios' : 'practice' }
   ];
-  // 🛡 Admin. The first three are the admin screen proper; the rest are the trainer's own tools.
+  /* 🛡 Admin. The first three are the admin screen proper; then the trainer's own tools.
+     A tab with no label isn't on the strip: it's a page one of the tabs opens, and it lights that tab
+     up while it's showing — 🎧 Try practice is a button on 🤖 AI calls, not a tab beside it. */
   const adminTabs = () => [
     { k: 'calls', label: '🗂 Call Logs', view: 'calls' },
     { k: 'monitoring', label: '📊 Trainee Monitoring', view: 'monitoring' },
     { k: 'graded', label: '📋 Graded Calls', view: 'graded' },
     { k: 'aicalls', label: '🤖 AI calls', view: 'aicalls' },
-    { k: 'practice', label: '🎧 Try practice', view: 'practice' },
-    { k: 'setup', label: '⚙️ Setup', view: 'setup' }
+    { k: 'setup', label: '⚙️ Setup', view: 'setup' },
+    { k: 'practice', view: 'practice', under: 'aicalls' }
   ];
 
   /* The screen: its name, its tabs, and the open tab's page under them. The tabs are links, so the
      address says which tab is open (#/admin/graded) and the browser's Back button works. */
   function screen(route, head, tabs, key) {
     const tab = tabs.find((t) => t.k === key) || tabs[0];
+    const lit = tab.under || tab.k;
     U.$('#app').innerHTML = `<div class="screen">
       <div class="screen-head"><h1>${head}</h1></div>
-      <div class="screen-tabs" role="tablist">${tabs.map((t) => `<a role="tab" href="#/${route}/${t.k}" class="${t.k === tab.k ? 'on' : ''}" aria-selected="${t.k === tab.k}">${t.label}</a>`).join('')}</div>
+      <div class="screen-tabs" role="tablist">${tabs.filter((t) => t.label).map((t) => `<a role="tab" href="#/${route}/${t.k}" class="${t.k === lit ? 'on' : ''}" aria-selected="${t.k === lit}">${t.label}</a>`).join('')}</div>
       <div id="appHost"><div class="empty">Loading…</div></div></div>`;
     App.route.sub = tab.view;
     return App.views[tab.view].render();

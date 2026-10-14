@@ -604,7 +604,7 @@
     const side = U.$('#sideL'); if (!side) return;
     if (!C.sbOpen()) { side.innerHTML = ''; return; }
     if (!U.$('#roster', side)) {
-      side.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="150" height="40">
+      side.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
         <div class="sb-sub">Ring Channel · Switchboard</div></div><div class="card roster" id="roster"></div>`;
     }
     const el = U.$('#roster', side); if (!el) return;
@@ -646,7 +646,7 @@
     return `<div class="board-opts">
       <div class="dev-btns">
         ${board}
-        <a class="dev-btn" href="#/logs/scenarios" title="The Scenario Picker, on the next screen: the calls you can play, and ＋ write your own">🎭 ${s ? 'Call to play: ' + esc(s.title) : 'Call to play…'}</a>
+        <button type="button" class="dev-btn" data-act="playpick" title="The Scenario Picker, in a tab of its own: the calls you can play, and ＋ write your own. The Console stays where it is">🎭 ${s ? 'Call to play: ' + esc(s.title) : 'Call to play…'}</button>
       </div>
       <div class="side-h small muted">How the next call is placed</div>
       <div class="soft-keys">
@@ -908,8 +908,43 @@
      The calls the trainer can play live are picked on 🗂 Call Logs & Scenario Picker, the next screen
      (review.js). The one picked shows on the dialer's own screen, and these two are how the picker
      sets it and reads it back. */
-  C.pickedCall = () => App.scen[pick.scenarioId] || null;
+  C.pickedCall = () => { loadPick(); return App.scen[pick.scenarioId] || null; };
   C.pickCall = (id) => pickCall(id);
+
+  /* The Scenario Picker opens in a tab of its own (🎭 Call to play), so a trainer never loses the
+     Console mid-session. The call picked is kept on this computer, so the picker's tab and the
+     Console's tab agree on it, and the browser's own storage event tells the Console the moment it
+     changes in the other tab. */
+  const PICK_KEY = 'mcv_play';
+  function savePick() { try { localStorage.setItem(PICK_KEY, JSON.stringify({ id: pick.scenarioId, track: pick.track })); } catch (e) {} }
+  function loadPick() {
+    if (!App.cfg || !App.scen) return false;
+    let v = null;
+    try { v = JSON.parse(localStorage.getItem(PICK_KEY) || 'null'); } catch (e) { return false; }
+    if (!v) return false;
+    const id = v.id && App.scen[v.id] ? v.id : '';
+    const track = App.cfg.tracks[v.track] ? v.track : pick.track;
+    if (id === pick.scenarioId && track === pick.track) return false;
+    pick.scenarioId = id; pick.track = track;
+    return true;
+  }
+  C.loadPick = loadPick;
+  window.addEventListener('storage', (e) => {
+    if (e.key !== PICK_KEY || !loadPick()) return;
+    if (App.route.name === 'console' && !active(App.t)) renderDialer();
+    else if (App.at('scenarios')) App.views.scenarios.render();
+  });
+
+  // 🎭 Call to play: one tab, reused and brought to the front, never a pile of them.
+  C.pickWin = null;
+  function openPicker() {
+    try {
+      if (C.pickWin && !C.pickWin.closed) { C.pickWin.focus(); return; }
+      C.pickWin = window.open(location.pathname + '#/logs/scenarios', 'lshscenarios');
+      if (C.pickWin) { C.pickWin.focus(); return; }
+    } catch (e) {}
+    U.toast('The browser blocked the new tab: allow pop-ups for this site, or open 🗂 Call Logs & Scenario Picker on the top bar.', 'error');
+  }
 
   /* ---------- 📺 the Class view (a tab to present in Google Meet) ----------
      The Class view window (#/class, js/classview.js) is opened from here. It reads C.classState() and
@@ -963,8 +998,9 @@
       const app = App.host();
       app.innerHTML = `<div class="ai-page">
         <div class="card-head"><h2>🤖 AI calls</h2><span class="spacer"></span>
+          <a class="btn" href="#/admin/practice" title="Take a practice call with the AI caller yourself, the way a trainee does">🎧 Try one yourself</a>
           <button class="btn btn-primary" data-act="aisetup" ${App.cfg.features.ai ? '' : 'disabled'} title="Choose the calls, the voice and who to ring">🎭 Send AI callers…</button></div>
-        <p class="muted">Calls where the AI plays the caller and the trainee takes it on their own phone. Send them to one trainee or to a whole batch; follow a call as it happens, and read the AI's review when it's over. The trainer's own line is free the whole time.</p>
+        <p class="muted">Calls where the AI plays the caller and the trainee takes it on their own phone. Send them to one trainee or to a whole batch; follow a call as it happens, and read the AI's review when it's over. The trainer's own line is free the whole time. <b>🎧 Try one yourself</b> takes the same call, as a trainee would.</p>
         <div id="aiBox"></div></div>`;
       app.firstChild.addEventListener('click', onClick);
       renderAiCalls();
@@ -985,6 +1021,7 @@
       app.firstChild.addEventListener('change', onChange);
       app.firstChild.addEventListener('input', onInput);
       document.addEventListener('keydown', onKey);
+      loadPick();   // the call the picker's tab left for it
       render();
       try { C.roster = (await API.post('/api/trainees')).trainees; renderRoster(); if (!App.t) { syncDial(); renderDialer(); } } catch (e) {}
     }
@@ -1022,6 +1059,7 @@
     else if (act === 'newcall') { App.t = null; pick.dial = ''; syncDial(); render(); }   // the screen clears for the next call
     else if (act === 'takehere') takeHere();
     else if (act === 'switchboard') toggleSb();
+    else if (act === 'playpick') openPicker();
     else if (act === 'classview') openClassView();
   }
   function pickTrainee(id) {
@@ -1033,6 +1071,7 @@
   function pickCall(id) {
     pick.scenarioId = id && App.scen[id] ? id : '';
     if (pick.scenarioId) pick.track = App.scen[pick.scenarioId].track;
+    savePick();
     if (App.route.name === 'console') renderDialer();
   }
   // The line (Reception, Calendar, Intake): which calls are listed, and where an open call rings.
@@ -1040,6 +1079,7 @@
     if (!App.cfg.tracks[k]) return;
     pick.track = k;
     const s = App.scen[pick.scenarioId]; if (s && s.track !== k) pick.scenarioId = '';
+    savePick();
     if (App.route.name === 'console') renderDialer();
   }
   // Typing on the keyboard dials too: digits, * and #; Backspace deletes, Esc clears, Enter rings.
