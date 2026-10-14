@@ -14,7 +14,7 @@ const playCall = async (pg, sid) => {
   // 🎭 Call to play opens the Scenario Picker in a tab of its own: the Console stays where it is, and
   // the call picked over there reaches the dialer on its own.
   const was = await pg.evaluate(() => location.hash);
-  const [picker] = await Promise.all([pg.context().waitForEvent('page'), pg.click('#dialer [data-act="playpick"]')]);
+  const [picker] = await Promise.all([pg.context().waitForEvent('page'), pg.click('#roster [data-act="playpick"]')]);
   await picker.waitForSelector('.screen-tabs a.on');
   const track = await picker.evaluate((id) => (App.scen[id] || {}).track, sid);
   await picker.click(`#stk [data-track="${track}"]`);
@@ -25,9 +25,6 @@ const playCall = async (pg, sid) => {
   if ((await pg.evaluate(() => location.hash)) !== was) throw new Error('🎭 Call to play should leave the Console where it is, not navigate away from it');
   await pg.waitForSelector('#dialer .dialpad');
 };
-const openBoard = async (pg) => { if (!(await pg.$('#roster'))) { await pg.click('#dialer [data-act="switchboard"]'); await pg.waitForSelector('#roster .tr'); } };
-const closeBoard = async (pg) => { if (await pg.$('#roster')) { await pg.click('#roster [data-act="switchboard"]'); await pg.waitForFunction(() => !document.querySelector('#roster')); } };
-const openTraineeBoard = async (pg) => { if (!(await pg.$('#tside .roster'))) { await pg.click('#device [data-act="switchboard"]'); await pg.waitForSelector('#tside .roster'); } };
 
 (async () => {
   const browser = await chromium.launch({
@@ -52,14 +49,12 @@ const openTraineeBoard = async (pg) => { if (!(await pg.$('#tside .roster'))) { 
   await other.close();
   ok('Ring Channel\'s own link shows the way to the Portal, with no trainee sign-in form (and the old sign-in is gone)');
   await tr.goto(Portal.trainer(B, 'Coach Ana'));
-  await tr.waitForSelector('#dialer .dialpad');
-  if (await tr.$('#roster')) throw new Error('The Console\'s main screen is the dialer and nothing else: the switchboard should start folded away');
-  await openBoard(tr);
+  await tr.waitForSelector('#roster .tr[data-tid]');
   const ext = (await tr.textContent('#roster .tr[data-tid] .bt')).match(/ext (\d+)/);
   if (!ext || ext[1] !== '7001') throw new Error('The trainee should have desk extension 7001: ' + (await tr.textContent('#roster .tr[data-tid] .bt')));
   if (!/ext 7001/.test(await te.textContent('#device .dev-head'))) throw new Error('The trainee\'s phone should show its extension');
   if ((await tr.evaluate(() => App.me.name)) !== 'Coach Ana') throw new Error('The trainer should be signed in under their Portal name');
-  ok('Trainer opened Ring Channel from the Portal (on the Console, as Coach Ana): the main screen is the dialer alone, and ☎ Switchboard folds the board out with the trainee on it at desk extension 7001 (also on their phone)');
+  ok('Trainer opened Ring Channel from the Portal (on the Console, as Coach Ana); trainee appears on the switchboard with desk extension 7001 (also on their phone)');
 
   // Trainee raises a hand
   await te.click('[data-act="hand"]');
@@ -70,10 +65,11 @@ const openTraineeBoard = async (pg) => { if (!(await pg.$('#tside .roster'))) { 
   /* 🎭 The call to play is picked on 🗂 Call Logs & Scenario Picker, the next screen, and comes back on
      the dialer's own screen; then the trainer dials the trainee's extension on the keypad and rings. */
   await playCall(tr, 'ft_rc_offer');
-  if (!/Call to play: An Offer With a Deadline/.test(await tr.textContent('#dialer'))) throw new Error('The dialer should name the call the Scenario Picker put on it');
+  if (!/An Offer With a Deadline/.test(await tr.textContent('#dialer .lcd-cid'))) throw new Error('The dialer\'s screen should name the call the Scenario Picker put on it');
+  if (!/Call to play: An Offer With a Deadline/.test(await tr.textContent('#roster .board-opts'))) throw new Error('🎭 Call to play should name the call it will play');
   if (!/LIBERTY CREST INS/.test(await tr.textContent('#dialer .lcd-cid'))) throw new Error('The dialer should show the caller ID the trainee will see');
   if (!(await tr.isChecked('#pkGraded'))) throw new Error('New live calls should start as graded mock calls');
-  if (!(await tr.$('#dialer #pkGraded')) || !(await tr.$('#dialer [data-act="airing"]')) || !(await tr.$('#dialer [data-act="classview"]')) || !(await tr.$('#dialer [data-act="switchboard"]'))) throw new Error('How the call is placed (graded, record, hide ID, the AI callers, the Class view, ☎ Switchboard) belongs on the dialer');
+  if (!(await tr.$('#roster #pkGraded')) || !(await tr.$('#roster [data-act="airing"]')) || !(await tr.$('#roster [data-act="classview"]')) || !(await tr.$('#roster [data-act="playpick"]'))) throw new Error('How the call is placed (graded, record, hide ID, the AI callers, 🎭 Call to play and the Class view) belongs at the foot of the switchboard');
   for (const d of '7001') await tr.click(`#dialer [data-dk="${d}"]`);
   await tr.waitForFunction(() => /Ready to call/.test(document.querySelector('#dialer .lcd').textContent) && /Jamie Cruz/.test(document.querySelector('#dialer .lcd').textContent));
   if ((await tr.textContent('#dlNum')).trim() !== '7001') throw new Error('The dialer shows ' + await tr.textContent('#dlNum'));
@@ -156,7 +152,7 @@ const openTraineeBoard = async (pg) => { if (!(await pg.$('#tside .roster'))) { 
   ok('Trainer sees the trainee\'s note as it is typed');
 
   // 📺 Class view for Google Meet: plays the trainee's side of the call, shows the note, never the script
-  const [cv] = await Promise.all([tr.context().waitForEvent('page'), tr.click('#dialer [data-act="classview"]')]);
+  const [cv] = await Promise.all([tr.context().waitForEvent('page'), tr.click('#roster [data-act="classview"]')]);
   cv.on('pageerror', (e) => console.log('CLASS VIEW ERROR', e.message));
   await cv.waitForSelector('#cvStart');
   await cv.click('#cvStart');
@@ -230,23 +226,17 @@ const openTraineeBoard = async (pg) => { if (!(await pg.$('#tside .roster'))) { 
   if (queue.includes(legCall.id)) throw new Error('A conference leg should not wait in the trainer\'s "needs review" queue');
   ok('The merged trainee\'s call log says 👥 Conference (graded with the call they joined), and it never sits in the trainer\'s "needs review" queue');
 
-  /* ☎ The switchboard drawer, on both sides: it folds out of the phone's own ☎ Switchboard key and
-     folds back away, so the main screen stays the phone and nothing else. */
-  await openTraineeBoard(te);
+  // ☎ The trainee's own switchboard panel beside their phone, and the console's board
   if (!/Riley Santos|Jamie Cruz/.test(await te.textContent('#tside'))) throw new Error('The trainee switchboard should list their batch');
   if (!/Coach Ana/.test(await te.textContent('#tside'))) throw new Error('The trainee switchboard should show the trainer who is on');
-  await te.click('#tside [data-act="switchboard"]');
-  await te.waitForFunction(() => !document.querySelector('#tside .roster'));
-  if (!(await te.evaluate(() => !document.querySelector('#phoneGrid').classList.contains('sb-open')))) throw new Error('Closing the switchboard should take the drawer with it');
-  await openTraineeBoard(te);
-  // The trainer's board is the same drawer, out of the dialer's ☎ Switchboard key.
-  if (!(await tr.evaluate(() => document.querySelector('#consoleGrid').classList.contains('sb-open')))) throw new Error('The console grid should say the drawer is out');
-  await tr.click('#roster [data-act="switchboard"]');
-  await tr.waitForFunction(() => !document.querySelector('#roster'));
-  if (!(await tr.$('#dialer .lcd')) || (await tr.evaluate(() => document.querySelector('#consoleGrid').classList.contains('sb-open')))) throw new Error('With the board away the Console should be the dialer alone');
-  await openBoard(tr);
-  if (!(await tr.$('#roster .tr'))) throw new Error('☎ Switchboard should bring the board back');
-  ok('☎ The switchboard is a drawer on both phones: it folds out of the ☎ Switchboard key (the trainee sees their batch, their line and the trainers on) and folds back, leaving the dialer alone on the main screen');
+  await te.click('#tside [data-fold]');
+  await te.waitForSelector('#tside .rail');
+  await te.click('#tside .rail');
+  await te.waitForSelector('#tside .roster');
+  // The console's switchboard is part of the phone: it stays put.
+  if (await tr.$('#roster [data-fold]')) throw new Error('The switchboard is part of the phone: it should not fold away');
+  if (!(await tr.$('#roster .tr'))) throw new Error('The console\'s switchboard should be there beside the dialer');
+  ok('☎ The trainee has the switchboard beside their phone (their batch, their line, the trainers on) and minimizes it to a rail and back; on the console the switchboard stays with the phone');
 
   // Transfer → trainer answers "no answer"
   await te.click('[data-act="transfer"]');
@@ -437,36 +427,24 @@ const openTraineeBoard = async (pg) => { if (!(await pg.$('#tside .roster'))) { 
   await te.waitForSelector('#device .lcd');
   await tr.goto(B + '/#/console');
   await tr.waitForSelector('#dialer .dialpad');
-  await closeBoard(tr);
-  /* 🎛 The Console's main screen: ☎ the dialer and nothing else. Nothing sits beside it — no
-     switchboard, no calls to play, no preview of the call — and everything needed to place a call is
-     a key on the phone itself. The board comes out of its ☎ Switchboard key and goes back away. */
+  /* 🎛 The Console: ☎ the switchboard joined to the dialer with how the next call is placed at its
+     foot, and nothing else beside them — the calls to play and their preview are on the next screen. */
   const deck = await tr.evaluate(() => {
     const r = (s) => { const el = document.querySelector(s); return el ? el.getBoundingClientRect() : null; };
-    const d = r('#dialer'), stage = document.querySelector('#stage');
-    const beside = [...document.querySelectorAll('#app #stage > * > *, #app .console > *')]
-      .filter((el) => el !== stage && el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().left >= d.right - 1).length;
-    return { solo: !!document.querySelector('.dial-stage.solo'), beside,
-      board: !!r('#roster'), picker: !!r('#pkList'), preview: !!r('#scenPreview'),
-      opts: !!r('#dialer .board-opts'), sbKey: !!r('#dialer [data-act="switchboard"]'),
-      playKey: !!document.querySelector('#dialer [data-act="playpick"]'),
-      centered: (() => { const st = stage.getBoundingClientRect(); return Math.abs((d.left + d.right) / 2 - (st.left + st.right) / 2) < 40; })() };
+    const d = r('#dialer'), sb = r('#roster'), op = r('#roster .board-opts');
+    const sc = document.querySelector('#roster');
+    return { gap: Math.round(d.left - sb.right), endsTogether: Math.round(Math.abs(sb.bottom - d.bottom)),
+      picker: !!r('#pkList'), preview: !!r('#scenPreview'), dialerOpts: !!r('#dialer .board-opts'),
+      optsOnBoard: !!op && op.bottom <= sb.bottom + 1 && op.top >= sb.top,
+      beside: [...document.querySelectorAll('#stage > * > *')].filter((el) => el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().left >= d.right - 1).length,
+      noScroll: !!sc && sc.scrollHeight <= sc.clientHeight + 1 && !/auto|scroll/.test(getComputedStyle(sc).overflowY) };
   });
-  if (!deck.solo || deck.beside) throw new Error('The Console\'s main screen should be the dialer alone, with nothing beside it: ' + JSON.stringify(deck));
-  if (deck.board || deck.picker || deck.preview) throw new Error('No switchboard, calls to play or call preview on the main screen: ' + JSON.stringify(deck));
-  if (!deck.opts || !deck.sbKey || !deck.playKey) throw new Error('How the next call is placed, ☎ Switchboard and 🎭 Call to play belong on the dialer: ' + JSON.stringify(deck));
-  if (!deck.centered) throw new Error('The dialer should stand in the middle of the screen with nothing beside it: ' + JSON.stringify(deck));
-  // ☎ Switchboard brings the board out beside the dialer, and takes it away again.
-  await openBoard(tr);
-  const out = await tr.evaluate(() => {
-    const d = document.querySelector('#dialer').getBoundingClientRect(), sb = document.querySelector('#roster').getBoundingClientRect();
-    return { gap: Math.round(d.left - sb.right), ends: Math.round(Math.abs(sb.bottom - d.bottom)),
-      open: document.querySelector('#consoleGrid').classList.contains('sb-open') };
-  });
-  if (!out.open || out.gap > 2) throw new Error('With the drawer out the board should sit against the dialer: ' + JSON.stringify(out));
-  // one piece of equipment: the board's case reaches down to the foot of the phone
-  if (out.ends > 2) throw new Error('The board and the dialer should end on the same line: ' + JSON.stringify(out));
-  // and it follows the phone when a late reflow makes it taller (a web font arriving, a key appearing)
+  if (deck.gap > 2) throw new Error('The switchboard should be attached to the dialer, with no gap: ' + JSON.stringify(deck));
+  if (deck.endsTogether > 2) throw new Error('The switchboard and the dialer should end on the same line: ' + JSON.stringify(deck));
+  if (deck.picker || deck.preview || deck.beside) throw new Error('Nothing sits beside the dialer: the calls to play and the call picked are on the next screen: ' + JSON.stringify(deck));
+  if (!deck.optsOnBoard || deck.dialerOpts) throw new Error('How the next call is placed belongs at the foot of the switchboard, not on the dialer: ' + JSON.stringify(deck));
+  if (!deck.noScroll) throw new Error('The board should run as one piece with the phone, never scrolling inside itself: ' + JSON.stringify(deck));
+  // A late reflow of the phone (a web font arriving, the window changing) must not leave the board short.
   const reflow = await tr.evaluate(async () => {
     const hint = document.querySelector('#dialer .dev-hint');
     if (hint) hint.textContent += ' ' + 'A longer line that rewraps the phone and makes it taller. '.repeat(3);
@@ -475,9 +453,7 @@ const openTraineeBoard = async (pg) => { if (!(await pg.$('#tside .roster'))) { 
     return Math.round(Math.abs(sb.bottom - d.bottom));
   });
   if (reflow > 2) throw new Error('The board should follow the dialer when it reflows, not stay at the height it was first measured at: ' + reflow);
-  await tr.click('#roster [data-act="switchboard"]');
-  await tr.waitForFunction(() => !document.querySelector('#roster'));
-  ok('🎛 The Console is just the dialer: nothing beside it, and the switchboard, how the next call is placed and 🎭 Call to play are all keys on the phone — ☎ Switchboard folds the board out against the dialer as one piece, ending on the same line and following it when it reflows, and away again');
+  ok('🎛 The Console is one desk: the switchboard and the dialer as one piece ending on the same line with nothing scrolling inside and how the next call is placed at the board\'s foot — and nothing beside them, the calls to play being a screen of their own');
   // An open call: no script picked. The line key picks the line (Intake), and the trainer improvises the caller.
   await tr.click('#dialer [data-line="intake"]');
   await tr.waitForFunction(() => /Open call: no script/.test(document.querySelector('#dialer .lcd-cid').textContent) && /Intake Line/.test(document.querySelector('#dialer .lcd-cid').textContent));

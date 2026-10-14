@@ -8,8 +8,6 @@ const PORTAL_HOME = 'http://127.0.0.1:9911/programs.html';
 let step = 0;
 const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
 
-// ☎ The switchboard is a drawer on the Console: it folds out of the dialer's ☎ Switchboard key.
-const openBoard = async (pg) => { if (!(await pg.$('#roster'))) { await pg.click('#dialer [data-act="switchboard"]'); await pg.waitForSelector('#roster'); } };
 
 (async () => {
   const browser = await chromium.launch({
@@ -57,8 +55,7 @@ const openBoard = async (pg) => { if (!(await pg.$('#roster'))) { await pg.click
   // An administrator from the Portal lands on the console, under their Portal name: no passphrase
   const tr = await mk();
   await tr.goto(Portal.trainer(B, 'Coach Ana'));
-  await tr.waitForSelector('#dialer .dialpad');
-  await openBoard(tr);
+  await tr.waitForSelector('#roster');
   const t = await tr.evaluate(() => ({ role: App.me.role, name: App.me.name, hash: location.hash }));
   if (t.role !== 'a' || t.name !== 'Coach Ana' || t.hash !== '#/console') throw new Error('The trainer from the Portal: ' + JSON.stringify(t));
   // 🏠 Main Portal is a button on the top bar, last of the four (Console · Call Logs & Scenario Picker · Admin · Main Portal).
@@ -92,8 +89,7 @@ const openBoard = async (pg) => { if (!(await pg.$('#roster'))) { await pg.click
   if (/admin=/.test(fb.url())) throw new Error('?admin=1 stayed in the address');
   await fb.fill('#an', 'Coach Ben'); await fb.fill('#ap', 'test-pass');
   await fb.click('#fTrainer button');
-  await fb.waitForSelector('#dialer .dialpad');
-  await openBoard(fb);
+  await fb.waitForSelector('#roster');
   ok('The trainers\' fallback (the Portal is down): the passphrase still opens the console');
 
   // Separate trainer accounts get their own desk extensions (8001 and up), and see each other's
@@ -103,7 +99,6 @@ const openBoard = async (pg) => { if (!(await pg.$('#roster'))) { await pg.click
   if (!/^80\d\d$/.test(e1) || !/^80\d\d$/.test(e2) || e1 === e2) throw new Error('Each trainer account needs its own extension: ' + JSON.stringify([e1, e2]));
   await tr.click('#nav a[href="#/console"]');
   await tr.waitForSelector('#dialer .dev-head');
-  await openBoard(tr);
   if (!new RegExp('ext ' + e1).test(await tr.textContent('#dialer .dev-head'))) throw new Error('The console should show the trainer\'s own extension');
   await tr.waitForFunction((n) => /Coach Ben/.test(document.querySelector('#roster').textContent) && new RegExp('ext ' + n).test(document.querySelector('#roster').textContent), e2);
   ok(`Separate trainer accounts have their own trainer lines (Coach Ana ext ${e1}, Coach Ben ext ${e2}) and see each other on the switchboard`);

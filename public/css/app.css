@@ -142,30 +142,16 @@ table.list tr.click:hover td { background: #f8fafc; }
 .gate-fallback summary { cursor: pointer; font-size: 13px; color: var(--muted); text-align: center; }
 
 /* ---------- the softphone (a desk phone on screen) ----------
-   ☎ Console is the phone and nothing else: on the main screen the phone stands on its own
-   (.solo), the panes a call needs come up beside it while a call is on, and ☎ Switchboard folds
-   the board out of the phone's own key (.sb-open). */
-.phone-layout { display: grid; grid-template-columns: 360px minmax(0, 1fr); grid-template-areas: "device work"; column-gap: 18px; row-gap: 18px; align-items: start; }
-.phone-layout > .tside { grid-area: board; display: none; }
-.phone-layout > .device { grid-area: device; }
-.phone-layout > .work { grid-area: work; }
-.phone-layout.sb-open { grid-template-columns: var(--ts, 250px) 360px minmax(0, 1fr); grid-template-areas: "board device work"; }
-.phone-layout.sb-open > .tside { display: block; }
-/* the main screen: the phone on its own, in the middle of the window */
-.phone-layout.solo { grid-template-columns: 360px; grid-template-areas: "device"; justify-content: center; }
-.phone-layout.solo > .work { display: none; }
-.phone-layout.solo.sb-open { grid-template-columns: var(--ts, 250px) 360px; grid-template-areas: "board device"; justify-content: start; }
-@media (max-width: 1240px) { .phone-layout.sb-open { --ts: 220px; column-gap: 14px; } }
+   ☎ Console: the switchboard beside the phone (« minimizes it to a rail), the phone, and the
+   workspace on the right. */
+.phone-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
+.phone-layout.with-side { grid-template-columns: var(--ts, 250px) 360px minmax(0, 1fr); gap: 18px; }
+.phone-layout.with-side.side-folded { --ts: 52px; }
+@media (max-width: 1240px) { .phone-layout.with-side { --ts: 220px; gap: 14px; } }
 .phone-layout > * { min-width: 0; }
 .tside { position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow: auto; }
-@media (max-width: 1060px) {
-  .phone-layout.sb-open { grid-template-columns: 360px minmax(0, 1fr); grid-template-areas: "board board" "device work"; }
-  .phone-layout.solo.sb-open { grid-template-columns: 360px; grid-template-areas: "board" "device"; }
-  .tside { position: static; max-height: none; }
-}
-@media (max-width: 960px) {
-  .phone-layout, .phone-layout.sb-open, .phone-layout.solo, .phone-layout.solo.sb-open { grid-template-columns: minmax(0, 1fr); grid-template-areas: "board" "device" "work"; }
-}
+@media (max-width: 1060px) { .phone-layout.with-side, .phone-layout.with-side.side-folded { grid-template-columns: 360px minmax(0, 1fr); } .tside { grid-column: 1 / -1; position: static; max-height: none; } }
+@media (max-width: 960px) { .phone-layout, .phone-layout.with-side, .phone-layout.with-side.side-folded { grid-template-columns: 1fr; } }
 .device { background: linear-gradient(160deg, #13254d, #0a1530 70%); color: #e2e8f0; border-radius: 26px; padding: 16px; box-shadow: 0 20px 50px rgba(8, 18, 38, .35), inset 0 1px 0 rgba(255, 255, 255, .06); position: sticky; top: 76px; }
 @media (max-width: 960px) { .device { position: static; } }
 .dev-head { display: flex; align-items: center; gap: 8px; padding: 2px 4px 12px; font-size: 13px; color: #94a3b8; white-space: nowrap; }
@@ -265,14 +251,10 @@ table.list tr.click:hover td { background: #f8fafc; }
 .lvl-Beginner { background: #dcfce7; color: #166534; } .lvl-Intermediate { background: var(--blue-soft); color: #1e40af; } .lvl-Advanced { background: #fee2e2; color: #991b1b; }
 
 /* ---------- trainer console ----------
-   🎛 Console is the dialer and nothing else on the main screen: the switchboard folds out of the
-   dialer's own ☎ Switchboard key (.sb-open), and the calls to play are on the next screen
-   (🗂 Call Logs & Scenario Picker). */
-.console { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "stage"; column-gap: 0; row-gap: 18px; align-items: start; }
-.console > .console-side { grid-area: board; display: none; }
-.console > .console-stage { grid-area: stage; }
-.console.sb-open { grid-template-columns: var(--sl, 290px) minmax(0, 1fr); grid-template-areas: "board stage"; }
-.console.sb-open > .console-side { display: block; }
+   🎛 Console: ☎ the switchboard joined to the dialer on the left, with how the next call is placed
+   at its foot. The calls to play are on the next screen (🗂 Call Logs & Scenario Picker), which
+   🎭 Call to play opens in a tab of its own. */
+.console { display: grid; grid-template-columns: var(--sl, 290px) minmax(0, 1fr); column-gap: 0; row-gap: 18px; align-items: start; }
 /* ☎ the switchboard runs into the dialer: one flat case across the logo, the board and the phone,
    with no gradient seam or shadow where they meet, so they read as a single piece of equipment.
    The shadow falls down and to the right only, away from the join. */
@@ -284,7 +266,6 @@ table.list tr.click:hover td { background: #f8fafc; }
   padding: 4px 14px 16px; display: flex; flex-direction: column;
 }
 .dial-stage > .dialer { background: var(--deck); box-shadow: 10px 22px 44px -16px rgba(8, 18, 38, .5); }
-.console:not(.sb-open) .dial-stage > .dialer { box-shadow: 0 22px 44px -16px rgba(8, 18, 38, .5); }
 /* nothing scrolls inside the board: it runs as long as the batch does, and the keys follow it */
 .console-side .roster h3, .console-side .roster .nm { color: #e2e8f0; }
 .console-side .roster .bt, .console-side .roster .muted, .console-side .roster .side-h, .console-side .roster .empty { color: #94a3b8; }
@@ -298,19 +279,20 @@ table.list tr.click:hover td { background: #f8fafc; }
 .console-side .roster .btn { background: transparent; border-color: #22386a; color: #cbd5e1; }
 .console-side .roster .btn-green { background: var(--green); border-color: var(--green); color: #fff; }
 .console-side .roster summary { color: #94a3b8; }
-/* the phone's left side is open only while the board is out beside it */
-.console.sb-open .dial-stage > .dialer { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+/* the phone's left side is open where the board meets it */
+.dial-stage > .dialer { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 @media (max-width: 1140px) {
   .console-side .side-brand { margin-bottom: 14px; border-radius: 16px; }
   .console-side .roster { border-radius: var(--radius); }
-  .console.sb-open .dial-stage > .dialer { border-radius: 26px; }
+  .dial-stage > .dialer { border-radius: 26px; }
 }
-@media (max-width: 1420px) { .console.sb-open { --sl: 260px; } }
-@media (max-width: 1240px) { .console.sb-open { --sl: 240px; } }
-@media (max-width: 1140px) { .console.sb-open { grid-template-columns: minmax(0, 1fr); grid-template-areas: "board" "stage"; } }
+@media (max-width: 1420px) { .console { --sl: 260px; } }
+@media (max-width: 1240px) { .console { --sl: 240px; } }
+@media (max-width: 1140px) { .console { grid-template-columns: minmax(0, 1fr); } }
 .console > *, .dial-stage > *, .dial-side > * { min-width: 0; }
 .console-side { position: static; }
 .console-side > .card + .card { margin-top: 16px; }
+@media (max-width: 1140px) { .console-side.right { order: 3; } }
 
 /* the two sidebars fold away to a rail, and the trainee's switchboard with them */
 .fold-btn { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--orange); background: var(--orange-soft); color: #c2410c; border-radius: 8px; padding: 4px 9px; line-height: 1; cursor: pointer; font: inherit; font-size: 11.5px; font-weight: 700; white-space: nowrap; }
@@ -334,11 +316,11 @@ table.list tr.click:hover td { background: #f8fafc; }
 .my-line .bt { font-size: 12px; color: var(--muted); }
 .side-h { text-transform: uppercase; letter-spacing: .5px; font-weight: 700; margin: 12px 0 4px; }
 .side-card { margin: 0; }
-/* how the next call is placed: the dialer's own keys, under the keypad */
-.board-opts { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #1e2d52; }
-.board-opts .side-h { margin: 12px 0 6px; color: #94a3b8; font-size: 10.5px; }
+/* how the next call is placed, at the foot of the switchboard beside the dialer */
+.board-opts { flex: none; margin-top: auto; padding-top: 16px; border-top: 1px solid var(--orange); }
+.board-opts .side-h:first-child { margin-top: 4px; }
+.board-opts .side-h { margin: 0 0 6px; }
 .board-opts .soft-keys { margin-top: 0; }
-.board-opts .dev-btns { margin-top: 0; }
 /* the sidebars are narrow: their headings wrap instead of pushing the minimize key off the card */
 .tside .card-head, .console-side .card-head { flex-wrap: wrap; row-gap: 6px; }
 .tside .card-head h3, .console-side .card-head h3 { font-size: 15px; }
@@ -379,9 +361,8 @@ table.list tr.click:hover td { background: #f8fafc; }
 /* the dialer carries everything a call is placed with, so it is taller than a window: it scrolls with
    the page instead of sticking, or its keypad could never be reached */
 .dial-stage > .dialer { position: static; }
-/* before a call there is nothing beside the dialer: it stands on its own, centered on the screen */
-.dial-stage.solo { grid-template-columns: 360px; justify-content: center; }
-.console.sb-open .dial-stage.solo { justify-content: start; }
+/* before a call there is nothing beside the dialer: it stands at the board's side */
+.dial-stage.solo { grid-template-columns: 360px; justify-content: start; }
 @media (max-width: 1280px) { .dial-stage { grid-template-columns: 318px minmax(0, 1fr); gap: 16px; } .dial-stage.solo { grid-template-columns: 360px; } }
 @media (max-width: 1100px) { .dial-stage { grid-template-columns: minmax(0, 1fr); } .dial-stage.solo { grid-template-columns: minmax(0, 1fr); } .dialer { width: 100%; max-width: 380px; margin: 0 auto; } }
 @media (max-width: 560px) { .callers .scen .meta { display: none; } }

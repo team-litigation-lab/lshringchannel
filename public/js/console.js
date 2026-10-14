@@ -21,17 +21,6 @@
   const remote = () => document.getElementById('remoteAudio');
   const active = (t) => t && ['ringing', 'connecting', 'live'].includes(t.status);
   const pick = C.pick = { dial: '', traineeId: '', scenarioId: '', track: 'reception', record: true, withhold: false, batch: '', graded: null, voice: '', aiPool: [] };
-  /* ☎ The switchboard drawer. The Console's main screen is the dialer and nothing else, so the board
-     folds out of the dialer's ☎ Switchboard key instead of sitting beside it. It starts closed and
-     stays as the trainer leaves it on that computer. */
-  const SB_KEY = 'mcv_sb';
-  C.sbOpen = function (set) {
-    try {
-      if (set === undefined) return localStorage.getItem(SB_KEY) === '1';
-      localStorage.setItem(SB_KEY, set ? '1' : '0');
-    } catch (e) {}
-    return !!set;
-  };
   // 📋 Graded mock call: starts as ⚙️ Setup says, then as the trainer last left it (on this computer).
   const gradedPick = () => {
     if (pick.graded === null) { let v = null; try { v = localStorage.getItem('mcv_graded'); } catch (e) {} pick.graded = v === null ? !!(App.cfg.settings && App.cfg.settings.defaultGraded) : v === '1'; }
@@ -589,20 +578,12 @@
     renderRoster();
     renderStage();
   }
-  // The drawer: open it, close it, and keep the dialer's own corner square only while it's out.
-  function renderDrawer() {
-    const grid = U.$('#consoleGrid');
-    if (grid) grid.classList.toggle('sb-open', C.sbOpen());
-    renderRoster();
-  }
-  function toggleSb() { C.sbOpen(!C.sbOpen()); renderDrawer(); renderDialer(); }
   C.render = render;
 
-  /* ☎ The switchboard, in the drawer beside the dialer: every phone that's open, by batch. It is
-     drawn only while the drawer is out, so the main screen stays the dialer alone. */
+  /* ☎ The switchboard, beside the dialer and part of it: the trainer's own line, the other trainers
+     who are on, and every phone that's open by batch — with how the next call is placed at its foot. */
   function renderRoster() {
     const side = U.$('#sideL'); if (!side) return;
-    if (!C.sbOpen()) { side.innerHTML = ''; return; }
     if (!U.$('#roster', side)) {
       side.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
         <div class="sb-sub">Ring Channel · Switchboard</div></div><div class="card roster" id="roster"></div>`;
@@ -615,8 +596,7 @@
     const offline = (C.roster || []).filter((x) => !online.has(x.id) && !x.archived && (!pick.batch || x.batch === pick.batch));
     const hands = all.filter((x) => x.hand).length;
     const desks = (App.desks || []).filter((d) => d.name !== App.me.name);
-    el.innerHTML = `<div class="card-head"><h3>☎ Switchboard</h3><span class="spacer"></span><span class="badge green">${all.length} online</span>${hands ? `<span class="badge orange">✋ ${hands}</span>` : ''}
-        <button type="button" class="fold-btn" data-act="switchboard" title="Close the switchboard: the Console goes back to the dialer alone" aria-label="Close the switchboard"><span class="fb-ic">«</span> Close</button></div>
+    el.innerHTML = `<div class="card-head"><h3>☎ Switchboard</h3><span class="spacer"></span><span class="badge green">${all.length} online</span>${hands ? `<span class="badge orange">✋ ${hands}</span>` : ''}</div>
       <div class="my-line"><div class="small muted">My trainer line</div><div class="nm">🎓 ${esc(App.me.name)}</div>
         <div class="bt">${App.myExt ? `ext <span class="mono">${esc(App.myExt)}</span> · ` : ''}${active(App.t) ? 'on a call' : 'free'}</div></div>
       ${desks.length ? `<div class="side-h small muted">Other trainers on</div>${desks.map((d) => `<div class="tr" style="cursor:default"><span class="led ${d.call ? 'ringing' : 'available'}"></span>
@@ -627,7 +607,8 @@
           <span class="led ${x.call ? 'ringing' : x.status}"></span>
           <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)} ${x.hand ? '<span class="hand-wave" title="Asked for a mock call">✋</span>' : ''}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''} · ${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}${x.tabs > 1 ? ` · ${x.tabs} tabs` : ''}</div></div>
           <button class="btn btn-sm ${x.call ? '' : 'btn-green'}" data-ring="${esc(x.id)}" ${x.call || active(App.t) ? 'disabled' : ''}>📞</button></div>`).join('') || '<div class="empty small">Nobody is online. Trainees open <b>📞 My phone</b> to take calls.</div>'}
-      ${offline.length ? `<details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">${offline.length} offline</summary>${offline.map((x) => `<div class="tr" style="cursor:default"><span class="led"></span><div><div class="nm" style="font-weight:500">${esc(x.name)}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''}${x.last_seen ? ' · seen ' + U.when(x.last_seen) : ''}</div></div></div>`).join('')}</details>` : ''}`;
+      ${offline.length ? `<details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">${offline.length} offline</summary>${offline.map((x) => `<div class="tr" style="cursor:default"><span class="led"></span><div><div class="nm" style="font-weight:500">${esc(x.name)}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''}${x.last_seen ? ' · seen ' + U.when(x.last_seen) : ''}</div></div></div>`).join('')}</details>` : ''}
+      ${optionsHTML()}`;
     matchHeights();
   }
 
@@ -639,15 +620,7 @@
     const onCall = active(App.t);
     const graded = gradedPick(), recOk = App.cfg.features.recordings, rec = (pick.record || graded) && recOk;
     const s = App.scen[pick.scenarioId];
-    const board = `<button type="button" class="dev-btn ${C.sbOpen() ? 'on' : ''}" data-act="switchboard" aria-pressed="${C.sbOpen()}" title="The switchboard: who is online, their extensions, and who has asked for a call. It folds out beside the dialer">☎ Switchboard</button>`;
-    const classKey = `<button type="button" class="dev-btn ${C.classOn() ? 'on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view'}</button>`;
-    // On a call, only the keys that act on the call stay: how the *next* call is placed waits its turn.
-    if (onCall) return `<div class="board-opts"><div class="dev-btns">${board}${classKey}</div></div>`;
     return `<div class="board-opts">
-      <div class="dev-btns">
-        ${board}
-        <button type="button" class="dev-btn" data-act="playpick" title="The Scenario Picker, in a tab of its own: the calls you can play, and ＋ write your own. The Console stays where it is">🎭 ${s ? 'Call to play: ' + esc(s.title) : 'Call to play…'}</button>
-      </div>
       <div class="side-h small muted">How the next call is placed</div>
       <div class="soft-keys">
         <label class="soft ${graded ? 'on' : ''} ${onCall ? 'dis' : ''}" title="Graded mock calls are recorded, autograded on the program's Mock Calls Metrics, and listed in 📋 Graded calls"><input type="checkbox" id="pkGraded" ${graded ? 'checked' : ''} ${onCall ? 'disabled' : ''}><i class="dot"></i>📋 Graded</label>
@@ -657,12 +630,12 @@
       <div class="dev-btns">
         <button type="button" class="dev-btn ai" data-act="airing" title="Ring the trainee on the dialer with an AI caller: the AI plays the call picked, you follow it live, and the AI reviews it" ${App.cfg.features.ai ? '' : 'disabled'}>🤖 AI caller</button>
         <button type="button" class="dev-btn" data-act="aisetup" title="Choose the calls the AI may play, the voice it speaks with, and the trainees to ring (several at once)" ${App.cfg.features.ai ? '' : 'disabled'}>🎭 Choose…</button>
-      </div>
-      <div class="dev-btns">${classKey.replace('class="dev-btn ', 'class="dev-btn wide ')}</div></div>`;
-
+        <button type="button" class="dev-btn wide" data-act="playpick" title="The Scenario Picker, in a tab of its own: the calls you can play, and ＋ write your own. The Console stays where it is" ${onCall ? 'disabled' : ''}>🎭 ${s ? 'Call to play: ' + esc(s.title) : 'Call to play…'}</button>
+        <button type="button" class="dev-btn wide ${C.classOn() ? 'on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view'}</button>
+      </div></div>`;
   }
 
-  /* ☎ The board and the dialer are one piece while the drawer is out: the board's case reaches down to
+  /* ☎ The board and the dialer are one piece: the board's case reaches down to
      the foot of the phone however short the batch is, and simply grows past it when the batch is long.
      Measured once, the board would go stale the moment anything reflowed the phone (a web font arriving
      and rewrapping its text, the window resizing, a key appearing or going), so it follows the dialer. */
@@ -821,12 +794,11 @@
           <button type="button" class="key conf" data-act="merge" disabled title="Merge another trainee into the call: their phone rings, and once they answer everyone hears everyone (once the call is connected)"><span class="ic">👥</span>Merge call</button>
           <button type="button" class="key" data-act="handover" disabled title="Hand the caller to another trainee: their phone rings, and when they answer this trainee's call ends and you carry on with the new one (once the call is connected)"><span class="ic">↪</span>Transfer on</button>
         </div>
-        <p class="dev-hint">These come alive once the call is connected — and when the trainee transfers, you answer it here.</p>
-        ${optionsHTML()}`;
+        <p class="dev-hint">These come alive once the call is connected — and when the trainee transfers, you answer it here.</p>`;
     } else if (status === 'ended') {
       main = `<div class="lcd-state">Call ended</div><div class="lcd-name">${esc(t.trainee.name)}</div><div class="lcd-timer" style="color:#94a3b8">${U.dur(t.endedAt - t.answeredAt)}</div><div class="lcd-sub">${esc(t.endNote || '')}</div>`;
       cid = `Played <b>${esc(t.scenario.title)}</b>`;
-      keys = `<div class="dev-keys"><button type="button" class="key answer wide" data-act="newcall"><span class="ic">📞</span>New call</button></div>${optionsHTML()}`;
+      keys = `<div class="dev-keys"><button type="button" class="key answer wide" data-act="newcall"><span class="ic">📞</span>New call</button></div>`;
     } else {
       const live = status === 'live';
       const st = status === 'ringing' ? `Calling · <span data-rings="${t.ringAt}">${U.ringText(t.ringAt)}</span>`
@@ -839,7 +811,7 @@
           <button type="button" class="key coach ${t.coaching ? 'on' : ''}" data-act="coach" ${live ? '' : 'disabled'} title="Pause the role-play to coach the trainee, then resume"><span class="ic">${t.coaching ? '▶' : '⏸'}</span>${t.coaching ? 'Resume role-play' : 'Coaching time-out'}</button>
           <button type="button" class="key conf ${confCount() ? 'on' : ''}" data-act="merge" ${live ? '' : 'disabled'} title="Merge another trainee into this call: their phone rings, and once they answer everyone hears everyone"><span class="ic">👥</span>${confCount() ? 'Merge another' : 'Merge call'}</button>
           <button type="button" class="key wide" data-act="handover" ${live && !confCount() ? '' : 'disabled'} title="Hand the caller to another trainee: their phone rings, and when they answer this trainee's call ends and you carry on with the new one"><span class="ic">↪</span>Transfer on</button>
-          <button type="button" class="key hang wide" data-act="hangup"><span class="ic">☎</span>${status === 'ringing' ? 'Cancel call' : 'End call'}</button></div>${optionsHTML()}`;
+          <button type="button" class="key hang wide" data-act="hangup"><span class="ic">☎</span>${status === 'ringing' ? 'Cancel call' : 'End call'}</button></div>`;
     }
     matchHeights();
     el.innerHTML = `<div class="dev-head"><span class="led ${led}"></span><b>Trainer line</b>${App.myExt ? ` <span class="mono" title="Your own trainer extension on this switchboard">ext ${esc(App.myExt)}</span>` : ''}<span class="spacer"></span><span>${esc(App.me.name)}</span></div>
@@ -931,7 +903,7 @@
   C.loadPick = loadPick;
   window.addEventListener('storage', (e) => {
     if (e.key !== PICK_KEY || !loadPick()) return;
-    if (App.route.name === 'console' && !active(App.t)) renderDialer();
+    if (App.route.name === 'console' && !active(App.t)) { renderRoster(); renderDialer(); }
     else if (App.at('scenarios')) App.views.scenarios.render();
   });
 
@@ -1014,7 +986,7 @@
     async render() {
       const app = App.host();
       // The main screen is ☎ the dialer and nothing else. ☎ Switchboard folds the board out beside it.
-      app.innerHTML = `<div class="console ${C.sbOpen() ? 'sb-open' : ''}" id="consoleGrid">
+      app.innerHTML = `<div class="console" id="consoleGrid">
         <aside class="console-side" id="sideL"></aside><div class="console-stage" id="stage"></div></div>`;
       App.leave = () => { document.removeEventListener('keydown', onKey); if (App.t && App.t.status === 'ended' && App.t.upload !== 'saving') App.t = null; };
       app.firstChild.addEventListener('click', onClick);
@@ -1058,7 +1030,6 @@
     else if (act === 'miccheck') App.micCheck();
     else if (act === 'newcall') { App.t = null; pick.dial = ''; syncDial(); render(); }   // the screen clears for the next call
     else if (act === 'takehere') takeHere();
-    else if (act === 'switchboard') toggleSb();
     else if (act === 'playpick') openPicker();
     else if (act === 'classview') openClassView();
   }
@@ -1072,7 +1043,7 @@
     pick.scenarioId = id && App.scen[id] ? id : '';
     if (pick.scenarioId) pick.track = App.scen[pick.scenarioId].track;
     savePick();
-    if (App.route.name === 'console') renderDialer();
+    if (App.route.name === 'console') { renderRoster(); renderDialer(); }
   }
   // The line (Reception, Calendar, Intake): which calls are listed, and where an open call rings.
   function setTrack(k) {
@@ -1080,7 +1051,7 @@
     pick.track = k;
     const s = App.scen[pick.scenarioId]; if (s && s.track !== k) pick.scenarioId = '';
     savePick();
-    if (App.route.name === 'console') renderDialer();
+    if (App.route.name === 'console') { renderRoster(); renderDialer(); }
   }
   // Typing on the keyboard dials too: digits, * and #; Backspace deletes, Esc clears, Enter rings.
   function onKey(e) {
@@ -1101,9 +1072,9 @@
   }
   function onChange(e) {
     if (e.target.id === 'batchSel') { pick.batch = e.target.value; renderRoster(); }
-    else if (e.target.id === 'pkRec') { pick.record = e.target.checked; renderDialer(); }
-    else if (e.target.id === 'pkGraded') { pick.graded = e.target.checked; try { localStorage.setItem('mcv_graded', pick.graded ? '1' : '0'); } catch (err) {} renderDialer(); }
-    else if (e.target.id === 'pkHide') { pick.withhold = e.target.checked; renderDialer(); }
+    else if (e.target.id === 'pkRec') { pick.record = e.target.checked; renderRoster(); renderDialer(); }
+    else if (e.target.id === 'pkGraded') { pick.graded = e.target.checked; try { localStorage.setItem('mcv_graded', pick.graded ? '1' : '0'); } catch (err) {} renderRoster(); renderDialer(); }
+    else if (e.target.id === 'pkHide') { pick.withhold = e.target.checked; renderRoster(); renderDialer(); }
     else if (e.target.id === 'ocCase') { const x = App.cfg.cases[e.target.value], pre = U.$('#ocCaseText'); if (pre) { pre.textContent = x ? x.text : ''; pre.classList.toggle('hidden', !x); } }
     else if (e.target.dataset.goal != null) { tick(Number(e.target.dataset.goal), e.target.checked); e.target.closest('.goal').classList.toggle('done', e.target.checked); }
   }

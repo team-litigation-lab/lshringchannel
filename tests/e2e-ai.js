@@ -9,7 +9,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
 
 /* 🎭 A trainee picks a practice call on the Scenario Picker, a tab of 🗂 Call Logs & Scenario Picker;
    the call then runs on ☎ their Console, the one phone they take every call on. A trainer picks the
-   call the Console will play on the same screen, and tries one on 🛡 Admin → 🎧 Try practice. */
+   call the Console will play on the same screen, and tries one on 🛡 Admin → 🤖 AI calls. */
 const toPicker = async (pg) => { await pg.goto(B + '/#/logs/scenarios'); await pg.waitForSelector('.screen-tabs a.on'); };
 const playCall = async (pg, sid) => {
   await pg.goto(B + '/#/logs/scenarios');
@@ -20,7 +20,6 @@ const playCall = async (pg, sid) => {
   await pg.goto(B + '/#/console');
   await pg.waitForSelector('#dialer .dialpad');
 };
-const openBoard = async (pg) => { if (!(await pg.$('#roster'))) { await pg.click('#dialer [data-act="switchboard"]'); await pg.waitForSelector('#roster .tr'); } };
 
 (async () => {
   const browser = await chromium.launch({
@@ -84,7 +83,7 @@ const openBoard = async (pg) => { if (!(await pg.$('#roster'))) { await pg.click
   // Trainer drafts a scorecard with AI from a live call's recording (the call from the live test)
   const tr = await mk();
   await tr.goto(Portal.trainer(B, 'Coach Ana'));
-  await tr.waitForSelector('#dialer .dialpad');
+  await tr.waitForSelector('#roster .tr');
   await tr.goto(B + '/#/admin/calls');
   await tr.waitForSelector('#fMode');
   await tr.selectOption('#fMode', 'live');
@@ -114,7 +113,7 @@ const openBoard = async (pg) => { if (!(await pg.$('#roster'))) { await pg.click
   const ext = await te.evaluate(() => App.myExt);
   await playCall(tr, 'ft_rc_appt');
   for (const d of ext) await tr.click(`#dialer [data-dk="${d}"]`);
-  await tr.click('#dialer [data-act="airing"]');
+  await tr.click('#roster [data-act="airing"]');
   await te.waitForSelector('#device .lcd.ringing', { timeout: 10000 });
   if (!/SANTOS MARIA/.test(await te.textContent('#device .lcd'))) throw new Error('The AI call should show the caller ID: ' + await te.textContent('#device .lcd'));
   // 🤖 AI calls has a page of its own, off the trainer's line
@@ -140,8 +139,7 @@ const openBoard = async (pg) => { if (!(await pg.$('#roster'))) { await pg.click
   await tr.waitForFunction(() => /On the call/.test((document.querySelector('#aiCalls') || {}).textContent || ''));
   // the switchboard knows too, while the trainer's own line stays free
   await tr.goto(B + '/#/console');
-  await tr.waitForSelector('#dialer .dialpad');
-  await openBoard(tr);
+  await tr.waitForSelector('#roster .tr');
   await tr.waitForFunction(() => /on a call/.test((document.querySelector('#roster') || {}).textContent || ''));
   if (!/Enter an extension/i.test(await tr.textContent('#dialer .lcd'))) throw new Error("The trainer's own line should stay free while an AI call runs");
   await tr.goto(B + '/#/admin/aicalls');
