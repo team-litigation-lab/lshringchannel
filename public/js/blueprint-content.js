@@ -150,14 +150,23 @@
     trainer: TRAINER,
     // trainers get both decks; trainees the trainee deck; nobody in the 📺 Class view (the class sees that tab)
     role: () => { const A = window.App; if (!A || !A.me || A.isClassView) return null; return A.trainer() ? 'trainer' : 'trainee'; },
-    version,
-    // in the header, before the name and Log out
-    // a compact 🧭 button (the top bar is full), with its name on hover
-    mount: (html) => { const who = document.getElementById('who'); if (who && who.firstChild) who.insertAdjacentHTML('afterbegin', html.replace('<button ', '<button title="Blueprint: how Ring Channel works" aria-label="Blueprint" ').replace('🧭 Blueprint', '🧭')); }
+    version
+    // No Blueprint button: the Main Portal's 🧭 Blueprint page is where the blueprints live. The trainer
+    // deck opens only from its own address, #/blueprint, which that page links to (trainers only).
   };
-  // the header is drawn again on every page: put the button back at once
+  // #/blueprint (from the Main Portal): open the trainer deck once a trainer is signed in. The router sends an
+  // unknown address to the home page, so the request is noted here, before it runs.
+  const BP_LINK = /^#\/blueprint\/?$/;
+  let bpPending = BP_LINK.test(location.hash);
+  function openFromLink() {
+    const A = window.App;
+    if (!bpPending || !window.LSHBlueprint || !A || !A.me || !A.trainer() || A.isClassView) return;
+    bpPending = false;
+    setTimeout(() => { try { LSHBlueprint.open('trainer'); } catch (e) { bpPending = true; } }, 0);
+  }
+  window.addEventListener('hashchange', () => { if (BP_LINK.test(location.hash)) { bpPending = true; openFromLink(); } });
   if (window.App && typeof App.header === 'function') {
     const header = App.header;
-    App.header = function () { const r = header.apply(this, arguments); if (window.LSHBlueprint) LSHBlueprint.refresh(); return r; };
+    App.header = function () { const r = header.apply(this, arguments); if (window.LSHBlueprint) LSHBlueprint.refresh(); openFromLink(); return r; };
   }
 })();
