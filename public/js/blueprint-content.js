@@ -19,26 +19,27 @@
           'You arrive signed in, on your phone, as your Portal name and batch.',
           'Opening Ring Channel\'s own link only shows the way to the Portal.',
           '🎧 Audio check tests your microphone, headset and speaker before the first call.'],
-        where: 'The LSH Training Portal · 📞 My phone → 🎧 Audio check.',
+        where: 'The LSH Training Portal · ☎ Console → 🎧 Audio check.',
         tip: 'Keep the Portal open in its own tab: it\'s your way back in.' },
-      { icon: '📞', title: 'My phone', points: [
-          'Keep 📞 My phone open with your headset on. It shows your desk extension (ext 7001…): the number your trainer dials.',
+      { icon: '☎', title: 'The Console: your phone', points: [
+          'You have two buttons on the top bar: ☎ Console, your phone, and 🗂 Call Logs & Scenario Picker, the next screen.',
+          'The Console is the phone and nothing else. Keep it open with your headset on; it shows your desk extension (ext 7001…), the number your trainer dials.',
           'Set ● Available when you\'re ready for a call, or ◌ Away when you step out.',
-          '✋ Ask for a call raises your hand on your trainer\'s switchboard.'],
-        where: 'Top bar → 📞 My phone.',
+          '✋ Ask for a call raises your hand on your trainer\'s switchboard; ☎ Switchboard, at the foot of the phone, folds the board out beside it (your line, the trainers on, the rest of your batch).'],
+        where: 'Top bar → ☎ Console.',
         tip: 'Stay on Available during mock-call sessions, even between calls.' },
       { icon: '🔔', title: 'Answering a call', points: [
           'When the phone rings, it shows the line (Main Line or Intake Line) and the caller ID.',
           'Answer within 3 rings: the phone counts them for your scorecard.',
           'Greet the caller the way the line\'s rules say, then find out who they are and why they\'re calling.'],
-        where: '📞 My phone, when it rings.',
+        where: '☎ Console, when the phone rings.',
         tip: 'The caller ID can be withheld: never assume who\'s calling.' },
       { icon: '🗂', title: 'During the call', points: [
           '📝 Note: the message slip, the calendar entry or the intake note, depending on the line.',
           '🔎 Case lookup: the firm\'s case files, searched by name, phone, date of birth or case number.',
           '📇 Directory: the firm\'s extensions, with Transfer buttons.',
           '📘 Rules: the front-desk rules and the line\'s reminders.'],
-        where: 'Beside the phone, while you\'re on a call.',
+        where: '☎ Console: they come up beside the phone while you\'re on a call.',
         tip: 'Verify the caller before you share anything from the file.' },
       { icon: '⏸', title: 'The phone\'s keys', points: [
           'Mute: the caller can\'t hear you. 🔊 Speaker: the call plays on your speakers instead of your headset.',
@@ -50,16 +51,16 @@
       { icon: '📨', title: 'After the call', points: [
           'Finish your note and submit it.',
           'The AI grades a graded mock call from the recording and your note; your trainer checks the grade and sends it.',
-          'Your scorecard appears in 🗂 My calls: each metric\'s score and feedback, the weighted average and tips.',
+          'Your scorecard appears in 🗂 Call Logs & Scenario Picker → 📞 Call Logs: each metric\'s score and feedback, the weighted average and tips.',
           'If a connection drops, the phone has 30 seconds to come back; a reload offers 🔊 Reconnect the call.'],
-        where: 'Top bar → 🗂 My calls.',
+        where: 'Top bar → 🗂 Call Logs & Scenario Picker → 📞 Call Logs.',
         tip: 'Read every scorecard before your next call.' },
       { icon: '🎧', title: 'Practice with an AI caller', points: [
-          'When no trainer is free, 🎧 Practice rings you with an AI caller that talks back out loud.',
+          'When no trainer is free, pick a call on 🗂 Call Logs & Scenario Picker → 🎭 Scenario Picker and an AI caller that talks back out loud rings ☎ your Console.',
           'Pick a call, or 🎲 Surprise me for a random call on a line.',
           'Hold and Transfer work, and the AI grades the call on the same metrics when you submit the note.',
           'Type instead of talking runs the call as text, if your microphone isn\'t available.'],
-        where: 'Top bar → 🎧 Practice.',
+        where: 'Top bar → 🗂 Call Logs & Scenario Picker → 🎭 Scenario Picker.',
         tip: 'Practice a line before your live mock call on it.' },
       { icon: '👥', title: 'When the class is listening', points: [
           'Your trainer can share the call in Google Meet so the batch can listen.',
@@ -74,15 +75,17 @@
     slides: [
       { icon: '🏠', title: 'Opening the console', points: [
           'Open ☎ LSH Ring Channel from the LSH Training Portal (Training Directory or Master Control): you arrive on the console, under your Portal name.',
-          'Your top bar: 🎛 Console, 🗂 Call log, 📋 Graded calls, 📚 Scenarios, 👥 Trainees, 🎧 Try practice and ⚙️ Setup; 🏠 goes back to the Portal.',
+          'Your top bar has four buttons: 🎛 Console, 🗂 Call Logs & Scenario Picker, 🛡 Admin and 🏠 Main Portal. 🛡 Admin holds Call Logs, 📊 Trainee Monitoring, 📋 Graded Calls, 🤖 AI calls, 🎧 Try practice and ⚙️ Setup.',
           'Trainees open it from the Portal too: no sign-in form, no PINs. The trainer passphrase is only for when the Portal is down.'],
         where: 'The LSH Training Portal · the top bar.',
-        tip: 'Open ⚙️ Setup once before your first session to check the relay, recordings and AI keys.' },
-      { icon: '☎', title: 'The Switchboard and the dialer', points: [
-          'The Switchboard: every trainee online, by batch, with their extension; ✋ shows who asked for a call.',
-          'Dial the trainee\'s extension (or click them on the Switchboard), pick the line, and a call to play, or none for an open call.',
+        tip: 'Open 🛡 Admin → ⚙️ Setup once before your first session to check the relay, recordings and AI keys.' },
+      { icon: '☎', title: 'The dialer and the Switchboard', points: [
+          'The Console\'s main screen is ☎ the dialer and nothing else, with everything a call is placed with on its own keys.',
+          '☎ Switchboard folds the board out beside the dialer: every trainee online, by batch, with their extension; ✋ shows who asked for a call. Click a trainee to put their extension on the dialer.',
+          '🎭 Call to play opens the Scenario Picker on the next screen; the call you pick comes back on the dialer\'s own screen.',
+          'Dial the trainee\'s extension, pick the line, and ring — with no call picked you play an open call, any caller you like.',
           'The soft keys: 📋 Graded, Record and Hide ID. Then 📞 rings the trainee.'],
-        where: '🎛 Console → ☎ Switchboard and the dialer.',
+        where: '🎛 Console → the dialer · ☎ Switchboard · 🎭 Call to play.',
         tip: 'Start with trainees who have their hand up.' },
       { icon: '🎭', title: 'On the call', points: [
           '🎭 You are the caller: the opening line, what the caller knows and how they act, the situation, who is out.',
@@ -109,25 +112,25 @@
           'The AI listens to the recording and scores each metric of the line\'s Mock Calls Metrics, 1 to 5 with feedback.',
           '📋 Score this call: ✅ Approve the AI grade & send, or change any score or feedback, then 📨 Send.',
           '📋 Graded calls: each trainee\'s Reception, Calendar and Intake grades, with ⬇ Export CSV.'],
-        where: 'After the call, on the console · Top bar → 📋 Graded calls.',
+        where: 'After the call, on the Console · 🛡 Admin → 📋 Graded Calls.',
         tip: 'Play the recording before you approve a grade.' },
-      { icon: '👥', title: 'Call log and Trainees', points: [
-          '🗂 Call log: every call, its recording and its scorecard.',
-          '👥 Trainees: each trainee\'s live average (reviewed calls) and practice average, kept apart.',
+      { icon: '👥', title: 'Call Logs and Trainee Monitoring', points: [
+          '🗂 Call Logs: every call, its recording and its scorecard — on 🗂 Call Logs & Scenario Picker, and again under 🛡 Admin.',
+          '📊 Trainee Monitoring (Utilization): live calls taken, the time each trainee spent on the line, the calls that rang out, the holds and transfers they used, the live average (reviewed calls) and their own practice calls, kept apart. ⬇ Export CSV takes the table away.',
           'Each trainee\'s desk extension (the number you dial), and 🗂 Calls for their calls.'],
-        where: 'Top bar → 🗂 Call log · 👥 Trainees.',
+        where: 'Top bar → 🗂 Call Logs & Scenario Picker · 🛡 Admin → 📊 Trainee Monitoring.',
         tip: 'Compare live and practice averages before you rank the batch.' },
-      { icon: '📚', title: 'Scenarios', points: [
-          '📚 Scenarios lists every call, by line and level, on the firm\'s case files.',
+      { icon: '📚', title: 'The Scenario Picker', points: [
+          '🎭 The Scenario Picker lists every call, by line and level, on the firm\'s case files. ☎ Play on the Console puts one on the dialer for your next call.',
           '⧉ Copy a built-in call to change it, or ＋ Write a new call: the caller, the case, the script, the goals.',
           'The calls follow the Training Portal\'s Foundational call pack, plus calls written for live practice.'],
-        where: 'Top bar → 📚 Scenarios.',
+        where: 'Top bar → 🗂 Call Logs & Scenario Picker → 🎭 Scenario Picker.',
         tip: 'Write a call for anything the batch keeps getting wrong.' },
       { icon: '⚙️', title: 'Setup, AI practice and this Blueprint', points: [
           '⚙️ Setup: the TURN relay, recordings, AI keys and the access code, a mic check, a network test, and the grading settings.',
           '🎧 Try practice: take a practice call with the AI caller yourself, as a trainee would.',
           '🧭 Blueprint: the Trainee blueprint is the deck to share on day one; ⬇ Download PDF gives either as a handout.'],
-        where: 'Top bar → ⚙️ Setup · 🎧 Try practice · 🧭 Blueprint.',
+        where: '🛡 Admin → ⚙️ Setup · 🎧 Try practice · 🧭 Blueprint.',
         tip: 'Run the network test on a trainee\'s computer if their calls have no audio.' }
     ]
   };

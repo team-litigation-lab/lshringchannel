@@ -90,13 +90,13 @@ async function walk(page, label) {
   await te.keyboard.press('Escape');
   if (await te.evaluate(() => LSHBlueprint.isOpen())) fail('Esc didn\'t close the Blueprint');
   // the header is drawn again on another page: the button is still there
-  await te.click('a[href="#/calls"]'); await te.waitForTimeout(200);
+  await te.click('#nav a[href="#/logs"]'); await te.waitForTimeout(200);
   if (!(await te.isVisible('#lbp-open-btn'))) fail('the 🧭 Blueprint button went missing on another page');
   await te.context().close();
 
   // ---- a trainer, on a laptop and on a phone ----
   let tr = await mk({ width: 1366, height: 768 });
-  await tr.goto(Portal.trainer(B, 'Coach Print')); await tr.waitForSelector('#roster');
+  await tr.goto(Portal.trainer(B, 'Coach Print')); await tr.waitForSelector('#dialer .dialpad');
   await tr.click('#lbp-open-btn'); await tr.waitForTimeout(300);
   const a = await tr.evaluate(() => ({ deck: document.getElementById('lbp-slide').dataset.deck, tabs: [...document.querySelectorAll('#lbp-tabs button')].filter(b => b.offsetParent).map(b => b.textContent.trim()) }));
   if (a.deck !== 'trainer' || a.tabs.join() !== 'Trainer blueprint,Trainee blueprint') fail(`a trainer should get both decks: ${JSON.stringify(a)}`);

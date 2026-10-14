@@ -7,6 +7,21 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let step = 0;
 const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
 
+/* 🎭 A trainee picks a practice call on the Scenario Picker, a tab of 🗂 Call Logs & Scenario Picker;
+   the call then runs on ☎ their Console, the one phone they take every call on. A trainer picks the
+   call the Console will play on the same screen, and tries one on 🛡 Admin → 🎧 Try practice. */
+const toPicker = async (pg) => { await pg.goto(B + '/#/logs/scenarios'); await pg.waitForSelector('.screen-tabs a.on'); };
+const playCall = async (pg, sid) => {
+  await pg.goto(B + '/#/logs/scenarios');
+  await pg.waitForSelector('.screen-tabs a.on');
+  const track = await pg.evaluate((id) => (App.scen[id] || {}).track, sid);
+  await pg.click(`#stk [data-track="${track}"]`);
+  await pg.click(`[data-pick="${sid}"]`);
+  await pg.goto(B + '/#/console');
+  await pg.waitForSelector('#dialer .dialpad');
+};
+const openBoard = async (pg) => { if (!(await pg.$('#roster'))) { await pg.click('#dialer [data-act="switchboard"]'); await pg.waitForSelector('#roster .tr'); } };
+
 (async () => {
   const browser = await chromium.launch({
     executablePath: process.env.CHROME_PATH || undefined,
@@ -17,14 +32,15 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await te.goto(Portal.trainee(B, 'Riley Santos', 'B093026'));
   await te.waitForSelector('#device .lcd');
 
-  // Voice practice call
-  await te.click('a[href="#/practice"]');
+  // Voice practice call: picked on 🎭 the Scenario Picker, taken on ☎ the Console
+  await toPicker(te);
   await te.waitForSelector('.scen[data-id="ft_rc_appt"]');
   await te.check('#optTr');
   await te.screenshot({ path: OUT + '/10-practice-picker.png', fullPage: true });
   await te.click('.scen[data-id="ft_rc_appt"] button');
   await te.waitForSelector('.lcd.ringing', { timeout: 10000 });
-  ok('Practice call rings the practice phone');
+  if (!/#\/phone$/.test(await te.evaluate(() => location.hash))) throw new Error('A trainee\'s practice call should run on ☎ their Console: ' + await te.evaluate(() => location.hash));
+  ok('Practice call picked on 🎭 the Scenario Picker rings ☎ the trainee\'s Console');
   await te.click('[data-act="answer"]');
   await te.waitForSelector('.lcd.live', { timeout: 15000 });
   ok('Answered: connected to the AI caller over Gemini Live (stand-in)');
@@ -51,7 +67,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   ok(`Full scorecard opens${rec ? ', with the practice recording' : ''}`);
 
   // Typed practice call
-  await te.click('a[href="#/practice"]');
+  await toPicker(te);
   await te.waitForSelector('#optTyped');
   await te.check('#optTyped');
   await te.click('.scen[data-id="ft_rc_appt"] button');
@@ -68,8 +84,9 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   // Trainer drafts a scorecard with AI from a live call's recording (the call from the live test)
   const tr = await mk();
   await tr.goto(Portal.trainer(B, 'Coach Ana'));
-  await tr.waitForSelector('#roster');
-  await tr.click('a[href="#/calls"]');
+  await tr.waitForSelector('#dialer .dialpad');
+  await tr.goto(B + '/#/admin/calls');
+  await tr.waitForSelector('#fMode');
   await tr.selectOption('#fMode', 'live');
   await tr.waitForSelector('[data-open]');
   // open a live call that has a recording
@@ -95,19 +112,17 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await te.evaluate(() => { location.hash = '#/phone'; });
   await te.waitForSelector('#device .lcd');
   const ext = await te.evaluate(() => App.myExt);
-  await tr.click('a[href="#/console"]');
-  await tr.waitForSelector('#dialer .dialpad');
+  await playCall(tr, 'ft_rc_appt');
   for (const d of ext) await tr.click(`#dialer [data-dk="${d}"]`);
-  await tr.click('#pkList .scen[data-sid="ft_rc_appt"]');
-  await tr.click('#roster [data-act="airing"]');
+  await tr.click('#dialer [data-act="airing"]');
   await te.waitForSelector('#device .lcd.ringing', { timeout: 10000 });
   if (!/SANTOS MARIA/.test(await te.textContent('#device .lcd'))) throw new Error('The AI call should show the caller ID: ' + await te.textContent('#device .lcd'));
   // 🤖 AI calls has a page of its own, off the trainer's line
-  await tr.click('a[href="#/aicalls"]');
+  await tr.goto(B + '/#/admin/aicalls');
   await tr.waitForSelector('#aiBox');
-  if (await tr.$('#dialer')) throw new Error('🤖 AI calls should be a page of its own, not the console');
+  if (await tr.$('#dialer')) throw new Error('🤖 AI calls should be its own tab of 🛡 Admin, not the Console');
   await tr.waitForFunction(() => /Ringing/.test((document.querySelector('#aiCalls') || {}).textContent || ''));
-  ok(`🤖 AI caller from the dialer: the trainee's own phone rings (ext ${ext}, SANTOS MARIA), and 🤖 AI calls — its own page — lists the call`);
+  ok(`🤖 AI caller from the dialer: the trainee's own phone rings (ext ${ext}, SANTOS MARIA), and 🤖 AI calls — a tab of 🛡 Admin — lists the call`);
   // 🎭 AI caller setup: the trainer picks the calls to draw from, the voice and who to ring
   await te.click('[data-act="decline"]');
   await tr.waitForFunction(() => /Declined/.test((document.querySelector('#aiCalls') || {}).textContent || ''));
@@ -124,10 +139,12 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await te.waitForSelector('#device .lcd.live', { timeout: 15000 });
   await tr.waitForFunction(() => /On the call/.test((document.querySelector('#aiCalls') || {}).textContent || ''));
   // the switchboard knows too, while the trainer's own line stays free
-  await tr.click('a[href="#/console"]');
+  await tr.goto(B + '/#/console');
+  await tr.waitForSelector('#dialer .dialpad');
+  await openBoard(tr);
   await tr.waitForFunction(() => /on a call/.test((document.querySelector('#roster') || {}).textContent || ''));
   if (!/Enter an extension/i.test(await tr.textContent('#dialer .lcd'))) throw new Error("The trainer's own line should stay free while an AI call runs");
-  await tr.click('a[href="#/aicalls"]');
+  await tr.goto(B + '/#/admin/aicalls');
   await tr.waitForSelector('[data-aifollow]');
   await tr.click('[data-aifollow]');
   await tr.waitForFunction(() => /chiropractor/.test(document.querySelector('#aiFollow').textContent), null, { timeout: 20000 });

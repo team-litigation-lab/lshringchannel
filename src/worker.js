@@ -194,6 +194,7 @@ export default {
       if (path === '/api/scenarios/save') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ scenario: await sb.saveScenario(body.scenario || {}) }); }
       if (path === '/api/scenarios/delete') { if (!admin) return json({ error: 'Not allowed' }, 403); await sb.deleteScenario(String(body.id || '')); return json({ ok: true }); }
       if (path === '/api/trainees') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ trainees: await sb.listTrainees() }); }
+      if (path === '/api/utilization') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ trainees: await sb.utilization() }); }
       if (path === '/api/trainees/archive') { if (!admin) return json({ error: 'Not allowed' }, 403); return json({ trainee: await sb.setArchived(String(body.id || ''), !!body.archived) }); }
       if (path === '/api/stats') {
         if (!admin) return json({ error: 'Not allowed' }, 403);

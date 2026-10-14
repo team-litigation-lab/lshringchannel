@@ -42,9 +42,9 @@
   const F = { traineeId: '', batch: '', mode: '', needsReview: false };
   App.register('calls', {
     async render() {
-      const app = U.$('#app');
+      const app = App.host();
       const tr = App.trainer();
-      app.innerHTML = `<div class="card"><div class="card-head"><h2>${tr ? '🗂 Call log' : '🗂 My calls'}</h2><span class="spacer"></span>
+      app.innerHTML = `<div class="card"><div class="card-head"><h2>${tr ? '🗂 Call Logs' : '🗂 My calls'}</h2><span class="spacer"></span>
         ${tr ? `<select class="input" id="fBatch" style="width:auto"><option value="">All batches</option></select>
           <select class="input" id="fTrainee" style="width:auto"><option value="">All trainees</option></select>
           <select class="input" id="fMode" style="width:auto"><option value="">Live and practice</option><option value="live" ${F.mode === 'live' ? 'selected' : ''}>Live calls</option><option value="ai" ${F.mode === 'ai' ? 'selected' : ''}>AI practice</option></select>
@@ -77,7 +77,7 @@
               <td>${c.ringMs != null ? `${U.rings(c.ringMs)} ring${U.rings(c.ringMs) > 1 ? 's' : ''}` : '–'}</td>
               <td>${c.talkMs ? U.dur(c.talkMs) : '–'}${c.recording ? ' 🎙' : ''}</td>
               <td>${c.score != null ? `<b>${c.score}%</b>` : tr && c.aiScore != null ? `<span class="muted" title="The AI's grade, not sent yet">🤖 ${c.aiScore}%</span>` : '–'}</td><td>${statusBadge(c)}${!tr && c.reviewed && !c.reviewSeen ? ' <span class="badge orange">New</span>' : ''}</td></tr>`).join('')}</tbody></table>`
-            : `<div class="empty">${tr ? 'No calls match.' : 'No calls yet. Keep <a href="#/phone">📞 My phone</a> open for live calls, or <a href="#/practice">practice with an AI caller</a>.'}</div>`;
+            : `<div class="empty">${tr ? 'No calls match.' : 'No calls yet. Keep <a href="#/phone">☎ the Console</a> open for live calls, or <a href="#/logs/scenarios">practice with an AI caller</a>.'}</div>`;
           el.onclick = (e) => { const row = e.target.closest('[data-open]'); if (row) location.hash = '#/call/' + row.dataset.open; };
         } catch (e) { el.innerHTML = `<div class="err-box">${esc(e.message)}</div>`; }
       }
@@ -87,7 +87,7 @@
   /* ---------------- a call: review and scorecard ---------------- */
   App.register('call', {
     async render(id) {
-      const app = U.$('#app');
+      const app = App.host();
       app.innerHTML = '<div class="empty">Loading the call…</div>';
       let c;
       try { c = (await API.post('/api/call', { id })).call; } catch (e) { app.innerHTML = `<div class="card err-box">${esc(e.message)}</div>`; return; }
@@ -153,7 +153,7 @@
   }
 
   function draw(c) {
-    const app = U.$('#app');
+    const app = App.host();
     const tr = App.trainer();
     const s = c.scenario || {};
     const ended = !['live', 'ringing'].includes(c.status);
@@ -226,7 +226,7 @@
         catch (err) { U.toast(err.message, 'error'); }
       } else if (act === 'delete') {
         if (!confirm('Delete this call and its recording? This can\'t be undone.')) return;
-        try { await API.post('/api/call/delete', { id: c.id }); U.toast('Deleted.'); location.hash = '#/calls'; } catch (err) { U.toast(err.message, 'error'); }
+        try { await API.post('/api/call/delete', { id: c.id }); U.toast('Deleted.'); location.hash = '#/' + (App.trainer() ? 'admin' : 'logs') + '/calls'; } catch (err) { U.toast(err.message, 'error'); }
       } else if (act === 'loadai') { c._useAi = true; drawScore(c, refresh);
       } else if (act === 'grade') {
         b.disabled = true;
@@ -344,7 +344,7 @@
   App.register('graded', {
     trainer: true,
     async render() {
-      const app = U.$('#app');
+      const app = App.host();
       app.innerHTML = '<div class="card"><div class="empty">Loading the graded mock calls…</div></div>';
       let calls, ts;
       try { [calls, ts] = await Promise.all([API.post('/api/graded', { batch: G.batch }).then((r) => r.calls), API.post('/api/trainees').then((r) => r.trainees)]); }
@@ -408,22 +408,38 @@
     document.body.appendChild(a); a.click(); a.remove();
   }
 
-  /* ---------------- 📚 scenarios ---------------- */
+  /* ---------------- 🎭 the Scenario Picker ----------------
+     The calls the trainer can play: pick the one ☎ the Console will play next (the dialer's screen then
+     shows it), and write your own. It's a tab of 🗂 Call Logs & Scenario Picker — the screen the
+     Console's 🎭 Call to play key opens — because the Console's own main screen is the dialer alone. */
   App.register('scenarios', {
     trainer: true,
     render() {
-      const app = U.$('#app');
-      const track = App.scenTrack || 'reception';
+      const app = App.host();
+      const track = App.scenTrack || Console.pick.track || 'reception';
       const list = App.cfg.scenarios.filter((s) => s.track === track);
-      app.innerHTML = `<div class="card"><div class="card-head"><h2>📚 Scenarios</h2><span class="spacer"></span><button class="btn btn-orange" data-act="new">＋ Write a new call</button></div>
-        <p class="muted small">The calls you play live (and the AI plays in practice). The built-in calls come from the Foundational call pack on the CMS Training Library cases; copy one to change it, or write your own.</p>
-        <div class="pill-tabs" id="stk" style="margin:10px 0 14px">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === track ? 'on' : ''}">${t.icon} ${esc(t.label)} (${App.cfg.scenarios.filter((s) => s.track === k).length})</button>`).join('')}</div>
-        <div class="scen-grid">${list.map((s) => `<div class="scen" style="cursor:default">
-          <div class="meta">${App.levelBadge(s.level)}${s.caseId ? `<span class="badge">${esc(s.caseId)}</span>` : ''}${s.custom ? '<span class="badge blue">Yours</span>' : '<span class="badge">Built in</span>'}${s.ai === false ? '<span class="badge">Live only</span>' : ''}</div>
+      const picked = Console.pickedCall();
+      const line = (k) => App.cfg.lines[k === 'intake' ? 'intake' : 'main'];
+      app.innerHTML = `<div class="card"><div class="card-head"><h2>🎭 Scenario Picker</h2><span class="spacer"></span><button class="btn btn-orange" data-act="new">＋ Write a new call</button></div>
+        <p class="muted small">The calls you play live (and the AI plays in practice). <b>☎ Play on the Console</b> puts one on the dialer for your next call; the built-in calls come from the Foundational call pack on the CMS Training Library cases, so copy one to change it, or write your own.</p>
+        <div class="${picked ? 'ok-box' : 'note-box'}" style="margin:0 0 14px">☎ The Console will play <b>${picked ? esc(picked.title) : '🎙 an open call: no script'}</b>${picked ? ` · ${esc(picked.caller.name)} on the ${esc(line(picked.track).label)}` : ' — any caller you like'}.
+          ${picked ? '<button class="btn btn-sm" data-pick="" style="margin-left:8px">Clear it</button>' : ''}
+          <a class="btn btn-sm" href="#/console" style="margin-left:6px">☎ Go to the Console →</a></div>
+        <div class="pill-tabs" id="stk" style="margin:10px 0 14px">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === track ? 'on' : ''}" title="${esc(t.label)} calls, on the ${esc(line(k).label)}">${t.icon} ${esc(t.label)} (${App.cfg.scenarios.filter((s) => s.track === k).length})</button>`).join('')}</div>
+        <div class="scen-grid">${list.map((s) => `<div class="scen ${picked && picked.id === s.id ? 'sel' : ''}" style="cursor:default">
+          <div class="meta">${App.levelBadge(s.level)}${s.caseId ? `<span class="badge">${esc(s.caseId)}</span>` : ''}${s.custom ? '<span class="badge blue">Yours</span>' : '<span class="badge">Built in</span>'}${s.ai === false ? '<span class="badge">Live only</span>' : ''}${picked && picked.id === s.id ? '<span class="badge green">On the Console</span>' : ''}</div>
           <h4>${esc(s.title)}</h4><p><b>${esc(s.caller.name)}</b>: ${esc(s.caller.role)}</p><p>${esc(s.facts)}</p>
-          <div class="row"><button class="btn btn-sm" data-view="${esc(s.id)}">👁 View</button><button class="btn btn-sm" data-copy="${esc(s.id)}">⧉ Copy</button>${s.custom ? `<button class="btn btn-sm" data-edit="${esc(s.id)}">✏️ Edit</button><button class="btn btn-sm" data-del="${esc(s.id)}">🗑</button>` : ''}</div></div>`).join('') || '<div class="empty">No calls here yet.</div>'}</div></div>`;
+          <div class="row"><button class="btn btn-sm btn-green" data-pick="${esc(s.id)}" title="Play this call on your next Console call">☎ Play on the Console</button><button class="btn btn-sm" data-view="${esc(s.id)}">👁 View</button><button class="btn btn-sm" data-copy="${esc(s.id)}">⧉ Copy</button>${s.custom ? `<button class="btn btn-sm" data-edit="${esc(s.id)}">✏️ Edit</button><button class="btn btn-sm" data-del="${esc(s.id)}">🗑</button>` : ''}</div></div>`).join('') || '<div class="empty">No calls here yet.</div>'}</div></div>`;
       app.onclick = async (e) => {
         const g = (a) => { const b = e.target.closest(`[data-${a}]`); return b ? b.dataset[a] : null; };
+        const pk = e.target.closest('[data-pick]');
+        if (pk) {
+          Console.pickCall(pk.dataset.pick);
+          const s = Console.pickedCall();
+          U.toast(s ? `☎ The Console will play "${s.title}".` : '☎ The Console is back to an open call: no script.', 'ok');
+          App.views.scenarios.render();
+          return;
+        }
         const tk = e.target.closest('[data-track]');
         if (tk) { App.scenTrack = tk.dataset.track; App.views.scenarios.render(); return; }
         if (e.target.closest('[data-act="new"]')) return editor({ track, level: 'Intermediate', caller: { gender: 'f' } });
@@ -484,32 +500,78 @@
     };
   }
 
-  /* ---------------- 👥 trainees ---------------- */
-  App.register('trainees', {
+  /* ---------------- 📊 Trainee Monitoring (Utilization) ----------------
+     A tab of 🛡 Admin: how much of the phone each trainee has actually used. Live calls taken and the
+     time they spent on the line, the calls that rang out or were declined, the holds and transfers they
+     used, their live average (reviewed calls only) — and their own practice calls kept apart from it,
+     because a practice call is self-practice, not live work. ⬇ Export CSV takes the table away with you.
+     Trainees also appear, and are archived, here: this is the page that was 👥 Trainees. */
+  const M = { batch: '' };
+  App.register('monitoring', {
     trainer: true,
     async render() {
-      const app = U.$('#app');
+      const app = App.host();
       app.innerHTML = '<div class="card"><div class="empty">Loading…</div></div>';
       let ts;
-      try { ts = (await API.post('/api/trainees')).trainees; } catch (e) { app.innerHTML = `<div class="card err-box">${esc(e.message)}</div>`; return; }
+      try { ts = (await API.post('/api/utilization')).trainees; } catch (e) { app.innerHTML = `<div class="card err-box">${esc(e.message)}</div>`; return; }
       const online = new Set((App.presence.trainees || []).map((x) => x.id));
       const show = App.showArchived;
-      const list = ts.filter((x) => !!x.archived === !!show);
-      app.innerHTML = `<div class="card"><div class="card-head"><h2>👥 Trainees</h2><span class="spacer"></span><label class="check small"><input type="checkbox" id="arch" ${show ? 'checked' : ''}> Show archived</label></div>
-        <p class="small muted">Trainees appear here the first time they open Ring Channel from the LSH Training Portal (as their Portal name and batch). The live average counts reviewed live calls only; practice scores are the AI's.</p>
-        <div class="table-wrap"><table class="list"><thead><tr><th>Trainee</th><th>Batch</th><th>Ext</th><th>Last seen</th><th>Live calls</th><th>Live average</th><th>Practice</th><th></th></tr></thead><tbody>
-        ${list.map((x) => `<tr><td><span class="led ${online.has(x.id) ? 'available' : ''}" style="display:inline-block;margin-right:8px"></span><b>${esc(x.name)}</b></td><td>${esc(x.batch)}</td><td class="mono">${esc(x.ext || '')}</td><td>${online.has(x.id) ? '<span class="badge green">Online</span>' : U.when(x.last_seen)}</td>
-          <td>${x.calls || 0}</td><td>${x.avg != null ? `<b>${Math.round(x.avg)}%</b>` : '–'}</td><td class="small">${x.practice || 0} call${x.practice === 1 ? '' : 's'}${x.practiceAvg != null ? ' · ' + Math.round(x.practiceAvg) + '%' : ''}</td>
-          <td class="row" style="justify-content:flex-end"><button class="btn btn-sm" data-calls="${esc(x.id)}">🗂 Calls</button><button class="btn btn-sm" data-arch="${esc(x.id)}" data-v="${x.archived ? 0 : 1}">${x.archived ? 'Restore' : 'Archive'}</button></td></tr>`).join('') || `<tr><td colspan="8" class="empty">${show ? 'No archived trainees.' : 'No trainees yet.'}</td></tr>`}
+      const batches = [...new Set(ts.map((x) => x.batch).filter(Boolean))].sort();
+      const list = ts.filter((x) => !!x.archived === !!show).filter((x) => !M.batch || x.batch === M.batch);
+      M.rows = list;
+      const avgMs = (x) => (x.liveCalls ? Math.round((x.talkMs || 0) / x.liveCalls) : null);
+      const sum = (k) => list.reduce((a, x) => a + (Number(x[k]) || 0), 0);
+      const per = (x) => (x.liveCalls ? (Number(x.holds) || 0) / x.liveCalls : 0);
+      app.innerHTML = `<div class="card"><div class="card-head"><h2>📊 Trainee Monitoring</h2><span class="spacer"></span>
+          <select class="input" id="mBatch" style="width:auto"><option value="">All batches</option>${batches.map((b) => `<option ${b === M.batch ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>
+          <label class="check small"><input type="checkbox" id="arch" ${show ? 'checked' : ''}> Show archived</label>
+          <button class="btn btn-sm" data-act="csv">⬇ Export CSV</button></div>
+        <p class="small muted">Utilization: how much of the phone each trainee has used. <b>Live calls</b> and <b>on the line</b> are calls their trainer rang and they answered; <b>rang out</b> counts the ones they missed or declined. <b>Holds</b> and <b>transfers</b> are how often they used those keys. The <b>live average</b> counts reviewed live calls only. <b>Practice</b> is the trainee's own AI practice — self-practice, so it's kept apart from the live figures. Trainees appear here the first time they open Ring Channel from the LSH Training Portal.</p>
+        <div class="stats" style="margin:4px 0 14px">
+          <div class="stat"><div class="v">${list.length}</div><div class="k">Trainee${list.length === 1 ? '' : 's'}${M.batch ? ' in ' + esc(M.batch) : ''}</div></div>
+          <div class="stat"><div class="v">${sum('liveCalls')}</div><div class="k">Live calls taken</div></div>
+          <div class="stat"><div class="v">${U.dur(sum('talkMs'))}</div><div class="k">On the line, all told</div></div>
+          <div class="stat ${sum('missed') + sum('declined') ? 'bad' : 'good'}"><div class="v">${sum('missed') + sum('declined')}</div><div class="k">Rang out or declined</div></div>
+          <div class="stat"><div class="v">${sum('practice')}</div><div class="k">Practice calls</div></div></div>
+        <div class="table-wrap"><table class="list"><thead><tr><th>Trainee</th><th>Batch</th><th>Ext</th><th>Last seen</th><th>Live calls</th><th>On the line</th><th>Rang out</th><th>Holds</th><th>Transfers</th><th>Live average</th><th>Practice</th><th></th></tr></thead><tbody>
+        ${list.map((x) => `<tr><td><span class="led ${online.has(x.id) ? 'available' : ''}" style="display:inline-block;margin-right:8px"></span><b>${esc(x.name)}</b></td><td>${esc(x.batch)}</td><td class="mono">${esc(x.ext || '')}</td>
+          <td>${online.has(x.id) ? '<span class="badge green">Online</span>' : U.when(x.last_seen)}</td>
+          <td><b>${x.liveCalls || 0}</b>${x.graded ? `<div class="tiny muted">${x.graded} graded</div>` : ''}</td>
+          <td>${x.talkMs ? `${U.dur(x.talkMs)}<div class="tiny muted">${U.dur(avgMs(x))} a call</div>` : '–'}</td>
+          <td>${x.missed || x.declined ? `${(x.missed || 0) + (x.declined || 0)}<div class="tiny muted">${x.missed || 0} missed · ${x.declined || 0} declined</div>` : '–'}</td>
+          <td>${x.holds == null ? '–' : `${x.holds}${x.liveCalls ? `<div class="tiny muted">${per(x).toFixed(1)} a call</div>` : ''}`}</td>
+          <td>${x.transfers == null ? '–' : x.transfers}</td>
+          <td>${x.avg != null ? `<b>${Math.round(x.avg)}%</b>${passBadge(Math.round(x.avg))}` : '–'}</td>
+          <td class="small">${x.practice || 0} call${x.practice === 1 ? '' : 's'}${x.practiceAvg != null ? ' · ' + Math.round(x.practiceAvg) + '%' : ''}${x.practiceMs ? `<div class="tiny muted">${U.dur(x.practiceMs)}</div>` : ''}</td>
+          <td class="row" style="justify-content:flex-end"><button class="btn btn-sm" data-calls="${esc(x.id)}">🗂 Calls</button><button class="btn btn-sm" data-arch="${esc(x.id)}" data-v="${x.archived ? 0 : 1}">${x.archived ? 'Restore' : 'Archive'}</button></td></tr>`).join('') || `<tr><td colspan="12" class="empty">${show ? 'No archived trainees.' : 'No trainees yet.'}</td></tr>`}
         </tbody></table></div></div>`;
-      U.$('#arch').onchange = (e) => { App.showArchived = e.target.checked; App.views.trainees.render(); };
+      app.onchange = (e) => {
+        if (e.target.id === 'arch') { App.showArchived = e.target.checked; App.views.monitoring.render(); }
+        if (e.target.id === 'mBatch') { M.batch = e.target.value; App.views.monitoring.render(); }
+      };
       app.onclick = async (e) => {
-        const c = e.target.closest('[data-calls]'); if (c) { F.traineeId = c.dataset.calls; F.batch = ''; location.hash = '#/calls'; return; }
+        if (e.target.closest('[data-act="csv"]')) return utilCsv();
+        const c = e.target.closest('[data-calls]'); if (c) { F.traineeId = c.dataset.calls; F.batch = ''; location.hash = '#/admin/calls'; return; }
         const a = e.target.closest('[data-arch]');
-        if (a) { try { await API.post('/api/trainees/archive', { id: a.dataset.arch, archived: a.dataset.v === '1' }); App.views.trainees.render(); } catch (err) { U.toast(err.message, 'error'); } }
+        if (a) { try { await API.post('/api/trainees/archive', { id: a.dataset.arch, archived: a.dataset.v === '1' }); App.views.monitoring.render(); } catch (err) { U.toast(err.message, 'error'); } }
       };
     }
   });
+
+  // One row per trainee, the same figures the table shows, for Excel or Google Sheets.
+  function utilCsv() {
+    const rows = M.rows || [];
+    const head = ['Trainee', 'Batch', 'Extension', 'Last seen', 'Live calls taken', 'Graded live calls', 'On the line (s)', 'Average call (s)', 'Missed', 'Declined', 'Holds', 'Transfers', 'Live average (%)', 'Practice calls', 'Practice average (%)', 'Practice time (s)'];
+    const q = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+    const sec = (ms) => (ms ? Math.round(ms / 1000) : 0);
+    const csv = [head.map(q).join(',')].concat(rows.map((x) => [x.name, x.batch, x.ext || '', x.last_seen ? new Date(x.last_seen).toISOString() : '', x.liveCalls || 0, x.graded || 0,
+      sec(x.talkMs), x.liveCalls ? Math.round(sec(x.talkMs) / x.liveCalls) : 0, x.missed || 0, x.declined || 0, x.holds == null ? '' : x.holds, x.transfers == null ? '' : x.transfers,
+      x.avg == null ? '' : Math.round(x.avg), x.practice || 0, x.practiceAvg == null ? '' : Math.round(x.practiceAvg), sec(x.practiceMs)].map(q).join(','))).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `Trainee monitoring${M.batch ? ' - ' + M.batch : ''} - ${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
 
   /* ---------------- ⚙️ graded mock call settings ---------------- */
   function drawGradeSettings() {
@@ -545,7 +607,7 @@
   App.register('setup', {
     trainer: true,
     async render() {
-      const app = U.$('#app');
+      const app = App.host();
       app.innerHTML = '<div class="card"><div class="empty">Checking…</div></div>';
       let r;
       try { r = await API.post('/api/stats'); } catch (e) { app.innerHTML = `<div class="card err-box">${esc(e.message)}</div>`; return; }
