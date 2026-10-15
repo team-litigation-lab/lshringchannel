@@ -320,15 +320,20 @@
   };
 
   /* ---------- the phone's screen (trainee side, live and practice) ---------- */
-  App.lcdHTML = function (p, idle) {
+  /* The screen. `dial` (the trainee's keypad) draws the number being keyed in, the way the
+     trainer's dialer does: on its own while the phone is idle, under the caller during a call. */
+  App.lcdHTML = function (p, idle, dial) {
     const status = p ? p.status : 'idle';
     const lineLabel = p && p.lineLabel ? p.lineLabel : 'LSH Training Law Group';
     const lineNo = p && p.lineNumber ? p.lineNumber : App.cfg.firm.mainLine;
     let main = '';
-    if (!p || status === 'idle') main = `<div class="lcd-state">${idle.state}</div><div class="lcd-name" style="font-size:18px">${idle.title}</div><div class="lcd-sub">${idle.sub || ''}</div>`;
+    const dialLine = dial ? `<div class="lcd-dial">${esc(dial.num)}<span class="caret"></span></div>` : '';
+    if (!p || status === 'idle') main = dial
+      ? `<div class="lcd-state ${dial.cls || ''}">${esc(dial.state)}</div>${dialLine}<div class="lcd-name sm">${esc(dial.name || '')}</div><div class="lcd-sub">${esc(dial.sub || '')}</div>`
+      : `<div class="lcd-state">${idle.state}</div><div class="lcd-name" style="font-size:18px">${idle.title}</div><div class="lcd-sub">${idle.sub || ''}</div>`;
     else if (status === 'ringing') main = `<div class="lcd-state">Incoming call · ${esc(p.lineLabel)}</div><div class="lcd-name">${esc(p.callerId.name)}</div><div class="lcd-num">${esc(p.callerId.number)}</div><div class="lcd-sub" data-rings="${p.ringAt}">${U.ringText(p.ringAt)}</div>`;
     else if (status === 'connecting') main = `<div class="lcd-state">Connecting…</div><div class="lcd-name">${esc(p.callerId.name)}</div><div class="lcd-num">${esc(p.callerId.number)}</div>`;
-    else if (status === 'live') main = `<div class="lcd-state">${p.held ? 'Caller on hold' : 'Connected'}</div><div class="lcd-name">${esc(p.callerId.name)}</div><div class="lcd-num">${esc(p.callerId.number)}</div><div class="lcd-timer" data-since="${p.answeredAt}">${U.since(p.answeredAt)}</div>`;
+    else if (status === 'live') main = `<div class="lcd-state">${p.held ? 'Caller on hold' : 'Connected'}</div><div class="lcd-name">${esc(p.callerId.name)}</div><div class="lcd-num">${esc(p.callerId.number)}</div>${dial ? `<div class="lcd-dial sm">${esc(dial.num)}</div><div class="lcd-sub ${dial.cls || ''}">${esc(dial.state)}${dial.name ? ' · ' + esc(dial.name) : ''}</div>` : `<div class="lcd-timer" data-since="${p.answeredAt}">${U.since(p.answeredAt)}</div>`}`;
     else main = `<div class="lcd-state">Call ended</div><div class="lcd-name" style="font-size:18px">${esc(p.callerId ? p.callerId.name : '')}</div><div class="lcd-timer" style="color:#94a3b8">${U.dur((p.endedAt || Date.now()) - (p.answeredAt || p.endedAt || Date.now()))}</div><div class="lcd-sub">${esc(p.endNote || '')}</div>`;
     const badges = [];
     if (p && status === 'live') {
@@ -344,16 +349,16 @@
     return `<div class="lcd ${status}"><div class="lcd-top"><span>${esc(lineLabel)} ${esc(lineNo)}</span><span data-clock></span></div><div class="lcd-main">${main}</div><div class="lcd-badges">${badges.join('')}</div></div>`;
   };
 
-  // The keys under the screen: Answer / Decline while it rings; Mute, 🔊 Speaker, Hold, Transfer and Hang up on a call.
+  // The keys under the screen: Answer / Decline while it rings; Mute, Hold, Transfer and Hang up on a
+  // call (🔊 Speaker sits on the keypad's dial row, where the trainer's dialer keeps it).
   App.keysHTML = function (p, idleKeys) {
     const status = p ? p.status : 'idle';
     if (status === 'ringing') return `<div class="dev-keys"><button class="key answer pulse wide" data-act="answer"><span class="ic">📞</span>Answer</button><button class="key hang wide" data-act="decline"><span class="ic">✖</span>Decline</button></div>`;
     if (status === 'connecting' || status === 'live') {
       const dis = status !== 'live' ? 'disabled' : '';
       const xfer = p.transfer && p.transfer.state === 'ringing' && p.mode === 'ai';
-      return `<div class="dev-keys four">
+      return `<div class="dev-keys three">
         <button class="key mute ${p.muted ? 'on' : ''}" data-act="mute" ${dis}><span class="ic">${p.muted ? '🔇' : '🎙'}</span>${p.muted ? 'Unmute' : 'Mute'}</button>
-        <button class="key spk ${VoIP.Speaker.on ? 'on' : ''}" data-act="speaker" aria-pressed="${VoIP.Speaker.on}" title="🔊 Speaker: ${VoIP.Speaker.on ? 'on: the call plays on the speakers' : 'off: the call plays in your headset'}"><span class="ic">${VoIP.Speaker.on ? '🔊' : '🔈'}</span>Speaker</button>
         <button class="key ${p.held ? 'on' : ''}" data-act="hold" ${dis || (xfer ? 'disabled' : '')}><span class="ic">⏸</span>${p.held ? 'Resume' : 'Hold'}</button>
         <button class="key" data-act="transfer" ${dis || (xfer || (p.transfer && p.transfer.state === 'ringing') ? 'disabled' : '')}><span class="ic">↪</span>Transfer</button>
         <button class="key hang wide" data-act="hangup"><span class="ic">☎</span>Hang up</button></div>`;

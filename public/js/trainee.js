@@ -110,6 +110,7 @@
     handedFrom: (m.conf && m.conf.handover ? m.conf.from : '') || m.handoverFrom || '' });
 
   function incoming(m) {
+    T.dial = '';
     if (App.p && active(App.p)) {
       // On a practice call: the trainer is told the trainee is busy, and the trainee sees who tried.
       if (App.p.mode === 'ai') { App.board.send({ t: 'decline', callId: m.callId, busy: true }); U.toast(`Your trainer tried to ring you (${m.lineLabel}). Hang up the practice call to take live calls.`, 'error'); }
@@ -280,6 +281,7 @@
     VoIP.Mic.close();
   }
   function endLive(m) {
+    T.dial = '';
     const p = App.p;
     if (!p || p.mode !== 'live') return;
     stopAlerts();
@@ -484,6 +486,75 @@
      phone is short and the batch can be long, so this has to work both ways. Measured once it would
      go stale the moment anything reflowed either of them, so it follows them. */
   let deckWatch = null, fitting = false;
+  /* ---------- ⌨ the keypad: the trainer's dialer, on the trainee's phone ----------
+     Built band for band as the trainer's dialer is. A trainee takes calls rather than places them,
+     so the number on screen is looked up in the firm's directory: idle it only says whose extension
+     it is, and on a call the ↪ key hands the caller to it. */
+  const PAD = [['1', ''], ['2', 'ABC'], ['3', 'DEF'], ['4', 'GHI'], ['5', 'JKL'], ['6', 'MNO'], ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'], ['*', ''], ['0', '+'], ['#', '']];
+  T.dial = '';
+  // Who the number on screen is: a firm extension (transferable), a trainer's desk, this phone, or nobody.
+  function dialEnt() {
+    const d = T.dial; if (!d) return null;
+    const dir = App.dirEntry(d); if (dir) return { kind: 'dir', dir };
+    const desk = (App.desks || []).find((x) => x.ext === d); if (desk) return { kind: 'trainer', desk };
+    if (App.myExt && App.myExt === d) return { kind: 'me' };
+    return { kind: 'none' };
+  }
+  function dialLcd(p) {
+    if (!T.dial) return null;
+    const live = !!(p && p.status === 'live');
+    const d = dialEnt();
+    let state = 'Dialing…', cls = '', name = '', sub = '';
+    if (d.kind === 'dir') { state = 'Firm extension'; cls = live ? 'ok' : ''; name = d.dir.name; sub = live ? '↪ hands the caller to this extension' : `${d.dir.role} · dial it on a call to transfer`; }
+    else if (d.kind === 'trainer') { state = 'Trainer line'; name = d.desk.name; sub = 'Your trainer rings you: this phone takes calls'; }
+    else if (d.kind === 'me') { state = 'Your own phone'; name = App.me ? App.me.name : ''; sub = 'The extension your trainer dials to ring you'; }
+    else { const far = T.dial.length >= 4; state = far ? 'No such extension' : 'Dialing…'; cls = far ? 'bad' : ''; sub = far ? 'The firm\'s extensions are on 📇 Directory' : ''; }
+    return { num: T.dial, state, cls, name, sub };
+  }
+  function setDial(v) { T.dial = v; renderDevice(); }
+  function press(k) {
+    const p = shown(); const st = p ? p.status : 'idle';
+    if (['ringing', 'connecting', 'ended'].includes(st)) return;
+    Sounds.dtmf(k);
+    if (T.dial.length < 6) setDial(T.dial + k);
+    const b = U.$(`#device [data-dk="${k}"]`);
+    if (b) { b.classList.add('press'); setTimeout(() => b.classList.remove('press'), 130); }
+  }
+  // The green key: on a call it transfers to the extension on screen; idle there is nothing to place.
+  function dialCall() {
+    const p = shown();
+    if (!p || p.status !== 'live') { U.toast('Your trainer rings this phone: you take calls here rather than place them.'); return; }
+    const d = dialEnt();
+    if (!d || d.kind !== 'dir') { U.toast(T.dial ? 'No such extension: the firm\'s extensions are on 📇 Directory.' : 'Key in the extension to transfer the caller to.'); return; }
+    const ext = T.dial; T.dial = '';
+    doTransfer(ext);
+  }
+  const spkKey = () => `<button type="button" class="key spk ${VoIP.Speaker.on ? 'on' : ''}" data-act="speaker" aria-pressed="${VoIP.Speaker.on}" title="🔊 Speaker: ${VoIP.Speaker.on ? 'on: the call plays on the speakers. Press to go back to the headset' : 'off: the call plays in the headset. Press to put it on the speakers'} (choose them in 🎧 Audio check)"><span class="ic">${VoIP.Speaker.on ? '🔊' : '🔈'}</span>Speaker</button>`;
+  // The keypad band: the pad, then 🔈 Speaker · the big key · ⌫ Delete, exactly as the dialer has it.
+  function padHTML(p) {
+    const st = p ? p.status : 'idle';
+    if (['ringing', 'connecting', 'ended'].includes(st)) return '';
+    const live = st === 'live';
+    const d = dialEnt();
+    const can = live && d && d.kind === 'dir' && !(p.transfer && p.transfer.state === 'ringing');
+    return `<div class="dialpad">${PAD.map(([k, l]) => `<button type="button" class="dk" data-dk="${k}" aria-label="${k}"><b>${k}</b><small>${l || '&nbsp;'}</small></button>`).join('')}</div>
+      <div class="dial-row">${spkKey()}
+        <button type="button" class="dial-call" data-act="dialcall" ${can ? '' : 'disabled'} title="${live ? 'Transfer the caller to the extension on screen (Enter)' : 'Your trainer rings this phone: you take calls here rather than place them'}" aria-label="${live ? 'Transfer' : 'Call'}">${live ? '↪' : '📞'}</button>
+        <button type="button" class="key" data-act="backspace" title="Delete a digit (Esc clears)" ${T.dial ? '' : 'disabled'}><span class="ic">⌫</span>Delete</button></div>`;
+  }
+  // Typing dials too: digits, * and #; Backspace deletes, Esc clears, Enter transfers.
+  document.addEventListener('keydown', (e) => {
+    if (!onPage() || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal-back')) return;
+    const p = shown(); const st = p ? p.status : 'idle';
+    if (['ringing', 'connecting', 'ended'].includes(st)) return;
+    const tg = e.target;
+    if (tg && tg.closest && tg.closest('textarea, select, [contenteditable], input:not([type=checkbox]):not([type=range])')) return;
+    if (/^[0-9*#]$/.test(e.key)) { e.preventDefault(); press(e.key); }
+    else if (e.key === 'Backspace' && T.dial) { e.preventDefault(); setDial(T.dial.slice(0, -1)); }
+    else if (e.key === 'Escape' && T.dial) setDial('');
+    else if (e.key === 'Enter' && T.dial && !(tg && tg.closest && tg.closest('button, a'))) { e.preventDefault(); dialCall(); }
+  });
+
   function fitBoard() {
     const card = U.$('#troster'), dev = U.$('#device'), brand = U.$('#tside .side-brand');
     if (!card || !dev || fitting) return;
@@ -491,9 +562,14 @@
     try {
       card.style.minHeight = ''; dev.style.minHeight = '';
       if (window.innerWidth <= 1060) return;
+      const phone = dev.getBoundingClientRect().height;
+      /* The board rides along as the page scrolls, so it can only grow as tall as the window. A phone
+         with its keypad out can be taller than that: then neither stays put, and the pair scrolls
+         together rather than ending on different lines. */
+      const grid = dev.parentElement;
+      if (grid) grid.classList.toggle('tall-phone', phone > window.innerHeight - 96);
       const brandH = brand ? brand.getBoundingClientRect().height : 0;
       const board = card.getBoundingClientRect().height + brandH;
-      const phone = dev.getBoundingClientRect().height;
       if (board > phone + 1) dev.style.minHeight = Math.round(board) + 'px';
       else if (phone > board + 1) card.style.minHeight = Math.round(phone - brandH) + 'px';
     } finally { fitting = false; }
@@ -529,12 +605,14 @@
     const p = shown();
     const status = p ? (p.status === 'waiting' ? 'idle' : p.status) : 'idle';
     const led = !App.connected && mode === 'live' ? 'offline' : status === 'ringing' ? 'ringing' : ['connecting', 'live'].includes(status) ? 'live' : mode === 'live' ? App.status : 'available';
-    /* The phone is built as the trainer's dialer is, band for band: the segmented row where the dialer
-       has its line keys, then a row of keys, then the trio that comes alive on a call with the same
-       hint under it — the trainee's own, since they answer calls rather than place them. */
+    /* The phone is built as the trainer's dialer is, band for band: the segmented line-key row, the
+       keypad, the 🔈 Speaker · key · ⌫ Delete row, then the trio that comes alive on a call with the
+       same hint under it — the trainee's own, since they answer calls rather than place them. */
+    const lineKeys = mode === 'live'
+      ? `<div class="line-keys two" role="group" aria-label="My line"><button class="${App.status === 'available' ? 'on' : ''}" data-act="available" aria-pressed="${App.status === 'available'}" title="Ready for a call: your trainer sees you as available">● Available</button><button class="${App.status === 'away' ? 'on' : ''}" data-act="away" aria-pressed="${App.status === 'away'}" title="Stepped out: your trainer sees you as away">◌ Away</button></div>`
+      : '';
     const idleKeys = mode === 'live'
-      ? `<div class="line-keys" role="group" aria-label="My line"><button class="${App.status === 'available' ? 'on' : ''}" data-act="available" aria-pressed="${App.status === 'available'}" title="Ready for a call: your trainer sees you as available">● Available</button><button class="${App.status === 'away' ? 'on' : ''}" data-act="away" aria-pressed="${App.status === 'away'}" title="Stepped out: your trainer sees you as away">◌ Away</button></div>
-         <div class="dev-keys three idle-keys" role="group" aria-label="This phone">
+      ? `<div class="dev-keys three idle-keys" role="group" aria-label="This phone">
            <button class="key hand ${App.hand ? 'on' : ''}" data-act="hand" title="Raise your hand on your trainer's switchboard"><span class="ic">✋</span>${App.hand ? 'Asked' : 'Ask for a call'}</button>
            <button class="key" data-act="notify" title="Let the browser alert you when a call rings, even on another tab"><span class="ic">🔔</span>Alert me</button>
            <a class="key" href="#/logs/scenarios" style="text-decoration:none" title="Pick a practice call on 🗂 Call Logs & Scenario Picker; the AI caller rings this phone"><span class="ic">🎭</span>Practice</a>
@@ -545,7 +623,7 @@
            <button class="key" disabled title="Hand the caller to one of the firm's extensions (once a call is connected)"><span class="ic">↪</span>Transfer</button>
          </div>
          <p class="dev-hint">These come alive once the call is connected — and the keys above answer it, hold it and hang up.</p>`
-      : `<div class="dev-keys"><button class="key" data-act="miccheck"><span class="ic">🎧</span>Audio check</button></div>`;
+      : '';
     let msg = '';
     if (p && p.needRejoin) msg = p.elsewhere ? `<div class="dev-msg lost">You're on this call in another tab or window. <button class="btn btn-sm btn-green" data-act="rejoin" style="margin-top:6px">📞 Move the call here</button></div>`
       : `<div class="dev-msg lost">This page reloaded during your call. <button class="btn btn-sm btn-green" data-act="rejoin" style="margin-top:6px">🔊 Reconnect the call</button></div>`;
@@ -565,10 +643,15 @@
     const head = mode === 'live'
       ? `<span class="led ${led}"></span><b>My phone</b>${App.myExt ? ` <span class="mono" title="Your desk extension: your trainer dials it to ring you">ext ${esc(App.myExt)}</span>` : ''}<span class="spacer"></span><span id="trOnline">${trainerLine()}</span>`
       : `<span class="led ${led}"></span><b>Practice phone</b><span class="spacer"></span><span>AI caller</span>`;
+    const shownCall = p && p.status !== 'waiting' ? p : null;
+    const pad = padHTML(shownCall);
+    el.classList.toggle('pad', !!pad);
     el.innerHTML = `<div class="dev-head">${head}</div>
-      ${App.lcdHTML(p && p.status !== 'waiting' ? p : null, idleInfo(mode))}
+      ${App.lcdHTML(shownCall, idleInfo(mode), dialLcd(shownCall))}
       ${msg}
-      ${App.keysHTML(p && p.status !== 'waiting' ? p : null, idleKeys)}
+      ${shownCall ? '' : lineKeys}
+      ${pad}
+      ${App.keysHTML(shownCall, idleKeys)}
       <div class="dev-foot"><span title="Call volume">🔉</span><input type="range" min="0" max="1" step="0.05" value="${App.volume == null ? 1 : App.volume}" data-act="volume" aria-label="Call volume">${!App.connected && mode === 'live' ? '<span>Offline</span>' : `<button type="button" class="dev-link" data-act="miccheck">🎧 Audio check</button>`}</div>`;
   }
   function renderBadges() {
@@ -673,9 +756,13 @@
 
       const fold = e.target.closest('[data-fold]');
       if (fold) { App.folded(fold.dataset.fold, !App.folded(fold.dataset.fold)); renderSide(); return; }
+      const dk = e.target.closest('[data-dk]');
+      if (dk) { press(dk.dataset.dk); return; }
       const b = e.target.closest('[data-act]'); if (!b) return;
       const act = b.dataset.act;
-      if (act === 'answer') answer();
+      if (act === 'dialcall') dialCall();
+      else if (act === 'backspace') setDial(T.dial.slice(0, -1));
+      else if (act === 'answer') answer();
       else if (act === 'decline') decline();
       else if (act === 'hangup') hangup();
       else if (act === 'mute') toggleMute();
