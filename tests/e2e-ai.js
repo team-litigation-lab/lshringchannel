@@ -6,6 +6,15 @@ const OUT = process.env.OUT || '.';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let step = 0;
 const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
+// 🎭 The call to play is chosen from the dialer's own key, in a modal (no right-hand rail).
+async function playCall(p, sid, track) {
+  await p.click('#dialer [data-act="pickcall"]');
+  await p.waitForSelector('.modal #pkList');
+  if (track) await p.click(`.modal #pkTrack [data-track="${track}"]`);
+  await p.click(sid ? `.modal #pkList .scen[data-sid="${sid}"]` : '.modal #pkList .scen.open');
+  await p.click('.modal [data-pkuse]');
+  await p.waitForFunction(() => !document.querySelector('.modal-back'));
+}
 
 (async () => {
   const browser = await chromium.launch({
@@ -98,7 +107,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.click('a[href="#/console"]');
   await tr.waitForSelector('#dialer .dialpad');
   for (const d of ext) await tr.click(`#dialer [data-dk="${d}"]`);
-  await tr.click('#pkList .scen[data-sid="ft_rc_appt"]');
+  await playCall(tr, 'ft_rc_appt');
   await tr.click('#roster [data-act="airing"]');
   await te.waitForSelector('#device .lcd.ringing', { timeout: 10000 });
   if (!/SANTOS MARIA/.test(await te.textContent('#device .lcd'))) throw new Error('The AI call should show the caller ID: ' + await te.textContent('#device .lcd'));

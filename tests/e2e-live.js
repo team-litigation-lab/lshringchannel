@@ -6,6 +6,15 @@ const OUT = process.env.OUT || '.';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let step = 0;
 const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
+// 🎭 The call to play is chosen from the dialer's own key, in a modal (no right-hand rail).
+async function playCall(p, sid, track) {
+  await p.click('#dialer [data-act="pickcall"]');
+  await p.waitForSelector('.modal #pkList');
+  if (track) await p.click(`.modal #pkTrack [data-track="${track}"]`);
+  await p.click(sid ? `.modal #pkList .scen[data-sid="${sid}"]` : '.modal #pkList .scen.open');
+  await p.click('.modal [data-pkuse]');
+  await p.waitForFunction(() => !document.querySelector('.modal-back'));
+}
 
 (async () => {
   const browser = await chromium.launch({
@@ -47,7 +56,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   for (const d of '7001') await tr.click(`#dialer [data-dk="${d}"]`);
   await tr.waitForFunction(() => /Ready to call/.test(document.querySelector('#dialer .lcd').textContent) && /Jamie Cruz/.test(document.querySelector('#dialer .lcd').textContent));
   if ((await tr.textContent('#dlNum')).trim() !== '7001') throw new Error('The dialer shows ' + await tr.textContent('#dlNum'));
-  await tr.click('#pkList .scen[data-sid="ft_rc_offer"]');
+  await playCall(tr, 'ft_rc_offer');
   if (!/LIBERTY CREST INS/.test(await tr.textContent('#dialer .lcd-cid'))) throw new Error('The dialer should show the caller ID the trainee will see');
   if (!(await tr.isChecked('#pkGraded'))) throw new Error('New live calls should start as graded mock calls');
   if (!(await tr.$('#roster #pkGraded')) || !(await tr.$('#roster [data-act="airing"]'))) throw new Error('How the call is placed (graded, record, hide ID, the AI callers, the Class view) belongs on the switchboard');
@@ -211,15 +220,11 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await te.waitForSelector('#tside .rail');
   await te.click('#tside .rail');
   await te.waitForSelector('#tside .roster');
-  // The console's switchboard is part of the phone: it stays put, and only 🎭 the calls to play fold away.
+  // The console's switchboard is part of the phone: it stays put, and there is no right-hand rail to fold.
   if (await tr.$('#roster [data-fold]')) throw new Error('The switchboard is part of the phone: it should not fold away');
-  await tr.click('#sideR [data-fold]');
-  await tr.waitForSelector('#sideR .rail');
-  if (!(await tr.evaluate(() => document.querySelector('#consoleGrid').classList.contains('r-folded')))) throw new Error('🎭 The calls to play should fold away');
-  if (!(await tr.$('#roster .tr'))) throw new Error('The switchboard should still be there with the calls to play folded');
-  await tr.click('#sideR .rail');
-  await tr.waitForSelector('#pkList');
-  ok('☎ The trainee has the switchboard beside their phone (their batch, their line, the trainers on); on the console the switchboard stays with the phone and only 🎭 the calls to play minimize to a rail and back');
+  if (await tr.$('#sideR')) throw new Error('The console is the switchboard and the dialer: there should be no right-hand rail');
+  if (!(await tr.$('#roster .tr'))) throw new Error('The switchboard should be there beside the phone');
+  ok('☎ The trainee has the switchboard beside their phone (their batch, their line, the trainers on); on the console the switchboard stays with the phone, with no right-hand rail');
 
   // Transfer → trainer answers "no answer"
   await te.click('[data-act="transfer"]');
@@ -371,20 +376,18 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.goto(B + '/#/console');
   await tr.waitForSelector('#roster .tr[data-tid]');
   // An open call: no script picked. The line key picks the line (Intake), and the trainer improvises the caller.
-  /* The console as a desk: ☎ the switchboard attached to the dialer on the left, the call picked
-     beside the dialer, and 🎭 the calls to play on the right. */
+  /* The console as a desk: ☎ the switchboard attached to the dialer on the left, and the dialer
+     alone on the stage: the call to play is chosen from its own key. */
   const deck = await tr.evaluate(() => {
     const r = (s) => { const el = document.querySelector(s); return el ? el.getBoundingClientRect() : null; };
-    const d = r('#dialer'), sb = r('#roster'), pk = r('#pkList'), pv = r('#scenPreview'), op = r('.board-opts');
+    const d = r('#dialer'), sb = r('#roster'), op = r('.board-opts');
     const sc = document.querySelector('#roster');
-    return { gap: d.left - sb.right, pkBeside: pk.left >= d.right && Math.abs(pk.top - d.top) < 400,
-      previewBeside: pv.left >= d.right && Math.abs(pv.top - d.top) < 200,
+    return { gap: d.left - sb.right, alone: !document.querySelector('#pkList') && !document.querySelector('#scenPreview'),
       endsTogether: Math.abs(sb.bottom - d.bottom) <= 2, optsOnScreen: !!op && op.bottom <= sb.bottom + 1 && op.top >= sb.top,
       noScroll: !!sc && sc.scrollHeight <= sc.clientHeight + 1 && !/auto|scroll/.test(getComputedStyle(sc).overflowY) };
   });
   if (deck.gap > 2) throw new Error('The switchboard should be attached to the dialer, with no gap: ' + deck.gap);
-  if (!deck.pkBeside) throw new Error('🎭 The calls to play should sit beside the dialer, not under it: ' + JSON.stringify(deck));
-  if (!deck.previewBeside) throw new Error('The call picked should sit beside the dialer: ' + JSON.stringify(deck));
+  if (!deck.alone) throw new Error('The stage should be the dialer alone: ' + JSON.stringify(deck));
   if (!deck.endsTogether) throw new Error('The switchboard and the dialer should end on the same line: ' + JSON.stringify(deck));
   if (!deck.noScroll || !deck.optsOnScreen) throw new Error('The board should run as one piece with the phone, never scrolling inside itself: ' + JSON.stringify(deck));
   // A late reflow of the phone (a web font arriving, the window changing) must not leave the board short.
@@ -396,8 +399,8 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
     return Math.round(Math.abs(sb.bottom - d.bottom));
   });
   if (reflow > 2) throw new Error('The board should follow the dialer when it reflows, not stay at the height it was first measured at: ' + reflow);
-  ok('The console is one desk: the switchboard and the dialer as one piece ending on the same line with nothing scrolling inside, the call picked beside the dialer, and 🎭 the calls to play on the right');
-  await tr.click('#pkList .scen.open');
+  ok('The console is one desk: the switchboard and the dialer as one piece ending on the same line with nothing scrolling inside, and the dialer alone on the stage');
+  await playCall(tr, '');
   await tr.click('#dialer [data-line="intake"]');
   await tr.waitForFunction(() => /Open call: no script/.test(document.querySelector('#dialer .lcd-cid').textContent) && /Intake Line/.test(document.querySelector('#dialer .lcd-cid').textContent));
   for (const d of '7001') await tr.click(`#dialer [data-dk="${d}"]`);
@@ -420,8 +423,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await te.goto(B + '/#/phone');
   await te.waitForSelector('#device .lcd');
   // A fresh call to hand on: the trainer rings Jamie with a scripted call.
-  await tr.click('#pkTrack [data-track="reception"]');
-  await tr.click('#pkList .scen[data-sid="ft_rc_appt"]');
+  await playCall(tr, 'ft_rc_appt', 'reception');
   for (const d of '7001') await tr.click(`#dialer [data-dk="${d}"]`);
   await tr.click('[data-act="ring"]');
   await te.waitForSelector('.lcd.ringing', { timeout: 20000 });
@@ -456,8 +458,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await te.waitForSelector('#device .lcd');
   await te2.close();
   // Typing on the keyboard dials too; a firm extension isn't a trainee; Esc clears; Enter rings
-  await tr.click('#pkTrack [data-track="reception"]');
-  await tr.click('#pkList .scen[data-sid="ft_rc_appt"]');
+  await playCall(tr, 'ft_rc_appt', 'reception');
   if (!(await tr.$('#dialer [data-line="reception"].on'))) throw new Error('Picking a Reception call should put the dialer on the Reception line');
   await tr.keyboard.type('201');
   await tr.waitForFunction(() => /Firm extension/.test(document.querySelector('#dialer .lcd').textContent) && /Marcus Reyes/.test(document.querySelector('#dialer .lcd').textContent));
