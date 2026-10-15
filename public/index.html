@@ -17,7 +17,10 @@
 </head>
 <body>
 <header class="top" id="top">
-  <div class="brand"><img class="logo" src="lsh-logo-dark.png" alt="Legal Support Help" width="150" height="40"><span>LSH Ring Channel <small>Training VOIP</small></span></div>
+  <!-- The LSH logo is a stacked lockup (the mark over LEGAL SUPPORT HELP). The top bar is too short for
+       the wordmark to be readable, and the bar already spells the name out, so only the mark shows here:
+       .logo-mark is a window on the image, which is scaled and pulled left to sit the mark in it. -->
+  <div class="brand"><span class="logo-mark"><img class="logo" src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397"></span><span>LSH Ring Channel <small>Training VOIP</small></span></div>
   <nav class="nav" id="nav"></nav>
   <div class="who" id="who"></div>
 </header>
@@ -34,11 +37,14 @@
 <script src="js/trainee.js"></script>
 <script src="js/console.js"></script>
 <script src="js/review.js"></script>
-<script src="js/classview.js"></script>
-<!-- 🧭 the Blueprint: a trainee deck and (trainers) a trainer deck, with a PDF of each.
+<!-- the screens the top bar opens: 🗂 Call Logs & Scenario Picker, and 🛡 Admin -->
+<script src="js/screens.js"></script>
+<!-- 🧭 the Blueprint's slides. There is no 🧭 button here: the Main Portal's 🧭 Blueprint page is where
+     the blueprints live, and it opens this deck through #/blueprint (trainers only).
      blueprint-content.js is this site's slides; lsh-blueprint.js is the same file on every LSH platform. -->
 <script src="js/blueprint-content.js"></script>
 <script src="js/lsh-blueprint.js"></script>
+<script src="js/classview.js"></script>
 <script>
 App.boot();
 </script>

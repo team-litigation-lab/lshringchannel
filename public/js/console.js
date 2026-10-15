@@ -6,9 +6,12 @@
    checklist in front of them, sees the trainee's note as it's typed,
    answers the trainee's transfers ("picks up" / "no answer" /
    "voicemail"), can pause the role-play to coach, and records the call.
-   It's laid out as a desk phone: ☎ the dialer (dial the trainee's
-   extension, or pick them on the switchboard; 📞 rings them), with
-   🔊 Speaker, Mute and the coaching time-out on its keys.
+   It's laid out as a desk phone, and on the main screen the dialer is
+   all there is: dial the trainee's extension and 📞 rings them, with
+   🔊 Speaker, Mute, the coaching time-out and how the next call is
+   placed on its own keys. ☎ Switchboard folds the board out beside the
+   dialer (who is online, their extensions, ✋ asked for a call) and
+   🎭 Call to play opens the Scenario Picker on the next screen.
    App.t is the call: { status: ringing · connecting · live · ended, … }.
    ========================================================= */
 (function () {
@@ -18,7 +21,6 @@
   const remote = () => document.getElementById('remoteAudio');
   const active = (t) => t && ['ringing', 'connecting', 'live'].includes(t.status);
   const pick = C.pick = { dial: '', traineeId: '', scenarioId: '', track: 'reception', record: true, withhold: false, batch: '', graded: null, voice: '', aiPool: [] };
-  // The two sidebars beside the dialer, each of which the trainer can minimize to a rail.
   // 📋 Graded mock call: starts as ⚙️ Setup says, then as the trainer last left it (on this computer).
   const gradedPick = () => {
     if (pick.graded === null) { let v = null; try { v = localStorage.getItem('mcv_graded'); } catch (e) {} pick.graded = v === null ? !!(App.cfg.settings && App.cfg.settings.defaultGraded) : v === '1'; }
@@ -578,11 +580,12 @@
   }
   C.render = render;
 
-  // The left sidebar: the LSH mark, then ☎ the switchboard (every phone that's open, by batch).
+  /* ☎ The switchboard, beside the dialer and part of it: the trainer's own line, the other trainers
+     who are on, and every phone that's open by batch — with how the next call is placed at its foot. */
   function renderRoster() {
     const side = U.$('#sideL'); if (!side) return;
     if (!U.$('#roster', side)) {
-      side.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="150" height="40">
+      side.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
         <div class="sb-sub">Ring Channel · Switchboard</div></div><div class="card roster" id="roster"></div>`;
     }
     const el = U.$('#roster', side); if (!el) return;
@@ -609,12 +612,14 @@
     matchHeights();
   }
 
-  /* How the next call is placed, on the switchboard beside the dialer: graded, recorded, caller ID
-     withheld, the AI callers, and the Class view. The dialer itself keeps the keypad and the keys for
-     the call on the line (⏸ Coaching time-out, 👥 Merge call, ↪ Transfer on). */
+  /* How the next call is placed, on the dialer's own keys: graded, recorded, caller ID withheld, the AI
+     callers and the Class view — with ☎ Switchboard, which folds the board out beside the dialer, and
+     🎭 Call to play, which opens the Scenario Picker on the next screen. The main screen is the dialer
+     and nothing else, so everything the trainer needs to place a call is a key on it. */
   function optionsHTML() {
     const onCall = active(App.t);
     const graded = gradedPick(), recOk = App.cfg.features.recordings, rec = (pick.record || graded) && recOk;
+    const s = App.scen[pick.scenarioId];
     return `<div class="board-opts">
       <div class="side-h small muted">How the next call is placed</div>
       <div class="soft-keys">
@@ -625,18 +630,16 @@
       <div class="dev-btns">
         <button type="button" class="dev-btn ai" data-act="airing" title="Ring the trainee on the dialer with an AI caller: the AI plays the call picked, you follow it live, and the AI reviews it" ${App.cfg.features.ai ? '' : 'disabled'}>🤖 AI caller</button>
         <button type="button" class="dev-btn" data-act="aisetup" title="Choose the calls the AI may play, the voice it speaks with, and the trainees to ring (several at once)" ${App.cfg.features.ai ? '' : 'disabled'}>🎭 Choose…</button>
+        <button type="button" class="dev-btn wide" data-act="playpick" title="The Scenario Picker, in a tab of its own: the calls you can play, and ＋ write your own. The Console stays where it is" ${onCall ? 'disabled' : ''}>🎭 ${s ? 'Call to play: ' + esc(s.title) : 'Call to play…'}</button>
         <button type="button" class="dev-btn wide ${C.classOn() ? 'on' : ''}" data-act="classview" title="A tab to present in Google Meet: the trainee's side of the call and their note, no script">📺 ${C.classOn() ? 'Class view on' : 'Class view'}</button>
       </div></div>`;
   }
 
-  /* The switchboard and the dialer are one piece: the board's case reaches down to the foot of the
-     phone however short the batch is, and simply grows past it when the batch is long — it never
-     scrolls inside itself. The call-to-play card on the right follows the same rule: it's capped to
-     the dialer's own height, so the whole console reads as one screen, and its own list of calls
-     scrolls inside the card instead of stretching the page past the dialer. */
+  /* ☎ The board and the dialer are one piece: the board's case reaches down to
+     the foot of the phone however short the batch is, and simply grows past it when the batch is long.
+     Measured once, the board would go stale the moment anything reflowed the phone (a web font arriving
+     and rewrapping its text, the window resizing, a key appearing or going), so it follows the dialer. */
   let deckWatch = null;
-  // Measured once, the board goes stale the moment anything reflows the phone (a web font arriving
-  // and rewrapping its text, the window resizing, a key appearing), so it follows the dialer instead.
   function fitBoard() {
     const card = U.$('#sideL .roster'), dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
     if (!card || !dialer) return;
@@ -651,7 +654,7 @@
       const dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
       if (!dialer || !window.ResizeObserver) return;
       if (deckWatch) deckWatch.disconnect();
-      deckWatch = new ResizeObserver(() => { fitBoard(); });
+      deckWatch = new ResizeObserver(() => fitBoard());
       deckWatch.observe(dialer);
       if (brand) deckWatch.observe(brand);
     });
@@ -659,8 +662,10 @@
   window.addEventListener('resize', () => { if (App.route.name === 'console') fitBoard(); });
   try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (App.route.name === 'console') fitBoard(); }); } catch (e) {}
 
-  // The stage. Before a call: ☎ the dialer, and the call to play (optional) under it. During a call: the
-  // dialer beside the script, checklist and live note. After it: the dialer beside the scorecard link.
+  /* The stage. Before a call the main screen is ☎ the dialer and nothing else: the call to play is on the
+     Scenario Picker (the next screen) and shows on the dialer's own screen. During a call the dialer is
+     joined by what the trainer needs to play the caller — the script, the checklist and the trainee's note
+     live — and after it by the link to the scorecard. */
   function renderStage() {
     const el = U.$('#stage'); if (!el) return;
     const t = App.t;
@@ -780,8 +785,7 @@
       const oc = App.cfg.openCaller || { idName: 'WIRELESS CALLER', number: '' };
       const vName = (App.cfg.voices || []).find((v) => v.id === pick.voice);
       cid = `Calls as <b>${esc(pick.withhold ? 'PRIVATE CALLER' : s ? s.caller.idName + ' ' + s.caller.number : oc.idName + ' ' + oc.number)}</b> · ${esc(lineOf(pick.track).label)}<br>${s ? `🎭 ${esc(s.title)}` : '🎙 Open call: no script'}${vName ? ` · 🎚 ${esc(vName.label)}` : ''}`;
-      keys = `<div class="row" style="margin-bottom:8px"><button type="button" class="key wide" data-act="pickcall" title="Choose the call you play, or leave it an open call"><span class="ic">🎭</span>${s ? 'Call to play: ' + esc(s.title) : 'Call to play: open call'}</button></div>
-        <div class="line-keys" role="group" aria-label="Line">${Object.entries(App.cfg.tracks).map(([k, x]) => `<button type="button" class="${k === pick.track ? 'on' : ''}" data-line="${k}" aria-pressed="${k === pick.track}" title="${esc(x.label)} call on the ${esc(lineOf(k).label)}">${x.icon} ${esc(x.label)}</button>`).join('')}</div>
+      keys = `<div class="line-keys" role="group" aria-label="Line">${Object.entries(App.cfg.tracks).map(([k, x]) => `<button type="button" class="${k === pick.track ? 'on' : ''}" data-line="${k}" aria-pressed="${k === pick.track}" title="${esc(x.label)} call on the ${esc(lineOf(k).label)}">${x.icon} ${esc(x.label)}</button>`).join('')}</div>
         <div class="dialpad">${PAD.map(([k, l]) => `<button type="button" class="dk" data-dk="${k}" aria-label="${k}"><b>${k}</b><small>${l || '&nbsp;'}</small></button>`).join('')}</div>
         <div class="dial-row">${spkKey()}<button type="button" class="dial-call" data-act="ring" title="Ring the trainee (Enter)" aria-label="Call">📞</button>
           <button type="button" class="key" data-act="backspace" title="Delete a digit (Esc clears)" ${pick.dial ? '' : 'disabled'}><span class="ic">⌫</span>Delete</button></div>
@@ -873,44 +877,45 @@
   }
 
   /* ---------- 🎭 the call to play ----------
-     The console is the dialer alone, so the call the trainer plays is chosen here, from the dialer's
-     🎭 key: the type of call (Reception, Calendar, Intake) and the calls on that line. Picking one is
-     optional: with none picked the trainer rings an open call and plays any caller. */
-  function pickCallModal() {
-    if (App.t) return;
-    let track = pick.track, sid = pick.scenarioId;
-    const body = () => {
-      const list = App.cfg.scenarios.filter((x) => x.track === track);
-      const s = App.scen[sid];
-      return `<div class="picker-modal">
-        <div class="pill-tabs" id="pkTrack">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === track ? 'on' : ''}" title="${esc(t.label)} calls, on the ${esc(lineOf(k).label)}">${t.icon} ${esc(t.label)}</button>`).join('')}</div>
-        <div class="callers compact" id="pkList">
-          <div class="scen open ${s ? '' : 'sel'}" data-sid="" tabindex="0"><div class="cav">🎙</div>
-            <div class="cbody"><h4>Open call: no script</h4><p>Any caller you like, on the ${esc(lineOf(track).label)}</p></div></div>
-          ${list.map((x) => `<div class="scen ${x.id === sid ? 'sel' : ''}" data-sid="${esc(x.id)}" tabindex="0" title="${esc(x.caller.name)}: ${esc(x.caller.role)}">
-            <div class="cav">${esc((x.caller.name || '?').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase())}</div>
-            <div class="cbody"><h4>${esc(x.title)}</h4><p>${App.levelBadge(x.level)}${x.caseId ? `<span class="badge">${esc(x.caseId)}</span>` : ''}${x.custom ? '<span class="badge blue">Yours</span>' : ''}</p></div></div>`).join('')}</div>
-        <p class="small muted" style="margin:10px 0 0">Optional: the call the trainer plays. <a href="#/scenarios">📚 Write your own call</a></p></div>`;
-    };
-    const m = App.modal({ title: '🎭 The call to play', wide: true, body: body(),
-      foot: '<button class="btn btn-primary" data-pkuse="1">Play this call</button><button class="btn" data-x>Cancel</button>' });
-    const redraw = () => { U.$('.modal-body', m.el).innerHTML = body(); };
-    const choose = (id) => { sid = id && App.scen[id] ? id : ''; if (sid) track = App.scen[sid].track; redraw(); };
-    m.el.addEventListener('click', (e) => {
-      const tb = e.target.closest('[data-track]');
-      if (tb) { track = tb.dataset.track; if (App.scen[sid] && App.scen[sid].track !== track) sid = ''; redraw(); return; }
-      const sc = e.target.closest('[data-sid]');
-      if (sc) { choose(sc.dataset.sid); return; }
-      if (e.target.closest('a[href]')) { m.close(); return; }
-      if (!e.target.closest('[data-pkuse]')) return;
-      pick.scenarioId = sid; pick.track = track;
-      m.close();
-      renderDialer();
-    });
-    m.el.addEventListener('keydown', (e) => {
-      const tg = e.target;
-      if (e.key === 'Enter' && tg && tg.dataset && tg.dataset.sid != null) { e.preventDefault(); choose(tg.dataset.sid); }
-    });
+     The calls the trainer can play live are picked on 🗂 Call Logs & Scenario Picker, the next screen
+     (review.js). The one picked shows on the dialer's own screen, and these two are how the picker
+     sets it and reads it back. */
+  C.pickedCall = () => { loadPick(); return App.scen[pick.scenarioId] || null; };
+  C.pickCall = (id) => pickCall(id);
+
+  /* The Scenario Picker opens in a tab of its own (🎭 Call to play), so a trainer never loses the
+     Console mid-session. The call picked is kept on this computer, so the picker's tab and the
+     Console's tab agree on it, and the browser's own storage event tells the Console the moment it
+     changes in the other tab. */
+  const PICK_KEY = 'mcv_play';
+  function savePick() { try { localStorage.setItem(PICK_KEY, JSON.stringify({ id: pick.scenarioId, track: pick.track })); } catch (e) {} }
+  function loadPick() {
+    if (!App.cfg || !App.scen) return false;
+    let v = null;
+    try { v = JSON.parse(localStorage.getItem(PICK_KEY) || 'null'); } catch (e) { return false; }
+    if (!v) return false;
+    const id = v.id && App.scen[v.id] ? v.id : '';
+    const track = App.cfg.tracks[v.track] ? v.track : pick.track;
+    if (id === pick.scenarioId && track === pick.track) return false;
+    pick.scenarioId = id; pick.track = track;
+    return true;
+  }
+  C.loadPick = loadPick;
+  window.addEventListener('storage', (e) => {
+    if (e.key !== PICK_KEY || !loadPick()) return;
+    if (App.route.name === 'console' && !active(App.t)) { renderRoster(); renderDialer(); }
+    else if (App.at('scenarios')) App.views.scenarios.render();
+  });
+
+  // 🎭 Call to play: one tab, reused and brought to the front, never a pile of them.
+  C.pickWin = null;
+  function openPicker() {
+    try {
+      if (C.pickWin && !C.pickWin.closed) { C.pickWin.focus(); return; }
+      C.pickWin = window.open(location.pathname + '#/logs/scenarios', 'lshscenarios');
+      if (C.pickWin) { C.pickWin.focus(); return; }
+    } catch (e) {}
+    U.toast('The browser blocked the new tab: allow pop-ups for this site, or open 🗂 Call Logs & Scenario Picker on the top bar.', 'error');
   }
 
   /* ---------- 📺 the Class view (a tab to present in Google Meet) ----------
@@ -962,11 +967,12 @@
   App.register('aicalls', {
     trainer: true,
     render() {
-      const app = U.$('#app');
+      const app = App.host();
       app.innerHTML = `<div class="ai-page">
         <div class="card-head"><h2>🤖 AI calls</h2><span class="spacer"></span>
+          <a class="btn" href="#/admin/practice" title="Take a practice call with the AI caller yourself, the way a trainee does">🎧 Try one yourself</a>
           <button class="btn btn-primary" data-act="aisetup" ${App.cfg.features.ai ? '' : 'disabled'} title="Choose the calls, the voice and who to ring">🎭 Send AI callers…</button></div>
-        <p class="muted">Calls where the AI plays the caller and the trainee takes it on their own phone. Send them to one trainee or to a whole batch; follow a call as it happens, and read the AI's review when it's over. The trainer's own line is free the whole time.</p>
+        <p class="muted">Calls where the AI plays the caller and the trainee takes it on their own phone. Send them to one trainee or to a whole batch; follow a call as it happens, and read the AI's review when it's over. The trainer's own line is free the whole time. <b>🎧 Try one yourself</b> takes the same call, as a trainee would.</p>
         <div id="aiBox"></div></div>`;
       app.firstChild.addEventListener('click', onClick);
       renderAiCalls();
@@ -978,14 +984,16 @@
   App.register('console', {
     trainer: true,
     async render() {
-      const app = U.$('#app');
+      const app = App.host();
+      // The main screen is ☎ the dialer and nothing else. ☎ Switchboard folds the board out beside it.
       app.innerHTML = `<div class="console" id="consoleGrid">
-        <aside class="console-side" id="sideL"></aside><div id="stage"></div></div>`;
+        <aside class="console-side" id="sideL"></aside><div class="console-stage" id="stage"></div></div>`;
       App.leave = () => { document.removeEventListener('keydown', onKey); if (App.t && App.t.status === 'ended' && App.t.upload !== 'saving') App.t = null; };
       app.firstChild.addEventListener('click', onClick);
       app.firstChild.addEventListener('change', onChange);
       app.firstChild.addEventListener('input', onInput);
       document.addEventListener('keydown', onKey);
+      loadPick();   // the call the picker's tab left for it
       render();
       try { C.roster = (await API.post('/api/trainees')).trainees; renderRoster(); if (!App.t) { syncDial(); renderDialer(); } } catch (e) {}
     }
@@ -1009,8 +1017,7 @@
     if (xf) { transferResult(xf.dataset.xfer); return; }
     const b = e.target.closest('[data-act]'); if (!b) return;
     const act = b.dataset.act;
-    if (act === 'pickcall') pickCallModal();
-    else if (act === 'ring') ring();
+    if (act === 'ring') ring();
     else if (act === 'backspace') setDial(pick.dial.slice(0, -1));
     else if (act === 'airing') aiRing();
     else if (act === 'aisetup') aiSetup();
@@ -1023,6 +1030,7 @@
     else if (act === 'miccheck') App.micCheck();
     else if (act === 'newcall') { App.t = null; pick.dial = ''; syncDial(); render(); }   // the screen clears for the next call
     else if (act === 'takehere') takeHere();
+    else if (act === 'playpick') openPicker();
     else if (act === 'classview') openClassView();
   }
   function pickTrainee(id) {
@@ -1030,12 +1038,20 @@
     if (x && x.ext) setDial(x.ext);
     else { pick.dial = ''; pick.traineeId = id; renderDialer(); renderRoster(); }
   }
+  // The call to play: a scripted call from the library, or '' for an open call (no script).
+  function pickCall(id) {
+    pick.scenarioId = id && App.scen[id] ? id : '';
+    if (pick.scenarioId) pick.track = App.scen[pick.scenarioId].track;
+    savePick();
+    if (App.route.name === 'console') { renderRoster(); renderDialer(); }
+  }
   // The line (Reception, Calendar, Intake): which calls are listed, and where an open call rings.
   function setTrack(k) {
     if (!App.cfg.tracks[k]) return;
     pick.track = k;
     const s = App.scen[pick.scenarioId]; if (s && s.track !== k) pick.scenarioId = '';
-    renderDialer();
+    savePick();
+    if (App.route.name === 'console') { renderRoster(); renderDialer(); }
   }
   // Typing on the keyboard dials too: digits, * and #; Backspace deletes, Esc clears, Enter rings.
   function onKey(e) {
@@ -1056,9 +1072,9 @@
   }
   function onChange(e) {
     if (e.target.id === 'batchSel') { pick.batch = e.target.value; renderRoster(); }
-    else if (e.target.id === 'pkRec') { pick.record = e.target.checked; renderDialer(); }
-    else if (e.target.id === 'pkGraded') { pick.graded = e.target.checked; try { localStorage.setItem('mcv_graded', pick.graded ? '1' : '0'); } catch (err) {} renderDialer(); }
-    else if (e.target.id === 'pkHide') { pick.withhold = e.target.checked; renderDialer(); }
+    else if (e.target.id === 'pkRec') { pick.record = e.target.checked; renderRoster(); renderDialer(); }
+    else if (e.target.id === 'pkGraded') { pick.graded = e.target.checked; try { localStorage.setItem('mcv_graded', pick.graded ? '1' : '0'); } catch (err) {} renderRoster(); renderDialer(); }
+    else if (e.target.id === 'pkHide') { pick.withhold = e.target.checked; renderRoster(); renderDialer(); }
     else if (e.target.id === 'ocCase') { const x = App.cfg.cases[e.target.value], pre = U.$('#ocCaseText'); if (pre) { pre.textContent = x ? x.text : ''; pre.classList.toggle('hidden', !x); } }
     else if (e.target.dataset.goal != null) { tick(Number(e.target.dataset.goal), e.target.checked); e.target.closest('.goal').classList.toggle('done', e.target.checked); }
   }
