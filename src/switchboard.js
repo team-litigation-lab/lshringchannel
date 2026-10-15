@@ -19,7 +19,8 @@
      sees the trainee's submitted note the moment it is sent).
    ========================================================= */
 import { DurableObject } from 'cloudflare:workers';
-import { SCENARIOS, cleanScenario, openCall, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM, CASES, weightedScore, DEFAULT_SETTINGS, traineeView, voiceOk } from './scenarios.js';
+import { SCENARIOS, cleanScenario, openCall, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM, CASES, weightedScore, DEFAULT_SETTINGS, traineeView, voiceOk, courseCall, programOk } from './scenarios.js';
+import { reportGradedCall, splitName } from './portal.js';
 
 const RING_MS = 45000;     // an unanswered call rings out after 45 seconds
 const GRACE_MS = 30000;    // a dropped phone has 30 seconds to reconnect before its call ends
@@ -695,13 +696,13 @@ export class Switchboard extends DurableObject {
   deleteCall(id) { this.sql.exec('DELETE FROM calls WHERE id = ?', id); return true; }
 
   // A practice call with the AI caller (the trainee's browser runs the call).
-  async startAiCall(who, scenarioId, voice) {
+  async startAiCall(who, scenarioId, voice, program, graded) {
     const s = this.scenario(scenarioId);
     if (!s) return { error: 'No such scenario', status: 404 };
     if (s.ai === false && who.role !== 'a') return { error: 'This call is for live practice with a trainer only.', status: 403 };
     const t = now();
     const r = { id: newId(), mode: 'ai', track: s.track, scenario_id: s.id, title: s.title, trainee_id: who.id, trainee_name: who.name, batch: who.batch || '', trainer: '',
-      status: 'live', created_at: t, answered_at: t, data: { scenario: s, voice: voiceOk(voice), metrics: {}, note: {}, transcript: [], events: [] } };
+      status: 'live', created_at: t, answered_at: t, data: { scenario: s, voice: voiceOk(voice), program: programOk(program), graded: !!graded, byTrainer: who.role === 'a', metrics: {}, note: {}, transcript: [], events: [] } };
     this.save(r);
     await this.armAlarm(t + (Math.min(15, Math.max(2, Number(this.env.AI_MAX_MINUTES) || 8)) + 2) * 60000);
     return { id: r.id, scenario: s };
@@ -720,7 +721,7 @@ export class Switchboard extends DurableObject {
   /* What a phone may change on a call record once it's placed.
      Trainees: their own note (until they submit it); on AI calls also the transcript, timings and end.
      Trainers: the review. */
-  updateCall(id, who, p) {
+  async updateCall(id, who, p) {
     const r = this.row(id);
     if (!r) return { error: 'No such call' };
     const mine = who.role === 't' && r.trainee_id === who.id;
@@ -760,6 +761,7 @@ export class Switchboard extends DurableObject {
       } else d.reviewDraft = rev;
     }
     const why = r._grade; delete r._grade;
+    const sent = who.role === 'a' && p.review && p.review.send;
     const tell = r._tell || r._freed, freed = r._freed; delete r._tell; delete r._freed;
     this.save(r);
     if (freed) this.freePhones(r);
@@ -767,6 +769,8 @@ export class Switchboard extends DurableObject {
     // The note is in (or a practice call ended): the call may be ready to grade. A note submitted after
     // the AI already graded without it is graded again, unless a trainer has started on the review.
     if (why) this.scheduleGrade(r.id, { again: why === 'note' && !d.review && !d.reviewDraft }).catch(() => {});
+    // The review the trainer sent is the trainee's score: the Portal's course counts it (reportCall).
+    if (sent) await this.reportCall(r.id);
     return { ok: true, call: r };
   }
 
@@ -816,7 +820,7 @@ export class Switchboard extends DurableObject {
   }
   // The AI's scorecard: on a practice call it's the trainee's result; on a live call it's a draft for the
   // trainer, or the trainee's review straight away when ⚙️ Setup releases AI grades automatically.
-  applyAutograde(id, grade) {
+  async applyAutograde(id, grade) {
     const r = this.row(id);
     if (!r) return null;
     const d = r.data, st = this.getSettings();
@@ -837,8 +841,40 @@ export class Switchboard extends DurableObject {
     }
     this.save(r);
     this.tellGraded(r);
+    // A practice call the AI graded is the trainee's score, and so is a live call whose AI grade
+    // ⚙️ Setup releases: the Portal's course counts it. A live call awaiting its trainer doesn't.
+    if (r.score != null) await this.reportCall(id);
     return r;
   }
+
+  /* 📊 A graded call to the LSH Training Portal, so it counts in the trainee's course (src/portal.js
+     reportGradedCall): the Portal keeps it on their Portal account and in the course's own store.
+     Sent only when the trainee has a score they can see, once per score (a re-grade or a new review
+     sends the new one), and never for a trainer trying 🎧 practice themselves. Best effort: if the
+     Portal can't be reached (or AI_GATEWAY_SECRET isn't set here), the call stays on Ring Channel and
+     why is kept on the record (data.reported). */
+  async reportCall(id) {
+    const r = this.row(id);
+    if (!r || r.score == null) return null;
+    const d = r.data || {};
+    if (d.byTrainer) return null;
+    if (d.reported && d.reported.ok && d.reported.score === r.score) return null;
+    const name = splitName(r.trainee_name);
+    if (!name) return null;
+    const grade = d.review || d.ai || d.aiDraft || {};
+    const res = await reportGradedCall(this.env, {
+      first: name.first, last: name.last, batch: r.batch || '', username: r.trainee_id,
+      call: Object.assign({
+        id: r.id, title: r.title, score: Math.round(r.score), verdict: String(grade.verdict || grade.summary || '').slice(0, 400),
+        secs: Math.round(Math.max(0, (r.ended_at || now()) - (r.answered_at || r.created_at)) / 1000),
+        voice: (d.metrics && d.metrics.voice) || '', at: new Date(now()).toISOString()
+      }, courseCall(r.track, d.program))
+    });
+    const row = this.row(id);
+    if (row) { row.data.reported = { at: now(), score: r.score, ok: !!res.ok, error: res.ok ? '' : res.code || '' }; this.save(row); }
+    return res;
+  }
+
   // 🤖 AI calls a trainer sent: what the console shows, and the phones that were ringing.
   aiBrief(r) {
     const d = r.data || {}, a = d.assigned || {};

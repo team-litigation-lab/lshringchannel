@@ -12,6 +12,7 @@
 
   const App = window.App = {
     cfg: null, me: null, board: null, views: {}, route: { name: '', arg: '' }, leave: null,
+    callLink: { track: '', line: '', program: '', graded: false },   // what a Call Simulator link from the Portal asked for
     p: null,          // the trainee's call (live or practice)
     t: null,          // the trainer's live call
     presence: { trainees: [], trainers: [] }, trainersOnline: 0,
@@ -27,13 +28,25 @@
   // 🏠 Ring Channel opens from the LSH Training Portal: ?ticket=… signs a trainee in on their phone and an administrator in
   // on the console (the Worker checks it, src/portal.js). ?admin=1 (an older Portal) opens the trainers' fallback sign-in.
   // Both leave the address at once.
+  //
+  // 📞 The Call Simulator is Ring Channel's: the Portal's Simulators page, the courses and the programs all open it here
+  // (/api/launch?tool=ringchannel&to=calls → ?track=&line=&program=&graded=1#/practice). Those are kept in App.callLink and
+  // leave the address too: 🎧 Practice opens on that line, with the program the call counts in, and a graded call rings at
+  // once with a caller the trainee doesn't see first (trainee.js).
   function fromPortal() {
     let ticket = '', admin = false;
+    const link = { track: '', line: '', program: '', graded: false };
     try {
       const u = new URL(location.href);
       ticket = u.searchParams.get('ticket') || ''; admin = u.searchParams.get('admin') === '1';
-      if (ticket || u.searchParams.has('admin')) { u.searchParams.delete('ticket'); u.searchParams.delete('admin'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); }
+      link.track = (u.searchParams.get('track') || u.searchParams.get('flow') || '').trim().toLowerCase().slice(0, 20);
+      link.line = (u.searchParams.get('line') || '').trim().slice(0, 80);
+      link.program = (u.searchParams.get('program') || '').trim().toUpperCase().slice(0, 4);
+      link.graded = u.searchParams.get('graded') === '1' || u.searchParams.get('mode') === 'graded' || u.searchParams.get('random') === '1';
+      const taken = ['ticket', 'admin', 'track', 'flow', 'line', 'program', 'graded', 'mode', 'random'].filter((k) => u.searchParams.has(k));
+      if (taken.length) { taken.forEach((k) => u.searchParams.delete(k)); history.replaceState(history.state, '', u.pathname + u.search + u.hash); }
     } catch (e) { /* an odd address: nothing to take */ }
+    App.callLink = link;
     return { ticket, admin };
   }
 

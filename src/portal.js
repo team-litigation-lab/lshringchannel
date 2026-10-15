@@ -91,3 +91,38 @@ export async function readPortalTicket(env, ticket) {
     return { ok: false, code: 'unreachable' };
   }
 }
+
+/* 📊 A graded call to the LSH Training Portal, so it counts in the trainee's course.
+   The Call Simulator is Ring Channel's: when a trainee can see their score (the AI graded their
+   practice call, or the trainer sent the review), the call goes to the Portal server to server:
+
+     POST <PORTAL_URL>/api/call-results   header X-Gateway-Key: AI_GATEWAY_SECRET
+          { first, last, batch, username, via: 'ringchannel', call: { id, program, line, lesson, title, score, verdict, secs, voice, at } }
+
+   The Portal keeps it on the trainee's Portal account (its progress page) and in the course's own
+   store, where the course shows it on their progress. It needs AI_GATEWAY_SECRET on this Worker, the
+   same shared secret the Portal has; without it there is nothing to send and the call stays here. */
+export async function reportGradedCall(env, body) {
+  const key = String((env && env.AI_GATEWAY_SECRET) || '').trim();
+  if (!key) return { ok: false, code: 'no-secret' };
+  const c = (body && body.call) || {};
+  if (!body || !body.first || !body.last || !c.id || !c.line || !Number.isFinite(Number(c.score))) return { ok: false, code: 'incomplete' };
+  try {
+    const r = await fetch(portalUrl(env) + '/api/call-results', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Gateway-Key': key },
+      body: JSON.stringify(Object.assign({ via: 'ringchannel' }, body))
+    });
+    const j = await r.json().catch(() => null);
+    if (j && j.success) return { ok: true, course: j.course || null };
+    return { ok: false, code: String((j && j.error) || 'HTTP ' + r.status).slice(0, 120) };
+  } catch (e) {
+    return { ok: false, code: String((e && e.message) || e).slice(0, 120) };
+  }
+}
+
+// "First Last" as the Portal wants it (it finds the account by first name, last name and batch).
+export function splitName(name) {
+  const parts = String(name == null ? '' : name).trim().replace(/\s+/g, ' ').split(' ');
+  if (parts.length < 2) return null;
+  return { first: parts[0].slice(0, 60), last: parts.slice(1).join(' ').slice(0, 60) };
+}
