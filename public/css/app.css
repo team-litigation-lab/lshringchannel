@@ -9,7 +9,14 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; background: var(--paper); color: var(--ink); font-size: 15px; line-height: 1.45; min-height: 100vh; }
+html { background: var(--paper); }
+body { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; background: transparent; color: var(--ink); font-size: 15px; line-height: 1.45; min-height: 100vh; }
+/* the call-floor photo behind the whole app: fixed, and under a paper wash so cards and text stay readable */
+body::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(rgba(244, 246, 251, .88), rgba(244, 246, 251, .94)), url('../call-center-bg.webp') center / cover no-repeat fixed;
+}
+@media (max-width: 760px) { body::before { background-attachment: scroll, scroll; } }
 a { color: var(--blue); }
 button, input, select, textarea { font: inherit; color: inherit; }
 h1, h2, h3, h4 { margin: 0 0 .4em; line-height: 1.2; color: var(--navy); }
