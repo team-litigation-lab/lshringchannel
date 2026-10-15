@@ -11,7 +11,7 @@
   const { esc } = U;
 
   const App = window.App = {
-    cfg: null, me: null, board: null, views: {}, route: { name: '', arg: '' }, leave: null,
+    cfg: null, me: null, board: null, views: {}, route: { name: '', arg: '', sub: '' }, leave: null,
     callLink: { track: '', line: '', program: '', graded: false },   // what a Call Simulator link from the Portal asked for
     p: null,          // the trainee's call (live or practice)
     t: null,          // the trainer's live call
@@ -21,6 +21,11 @@
   App.trainer = () => !!(App.me && App.me.role === 'a');
 
   App.register = (name, view) => { App.views[name] = view; };
+  /* A page renders into #appHost when a screen's tabs are hosting it (🗂 Call Logs & Scenario Picker,
+     🛡 Admin), and into #app when it has the page to itself. */
+  App.host = () => document.getElementById('appHost') || document.getElementById('app');
+  // True on a page whether it has the screen to itself or a screen's tab is hosting it.
+  App.at = (name) => App.route.name === name || App.route.sub === name;
   // The live call this tab is on, kept per tab: after a reload the tab picks its own call back up,
   // while a second tab only offers to move the call to itself.
   App.ownCall = (id) => { try { if (id === undefined) return sessionStorage.getItem('mcv_call'); if (id) sessionStorage.setItem('mcv_call', id); else sessionStorage.removeItem('mcv_call'); } catch (e) { return null; } };
@@ -92,18 +97,39 @@
     App.go();
   };
 
+  /* 🧭 The top bar. Four buttons for a trainer, two for a trainee, and one screen behind each:
+       ☎ Console                        the dialer, and nothing else on the main screen
+       🗂 Call Logs & Scenario Picker   the next screen: the call log, and the calls to play
+       🛡 Admin (trainers)              Call Logs · Trainee Monitoring · Graded Calls · 🤖 AI calls · 🎧 Try practice · ⚙️ Setup
+       🏠 Main Portal (trainers)        back to the LSH Training Portal
+     Every other page is a tab of one of those screens, so the bar never grows: `App.screenOf` says
+     which button a page lights up, and `App.ALIAS` sends an old address to the screen that holds it. */
+  // Its full name, with the short one the bar falls back to where it would otherwise wrap (CSS).
+  const LOGS_LABEL = '🗂 Call Logs<span class="long"> &amp; Scenario Picker</span>';
   App.navItems = function () {
     return App.trainer()
-      ? [['console', '🎛 Console'], ['aicalls', '🤖 AI calls'], ['calls', '🗂 Call log'], ['graded', '📋 Graded calls'], ['scenarios', '📚 Scenarios'], ['trainees', '👥 Trainees'], ['practice', '🎧 Try practice'], ['setup', '⚙️ Setup']]
-      : [['phone', '📞 My phone'], ['practice', '🎧 Practice'], ['calls', '🗂 My calls']];
+      ? [['console', '🎛 Console'], ['logs', LOGS_LABEL], ['admin', '🛡 Admin']]
+      : [['phone', '☎ Console'], ['logs', LOGS_LABEL]];
   };
+  // The pages 🛡 Admin holds (trainers): a page not listed here belongs to the Call Logs screen.
+  const ADMIN_PAGES = ['admin', 'monitoring', 'graded', 'aicalls', 'practice', 'setup'];
+  App.screenOf = function (name) {
+    if (name === 'console' || name === 'phone') return App.trainer() ? 'console' : 'phone';
+    if (App.trainer() && ADMIN_PAGES.includes(name)) return 'admin';
+    return 'logs';
+  };
+  // One home per page: an old address (or a link from inside a page) opens the screen that now holds it.
+  App.ALIAS = { calls: 'logs/calls', scenarios: 'logs/scenarios', graded: 'admin/graded', trainees: 'admin/monitoring', monitoring: 'admin/monitoring', aicalls: 'admin/aicalls', setup: 'admin/setup' };
 
   App.header = function () {
     const nav = document.getElementById('nav'), who = document.getElementById('who');
     if (!App.me) { nav.innerHTML = ''; who.innerHTML = ''; return; }
-    nav.innerHTML = App.navItems().map(([k, l]) => `<a href="#/${k}" class="${App.route.name === k ? 'on' : ''}">${l}${k === 'calls' && App.unread ? '<span class="dot"></span>' : ''}</a>`).join('');
+    const here = App.screenOf(App.route.name);
+    const portal = App.trainer() && App.cfg && App.cfg.portal
+      ? `<a href="${esc(App.cfg.portal)}" title="The LSH Training Portal: its Training Directory">🏠 Main Portal</a>` : '';
+    nav.innerHTML = App.navItems().map(([k, l]) => `<a href="#/${k}" class="${here === k ? 'on' : ''}">${l}${k === 'logs' && App.unread ? '<span class="dot"></span>' : ''}</a>`).join('') + portal;
     const install = App.installPrompt && !App.installed() ? '<button type="button" class="hdr-install" onclick="App.install()" title="Install Ring Channel as an app: its own window and icon">⬇ Install</button>' : '';
-    who.innerHTML = `${install}${App.trainer() && App.cfg && App.cfg.portal ? `<a class="hdr-btn" href="${esc(App.cfg.portal)}" title="LSH Training Portal (Training Directory)" aria-label="LSH Training Portal">🏠</a>` : ''}<span class="chip">${App.trainer() ? '🎓 Trainer' : '🎧 Trainee'} · ${esc(App.me.name)}${App.me.batch ? ' · ' + esc(App.me.batch) : ''}</span><button type="button" title="Signed in as ${esc(App.me.name)}" onclick="App.logout()">Log out</button>`;
+    who.innerHTML = `${install}<span class="chip">${App.trainer() ? '🎓 Trainer' : '🎧 Trainee'} · ${esc(App.me.name)}${App.me.batch ? ' · ' + esc(App.me.batch) : ''}</span><button type="button" title="Signed in as ${esc(App.me.name)}" onclick="App.logout()">Log out</button>`;
   };
 
   App.go = function () {
@@ -112,9 +138,11 @@
     const h = location.hash.replace(/^#\/?/, '');
     let [name, arg] = h.split('/');
     if (App.isClassView) name = 'class';
-    if (!App.views[name] || (App.views[name].trainer && !App.trainer()) || (App.views[name].trainee && App.trainer())) { name = def; if (location.hash !== '#/' + def) { history.replaceState(null, '', '#/' + def); } }
+    // An old address opens the screen that now holds the page (#/graded → #/admin/graded).
+    if (!App.isClassView && !arg && App.ALIAS[name]) { history.replaceState(null, '', '#/' + App.ALIAS[name]); [name, arg] = App.ALIAS[name].split('/'); }
+    if (!App.views[name] || (App.views[name].trainer && !App.trainer()) || (App.views[name].trainee && App.trainer())) { name = def; arg = ''; if (location.hash !== '#/' + def) { history.replaceState(null, '', '#/' + def); } }
     if (App.leave) { try { App.leave(); } catch (e) {} App.leave = null; }
-    App.route = { name, arg: arg ? decodeURIComponent(arg) : '' };
+    App.route = { name, arg: arg ? decodeURIComponent(arg) : '', sub: '' };
     App.header();
     App.onCallBar();
     const main = document.getElementById('app');
@@ -205,8 +233,8 @@
     const bar = document.getElementById('oncall');
     const c = App.trainer() ? App.t : App.p;
     const active = c && ['ringing', 'connecting', 'live'].includes(c.status);
-    const home = App.trainer() ? 'console' : c && c.mode === 'ai' && !c.assigned ? 'practice' : 'phone';
-    if (!active || App.route.name === home) { bar.classList.add('hidden'); return; }
+    const home = App.trainer() ? 'console' : 'phone';
+    if (!active || App.at(home) || (App.trainer() && App.at('practice'))) { bar.classList.add('hidden'); return; }
     const who = App.trainer() ? (c.trainee && c.trainee.name) : (c.callerId && c.callerId.name);
     bar.innerHTML = `<span>📞 ${c.status === 'ringing' ? 'Ringing' : 'On a call'}${who ? ' · ' + esc(who) : ''}</span><span data-since="${c.answeredAt || c.ringAt || ''}">${U.since(c.answeredAt || c.ringAt)}</span><a href="#/${home}">Go back to the call →</a>`;
     bar.classList.remove('hidden');

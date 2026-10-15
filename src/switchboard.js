@@ -662,6 +662,31 @@ export class Switchboard extends DurableObject {
   }
   setArchived(id, archived) { this.sql.exec('UPDATE trainees SET archived = ? WHERE id = ?', archived ? 1 : 0, id); return this.getTrainee(id); }
 
+  /* 📊 Trainee Monitoring (Utilization), on 🛡 Admin: how much of the phone each trainee has actually
+     used. Live calls taken, the calls that rang out or were declined, the time they spent on the line
+     (and the average call), the holds and transfers they used, and their own practice calls apart from
+     the live ones (a practice call is the trainee's own, so it never counts as live work).
+     The holds and the transfers are counted out of each call's metrics in its JSON; if this build of
+     SQLite has no JSON functions, utilization() falls back to the rest, which are plain columns. */
+  utilization() {
+    const base = `SELECT t.id, t.name, t.batch, t.ext, t.created_at, t.last_seen, t.archived,
+      (SELECT COUNT(*) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'live' AND c.status = 'ended') AS liveCalls,
+      (SELECT COUNT(*) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'live' AND c.status = 'missed') AS missed,
+      (SELECT COUNT(*) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'live' AND c.status = 'declined') AS declined,
+      (SELECT SUM(MAX(c.ended_at - c.answered_at, 0)) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'live' AND c.status = 'ended' AND c.answered_at IS NOT NULL AND c.ended_at IS NOT NULL) AS talkMs,
+      (SELECT COUNT(*) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'live' AND c.reviewed = 1 AND c.score IS NOT NULL) AS graded,
+      (SELECT AVG(c.score) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'live' AND c.reviewed = 1 AND c.score IS NOT NULL) AS avg,
+      (SELECT COUNT(*) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'ai' AND c.status = 'ended') AS practice,
+      (SELECT AVG(c.score) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'ai' AND c.score IS NOT NULL) AS practiceAvg,
+      (SELECT SUM(MAX(c.ended_at - c.answered_at, 0)) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'ai' AND c.status = 'ended' AND c.answered_at IS NOT NULL AND c.ended_at IS NOT NULL) AS practiceMs`;
+    const held = `,
+      (SELECT SUM(COALESCE(json_array_length(json_extract(c.data, '$.metrics.holds')), 0)) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'live' AND c.status = 'ended') AS holds,
+      (SELECT SUM(COALESCE(json_array_length(json_extract(c.data, '$.metrics.transfers')), 0)) FROM calls c WHERE c.trainee_id = t.id AND c.mode = 'live' AND c.status = 'ended') AS transfers`;
+    const tail = ` FROM trainees t ORDER BY batch, name`;
+    try { return this.sql.exec(base + held + tail).toArray(); }
+    catch (e) { return this.sql.exec(base + tail).toArray(); }
+  }
+
   listScenarios() {
     const custom = this.sql.exec('SELECT data FROM scenarios WHERE deleted = 0 ORDER BY updated_at').toArray().map((x) => JSON.parse(x.data));
     return [...SCENARIOS, ...custom.filter((c) => !SCENARIOS.some((s) => s.id === c.id))];

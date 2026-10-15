@@ -8,6 +8,7 @@ const PORTAL_HOME = 'http://127.0.0.1:9911/programs.html';
 let step = 0;
 const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
 
+
 (async () => {
   const browser = await chromium.launch({
     executablePath: process.env.CHROME_PATH || undefined,
@@ -57,16 +58,29 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.waitForSelector('#roster');
   const t = await tr.evaluate(() => ({ role: App.me.role, name: App.me.name, hash: location.hash }));
   if (t.role !== 'a' || t.name !== 'Coach Ana' || t.hash !== '#/console') throw new Error('The trainer from the Portal: ' + JSON.stringify(t));
-  if ((await tr.getAttribute('#who a.hdr-btn', 'href')) !== PORTAL_HOME) throw new Error('The trainer\'s 🏠 goes to ' + await tr.getAttribute('#who a.hdr-btn', 'href'));
-  ok('From the Portal, an administrator lands on the console as Coach Ana (no passphrase); 🏠 goes back to the Portal');
+  // 🏠 Main Portal is a button on the top bar, last of the four (Console · Call Logs & Scenario Picker · Admin · Main Portal).
+  const bar = await tr.evaluate(() => [...document.querySelectorAll('#nav a')].map((a) => ({ href: a.getAttribute('href'), text: a.textContent.trim() })));
+  if (bar.length !== 4 || bar[0].href !== '#/console' || bar[1].href !== '#/logs' || bar[2].href !== '#/admin') throw new Error('The trainer\'s top bar: ' + JSON.stringify(bar));
+  if (bar[3].href !== PORTAL_HOME || !/Main Portal/.test(bar[3].text)) throw new Error('🏠 Main Portal should be the last button on the bar, to the Portal: ' + JSON.stringify(bar[3]));
+  ok('From the Portal, an administrator lands on the Console as Coach Ana (no passphrase), with four buttons on the bar — 🎛 Console, 🗂 Call Logs & Scenario Picker, 🛡 Admin and 🏠 Main Portal, which goes back to the Portal');
 
   // The trainee is on the switchboard, with their extension, and in 👥 Trainees
   await te.goto(Portal.trainee(B, 'Riley Santos', 'B100626'));
   await te.waitForSelector('#device .lcd');
   await tr.waitForFunction(() => /Riley Santos/.test(document.querySelector('#roster').textContent) && /ext 7\d{3}/.test(document.querySelector('#roster').textContent));
-  await tr.click('a[href="#/trainees"]');
+  await tr.goto(B + '/#/admin/monitoring');
   await tr.waitForFunction(() => /Riley Santos/.test(document.querySelector('#app').textContent) && /Portal/.test(document.querySelector('#app').textContent) && !/PIN/.test(document.querySelector('#app').textContent));
-  ok('The trainee is on the trainer\'s switchboard with their extension, and in 👥 Trainees (no PINs anywhere)');
+  // 🛡 Admin's tabs, in the order the platform spec sets: Call Logs, Trainee Monitoring, Graded Calls, then the trainer's own tools.
+  const tabs = await tr.evaluate(() => [...document.querySelectorAll('.screen-tabs a')].map((a) => a.getAttribute('href')));
+  const want = ['#/admin/calls', '#/admin/monitoring', '#/admin/graded', '#/admin/aicalls', '#/admin/setup'];
+  if (tabs.join() !== want.join()) throw new Error('🛡 Admin\'s tabs: ' + JSON.stringify(tabs));
+  if (!(await tr.$('.screen-tabs a.on[href="#/admin/monitoring"]'))) throw new Error('📊 Trainee Monitoring should be the open tab');
+  // 🎧 Try practice is a button on 🤖 AI calls, not a tab beside it, and it lights that tab up.
+  await tr.goto(B + '/#/admin/practice');
+  await tr.waitForSelector('.screen-tabs a.on');
+  const lit = await tr.evaluate(() => [...document.querySelectorAll('.screen-tabs a')].map((a) => a.getAttribute('href')).concat((document.querySelector('.screen-tabs a.on') || {}).getAttribute('href')));
+  if (lit.join() !== want.concat('#/admin/aicalls').join()) throw new Error('🎧 Try practice should be a button on 🤖 AI calls, lighting that tab: ' + JSON.stringify(lit));
+  ok('The trainee is on the trainer\'s switchboard with their extension, and in 🛡 Admin → 📊 Trainee Monitoring, whose tabs are Call Logs · Trainee Monitoring · Graded Calls · AI calls · Setup — with 🎧 Try practice a button on 🤖 AI calls rather than a tab of its own (no PINs anywhere)');
 
   // The Portal being down: the trainers' passphrase still opens the console (?admin=1 from an older Portal opens it too)
   const fb = await mk();
@@ -83,7 +97,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await fb.waitForFunction(() => !!App.myExt);
   const [e1, e2] = [await ext(tr), await ext(fb)];
   if (!/^80\d\d$/.test(e1) || !/^80\d\d$/.test(e2) || e1 === e2) throw new Error('Each trainer account needs its own extension: ' + JSON.stringify([e1, e2]));
-  await tr.click('a[href="#/console"]');
+  await tr.click('#nav a[href="#/console"]');
   await tr.waitForSelector('#dialer .dev-head');
   if (!new RegExp('ext ' + e1).test(await tr.textContent('#dialer .dev-head'))) throw new Error('The console should show the trainer\'s own extension');
   await tr.waitForFunction((n) => /Coach Ben/.test(document.querySelector('#roster').textContent) && new RegExp('ext ' + n).test(document.querySelector('#roster').textContent), e2);
