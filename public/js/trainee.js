@@ -321,14 +321,28 @@
   /* =========================================================
      Practice with an AI caller
      ========================================================= */
+  // The line a Call Simulator link asks for: ?track= (reception, calendar, intake), or the line's name
+  // from a course's link (?line=Reception Mock Calls) or an older ?flow= (calendaring → calendar).
+  function linkTrack(link) {
+    const t = String(link.track || '').toLowerCase(), l = String(link.line || '').toLowerCase();
+    if (App.cfg.tracks[t]) return t;
+    if (t === 'calendaring' || /calendar/.test(l)) return 'calendar';
+    if (t === 'intake' || /intake/.test(l)) return 'intake';
+    if (t === 'reception' || /reception|front desk/.test(l)) return 'reception';
+    return '';
+  }
+
   async function startAi(scenarioId, opts) {
     if (App.p && active(App.p)) return U.toast('Finish the call you are on first.', 'error');
     let r;
-    try { r = await API.post('/api/ai/start', { scenarioId, voice: (opts && opts.voice) || '' }); } catch (e) { return U.toast(e.message, 'error'); }
+    // program and graded: the Call Simulator link the trainee came in on (App.callLink), so the Portal's
+    // course counts the call on the right line (src/portal.js reportGradedCall).
+    try { r = await API.post('/api/ai/start', { scenarioId, voice: (opts && opts.voice) || '', program: App.callLink.program, graded: !!(opts && opts.graded) }); } catch (e) { return U.toast(e.message, 'error'); }
     const s = r.scenario;
     const line = App.cfg.lines[s.line];
     App.p = { mode: 'ai', status: 'waiting', callId: r.callId, scenario: s, surprise: !!opts.surprise, typed: !!opts.typed, showTranscript: !!opts.transcript,
       line: s.line, lineLabel: line.label, lineNumber: line.number, callerId: s.callerId || { name: 'WIRELESS CALLER', number: '' }, track: s.track, hideCases: s.hideCases || [],
+      graded: !!(opts && opts.graded),
       note: {}, lines: [], muted: false, held: false, rec: App.cfg.features.recordings, metrics: { holds: [], transfers: [] } };
     if (App.trainer()) { if (App.at('practice')) App.views.practice.render(); else location.hash = '#/admin/practice'; }
     else if (App.route.name === 'phone') renderAll();
@@ -738,8 +752,17 @@
         app.innerHTML = `<div class="card"><h2>🎧 Practice with an AI caller</h2><p>AI practice callers aren't set up on this site yet${App.trainer() ? ': add the GEMINI_API_KEY5 … secrets (see ⚙️ Setup)' : '. Ask your trainer'}. Live mock calls with your trainer work without it.</p></div>`;
         return;
       }
+      // 📞 The Call Simulator link from the Portal (a course's "Take a graded call", the Simulators page):
+      // open on its line, and for a graded call ring one straight away, with a caller the trainee doesn't
+      // see first (the same as 🎲 Surprise me). Done once, so it doesn't ring again on every render.
+      const link = App.callLink;
+      if (link.track || link.line) { const t = linkTrack(link); if (t) { T.track = t; } link.track = link.line = ''; }
       const track = T.track || 'reception';
       const list = App.cfg.scenarios.filter((s) => s.track === track && s.ai !== false);
+      if (link.graded) {
+        link.graded = false;
+        if (list.length && App.cfg.features.ai) { const s = list[Math.floor(Math.random() * list.length)]; startAi(s.id, { surprise: true, graded: true, voice: T.voice }); return; }
+      }
       app.innerHTML = `<div class="card">
         <div class="card-head"><h2>🎭 ${App.trainer() ? 'Try a practice call' : 'Practice with an AI caller'}</h2>${App.trainer() ? '<span class="spacer"></span><a class="btn btn-sm" href="#/admin/aicalls">← 🤖 AI calls</a>' : ''}</div>
         <p class="muted">An AI caller rings your practice phone and talks with you out loud, like a real caller (use a headset). Handle the call, take the note, and the AI scores it with the same rubric your trainer uses. Calls last up to ${App.cfg.features.aiMinutes} minutes.</p>

@@ -1,6 +1,6 @@
 # LSH Ring Channel
 
-A training phone system (VOIP) for the **Receptionist** and **Intake** mock calls in the LSH Foundational Training program.
+A training phone system (VOIP) for the **Receptionist** and **Intake** mock calls in the LSH Foundational Training program, and the home of the LSH **📞 Call Simulator**: every program's mock calls are taken on this phone (see *On the LSH Training Portal*).
 
 The trainer rings a trainee's phone in the browser and plays the caller over live audio. The trainee answers and handles the call like a real one:
 
@@ -24,6 +24,12 @@ There's **no sign-in form**: everyone comes in from the Portal, signed in there.
 - **Administrators** land on the console, as trainers, under their Portal name. The Portal makes these admin tickets for Ring Channel only; the other platforms still ask admins for their password.
 - **Each ticket works once** (the Switchboard keeps the used ones until they expire), and it leaves the address bar at once, so a link from history or another browser is no use.
 - **The ticket check:** with `PORTAL_SSO_SECRET` set on this Worker (the same value as the Portal's), Ring Channel checks the ticket itself. Without it, it asks the Portal (`POST /api/verify-ticket`), as the CMS does, so it works with no secret to copy. `PORTAL_URL` changes which Portal it asks (default `https://cm-training-activity.pages.dev`).
+- **📞 The Call Simulator is Ring Channel's.** Every Call Simulator link on the Portal, in a course and in a program opens this phone, so a mock call is a real call on a real line instead of a panel in another platform: the Portal's `/simulators/call.html` and its 🛠 Simulators card go through `/api/launch?tool=ringchannel&to=calls` and land on **🎧 Practice**, signed in. The link may say which line and which course, and Ring Channel opens on it:
+  - `?track=reception|calendar|intake` (an older `?flow=calendaring` and `?line=Reception Mock Calls` are read too) → 🎧 Practice opens on that line;
+  - `?program=FT|CM|PD|EA` → the course the call counts in;
+  - `?graded=1` → a **graded call** rings at once, with a caller the trainee doesn't see first (the same as 🎲 Surprise me), graded on the line's Mock Calls Metrics.
+  These leave the address bar with the ticket (`public/js/app.js` `fromPortal`, `App.callLink`).
+- **📊 Graded calls count in the trainee's course.** When the trainee has a score they can see — the AI graded their practice call, or the trainer sent the review — Ring Channel sends the call to the Portal, server to server: `POST <PORTAL_URL>/api/call-results`, header `X-Gateway-Key` = **`AI_GATEWAY_SECRET`** (the Portal's shared gateway secret; `src/portal.js` `reportGradedCall`, `src/switchboard.js` `reportCall`). The Portal keeps it on the trainee's Portal account and in the course's own store, so the course shows it on their progress: Standard Training counts a call by its lesson (Reception 4, Calendar Management 5, Intake 6), the other programs by their line (`COURSE_LINES` in `src/scenarios.js`). Each call is sent once per score, never for a trainer's own practice, and if the secret isn't set here (or the Portal can't be reached) the call simply stays on Ring Channel — why is kept on the call record. **⚙️ Setup** shows whether it's configured.
 - **Opening Ring Channel's own link**, or signing out, shows **🏠 Open Ring Channel from the LSH Training Portal** with a button there. Trainers get **🏠 Main Portal**, the last button on the top bar, back to the Portal's Training Directory.
 - **If the Portal is down**, *Trainer: is the Portal down?* (folded away on that page) opens the console with the trainer passphrase (`ADMIN_PASSPHRASE`). Trainees wait for the Portal.
 
@@ -313,6 +319,7 @@ The **No Blueprint rule:** Ring Channel shows no 🧭 Blueprint button. The blue
    | `PORTAL_SSO_SECRET` | Optional. The LSH Training Portal's sign-in secret: Ring Channel then checks the Portal's tickets itself instead of asking the Portal (see *On the LSH Training Portal*). |
    | `TURN_KEY_ID`, `TURN_KEY_API_TOKEN` | **Recommended.** Cloudflare's TURN relay (step 3). |
    | `GEMINI_API_KEY5` … `GEMINI_API_KEY9` | Optional. AI practice callers and autograding. |
+   | `AI_GATEWAY_SECRET` | **Recommended.** The LSH Training Portal's shared gateway secret (the same value as the Portal's): every graded call here is then sent to the Portal's `/api/call-results` and counts in the trainee's course (see *On the LSH Training Portal*). Without it, graded calls stay on Ring Channel. |
 
 3. **Set up the TURN relay:** in Cloudflare, go to **Realtime → TURN Server → Create**, then copy the **Turn Token ID** into `TURN_KEY_ID` and the **API Token** into `TURN_KEY_API_TOKEN`.
    - Without it, most calls still connect directly. Trainees on strict home routers, mobile data or office networks may get no audio: their phone says "Still connecting the audio…".

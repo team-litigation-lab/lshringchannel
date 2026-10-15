@@ -15,6 +15,8 @@
  *                        networks that block direct audio (strict home routers, mobile data, offices)
  *   GEMINI_API_KEY5 … GEMINI_API_KEY9 (and GEMINI_API_KEY, _KEY1, _KEY2)
  *                        optional: AI practice callers and AI scoring (the LSH Gemini key pool)
+ *   AI_GATEWAY_SECRET    optional but recommended: the LSH Training Portal's shared gateway secret, so every graded
+ *                        call here counts in the trainee's course (POST the Portal's /api/call-results, src/portal.js)
  * Variables: RECORDING_DAYS (default 90), AI_MAX_MINUTES (default 8), PORTAL_URL (default https://cm-training-activity.pages.dev).
  * Recordings are kept in the shared LSH_KV namespace under "voip:" and expire on their own.
  */
@@ -160,7 +162,7 @@ export default {
         return json({
           me, firm: FIRM, cases: CASES, tracks: TRACKS, forms: NOTE_FORMS, lines: LINES, levels: LEVELS, cms: CMS_URL, portal: portalHome(env), openCaller: openCall('reception').caller, voices: AI_VOICES,
           scenarios: admin ? all : all.map(traineeView),
-          features: { ai: hasAI(env), recordings: !!env.LSH_KV, aiMinutes: aiMinutes(env), cmsAuth: !!String(env.PORTAL_SSO_SECRET || '').trim() },
+          features: { ai: hasAI(env), recordings: !!env.LSH_KV, aiMinutes: aiMinutes(env), cmsAuth: !!String(env.PORTAL_SSO_SECRET || '').trim(), courseResults: !!String(env.AI_GATEWAY_SECRET || '').trim() },
           settings: admin ? st : { weights: st.weights, passMark: st.passMark }
         });
       }
@@ -199,7 +201,7 @@ export default {
       if (path === '/api/stats') {
         if (!admin) return json({ error: 'Not allowed' }, 403);
         const ice = await iceServers(env);
-        return json({ stats: await sb.stats(), setup: { ai: hasAI(env), aiKeys: keyNames(env).length, turn: ice.turn, turnError: ice.error || '', recordings: !!env.LSH_KV, recordingDays: recDays(env), portal: portalHome(env), portalSecret: !!String(env.PORTAL_SSO_SECRET || '').trim() } });
+        return json({ stats: await sb.stats(), setup: { ai: hasAI(env), aiKeys: keyNames(env).length, turn: ice.turn, turnError: ice.error || '', recordings: !!env.LSH_KV, recordingDays: recDays(env), portal: portalHome(env), portalSecret: !!String(env.PORTAL_SSO_SECRET || '').trim(), courseResults: !!String(env.AI_GATEWAY_SECRET || '').trim() } });
       }
       // 📊 How much of the Cloudflare account's monthly request allowance (shared by every LSH site) is used.
 
@@ -280,7 +282,7 @@ export default {
       if (path === '/api/ai/start') {
         if (!hasAI(env)) return json({ error: 'AI practice callers aren\'t set up on this site yet.' }, 501);
         if (!admin && (await sb.countUsage(me.id, 'aicall', 3600000)) >= 30) return json({ error: 'That\'s a lot of practice calls this hour. Take a short break and try again.' }, 429);
-        const res = await sb.startAiCall(me, String(body.scenarioId || ''), String(body.voice || ''));
+        const res = await sb.startAiCall(me, String(body.scenarioId || ''), String(body.voice || ''), String(body.program || ''), !!body.graded);
         if (res.error) return json({ error: res.error }, res.status || 400);
         await sb.logUsage(me.id, 'aicall');
         return json({ callId: res.id, scenario: traineeView(res.scenario), maxSeconds: aiMinutes(env) * 60 });

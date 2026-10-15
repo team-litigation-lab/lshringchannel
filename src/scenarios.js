@@ -580,6 +580,38 @@ export const LINES = {
   intake: { label: 'Intake Line', number: FIRM.intakeLine, icon: '📋' }
 };
 
+/* 📊 Where a graded call counts in the LSH Training Portal's courses.
+   The Call Simulator is Ring Channel's: every graded call taken here is sent to the Portal
+   (POST /api/call-results, src/portal.js reportGradedCall), which keeps it on the trainee's Portal
+   account and in the course's own store, so the course shows it on their progress. Standard Training
+   counts a call by its lesson (Reception 4, Calendar Management 5, Intake 6); the other programs count
+   it by its line. The line names are the ones the courses and the Portal already use. */
+export const COURSE_LINES = {
+  reception: { line: 'Reception Mock Calls', lesson: 4 },
+  calendar: { line: 'Calendar Management Mock Calls', lesson: 5 },
+  intake: { line: 'Intake Mock Calls', lesson: 6 }
+};
+export const PROGRAMS = ['FT', 'CM', 'PD', 'EA'];
+export const programOk = (p) => { const x = String(p == null ? '' : p).trim().toUpperCase(); return PROGRAMS.includes(x) ? x : ''; };
+
+/* The line a Call Simulator link asks for: the Portal sends ?track=, and a course's older link ?flow=
+   (standard, cms, reception, intake, calendaring, ea-pa, pd) or ?line= (the line's name). */
+export function trackFromLink(track, line) {
+  const t = String(track == null ? '' : track).trim().toLowerCase(), l = String(line == null ? '' : line).trim().toLowerCase();
+  if (TRACKS[t]) return t;
+  if (t === 'calendaring' || /calendar/.test(l)) return 'calendar';
+  if (t === 'intake' || /intake/.test(l)) return 'intake';
+  if (t === 'reception' || /reception|front desk/.test(l)) return 'reception';
+  return '';
+}
+
+// What the Portal is told about a graded call: the program it counts in, its line, and its lesson (Standard Training).
+export function courseCall(track, program) {
+  const t = COURSE_LINES[track] ? track : 'reception';
+  const p = programOk(program) || 'FT';
+  return { program: p, line: COURSE_LINES[t].line, lesson: p === 'FT' ? COURSE_LINES[t].lesson : null };
+}
+
 /* An open call: the trainer rings without picking a script and plays any caller they like. The line
    follows the track (Reception and Calendar ring the Main Line, Intake the Intake Line); it's graded on
    the line's metrics alone (no checklist), with every case file in 🔎 Case lookup as usual. */
