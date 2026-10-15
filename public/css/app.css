@@ -145,12 +145,28 @@ table.list tr.click:hover td { background: #f8fafc; }
    ☎ Console: the switchboard beside the phone (« minimizes it to a rail), the phone, and the
    workspace on the right. */
 .phone-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
-.phone-layout.with-side { grid-template-columns: var(--ts, 250px) 360px minmax(0, 1fr); gap: 18px; }
+/* the board and the phone are one piece of equipment, as on the trainer's console: no gap between
+   them, the phone in the same flat case, and its left side open where the board meets it */
+.phone-layout.with-side { grid-template-columns: var(--ts, 250px) 360px minmax(0, 1fr); column-gap: 0; row-gap: 18px; }
+.phone-layout.with-side .work { margin-left: 18px; }
+.phone-layout.with-side:not(.side-folded) .device {
+  background: var(--deck, #0e1f42); border-top-left-radius: 0; border-bottom-left-radius: 0;
+  box-shadow: 10px 22px 44px -16px rgba(8, 18, 38, .5);
+}
+.phone-layout { --deck: #0e1f42; }
+.phone-layout.with-side.side-folded { column-gap: 18px; }
 .phone-layout.with-side.side-folded { --ts: 52px; }
-@media (max-width: 1240px) { .phone-layout.with-side { --ts: 220px; gap: 14px; } }
+@media (max-width: 1240px) { .phone-layout.with-side { --ts: 220px; } .phone-layout.with-side .work { margin-left: 14px; } }
 .phone-layout > * { min-width: 0; }
 .tside { position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow: auto; }
-@media (max-width: 1060px) { .phone-layout.with-side, .phone-layout.with-side.side-folded { grid-template-columns: 360px minmax(0, 1fr); } .tside { grid-column: 1 / -1; position: static; max-height: none; } }
+@media (max-width: 1060px) {
+  .phone-layout.with-side, .phone-layout.with-side.side-folded { grid-template-columns: 360px minmax(0, 1fr); column-gap: 18px; row-gap: 18px; }
+  .tside { grid-column: 1 / -1; position: static; max-height: none; }
+  .phone-layout.with-side .work { margin-left: 0; }
+  .tside .side-brand { margin-bottom: 14px; border-radius: 16px; }
+  .tside .roster { border-radius: var(--radius); }
+  .phone-layout.with-side:not(.side-folded) .device { border-radius: 26px; }
+}
 @media (max-width: 960px) { .phone-layout, .phone-layout.with-side, .phone-layout.with-side.side-folded { grid-template-columns: 1fr; } }
 .device { background: linear-gradient(160deg, #13254d, #0a1530 70%); color: #e2e8f0; border-radius: 26px; padding: 16px; box-shadow: 0 20px 50px rgba(8, 18, 38, .35), inset 0 1px 0 rgba(255, 255, 255, .06); position: sticky; top: 76px; }
 @media (max-width: 960px) { .device { position: static; } }
@@ -259,26 +275,26 @@ table.list tr.click:hover td { background: #f8fafc; }
    with no gradient seam or shadow where they meet, so they read as a single piece of equipment.
    The shadow falls down and to the right only, away from the join. */
 .console { --deck: #0e1f42; }
-.console-side .side-brand { background: var(--deck); box-shadow: none; margin-bottom: 0; border-radius: 18px 0 0 0; padding-bottom: 16px; }
-.console-side .roster {
+.console-side .side-brand, .tside .side-brand { background: var(--deck); box-shadow: none; margin-bottom: 0; border-radius: 18px 0 0 0; padding-bottom: 16px; }
+.console-side .roster, .tside .roster {
   background: var(--deck); color: #cbd5e1; border: 0;
   border-radius: 0 0 0 18px; box-shadow: -10px 22px 44px -20px rgba(8, 18, 38, .5);
   padding: 4px 14px 16px; display: flex; flex-direction: column;
 }
 .dial-stage > .dialer { background: var(--deck); box-shadow: 10px 22px 44px -16px rgba(8, 18, 38, .5); }
 /* nothing scrolls inside the board: it runs as long as the batch does, and the keys follow it */
-.console-side .roster h3, .console-side .roster .nm { color: #e2e8f0; }
-.console-side .roster .bt, .console-side .roster .muted, .console-side .roster .side-h, .console-side .roster .empty { color: #94a3b8; }
-.console-side .roster .my-line { background: rgba(255, 255, 255, .05); border-color: var(--orange); }
-.console-side .roster .my-line .nm { color: #fff; }
-.console-side .roster .tr:hover { background: rgba(255, 255, 255, .06); }
-.console-side .roster .tr.sel { background: rgba(249, 115, 22, .18); }
-.console-side .roster .input { background: #0a1530; border-color: #22386a; color: #e2e8f0; }
-.console-side .roster .fold-btn { background: rgba(249, 115, 22, .14); border-color: var(--orange); color: #fdba74; }
-.console-side .roster .fold-btn:hover { background: var(--orange); color: #fff; }
-.console-side .roster .btn { background: transparent; border-color: #22386a; color: #cbd5e1; }
-.console-side .roster .btn-green { background: var(--green); border-color: var(--green); color: #fff; }
-.console-side .roster summary { color: #94a3b8; }
+.console-side .roster h3, .console-side .roster .nm, .tside .roster h3, .tside .roster .nm { color: #e2e8f0; }
+.console-side .roster .bt, .console-side .roster .muted, .console-side .roster .side-h, .console-side .roster .empty, .tside .roster .bt, .tside .roster .muted, .tside .roster .side-h, .tside .roster .empty, .tside .roster p { color: #94a3b8; }
+.console-side .roster .my-line, .tside .roster .my-line { background: rgba(255, 255, 255, .05); border-color: var(--orange); }
+.console-side .roster .my-line .nm, .tside .roster .my-line .nm { color: #fff; }
+.console-side .roster .tr:hover, .tside .roster .tr:hover { background: rgba(255, 255, 255, .06); }
+.console-side .roster .tr.sel, .tside .roster .tr.sel { background: rgba(249, 115, 22, .18); }
+.console-side .roster .input, .tside .roster .input { background: #0a1530; border-color: #22386a; color: #e2e8f0; }
+.console-side .roster .fold-btn, .tside .roster .fold-btn { background: rgba(249, 115, 22, .14); border-color: var(--orange); color: #fdba74; }
+.console-side .roster .fold-btn:hover, .tside .roster .fold-btn:hover { background: var(--orange); color: #fff; }
+.console-side .roster .btn, .tside .roster .btn { background: transparent; border-color: #22386a; color: #cbd5e1; }
+.console-side .roster .btn-green, .tside .roster .btn-green { background: var(--green); border-color: var(--green); color: #fff; }
+.console-side .roster summary, .tside .roster summary { color: #94a3b8; }
 /* the phone's left side is open where the board meets it */
 .dial-stage > .dialer { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 @media (max-width: 1140px) {

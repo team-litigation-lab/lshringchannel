@@ -226,7 +226,21 @@ const playCall = async (pg, sid) => {
   if (queue.includes(legCall.id)) throw new Error('A conference leg should not wait in the trainer\'s "needs review" queue');
   ok('The merged trainee\'s call log says 👥 Conference (graded with the call they joined), and it never sits in the trainer\'s "needs review" queue');
 
-  // ☎ The trainee's own switchboard panel beside their phone, and the console's board
+  /* ☎ The trainee's switchboard, built as the trainer's console is: the board in the same dark case as
+     the phone, joined to it with no gap and ending on the same line — one piece of equipment. */
+  const tdeck = await te.evaluate(() => {
+    const b = document.querySelector('#tside').getBoundingClientRect(), d = document.querySelector('#device').getBoundingClientRect();
+    const card = document.querySelector('#tside .roster'), brand = document.querySelector('#tside .side-brand');
+    return { gap: Math.round(d.left - b.right), ends: Math.round(Math.abs(b.bottom - d.bottom)),
+      brand: !!brand, deck: card ? getComputedStyle(card).backgroundColor : '',
+      phoneDeck: getComputedStyle(document.querySelector('#device')).backgroundColor,
+      openSide: getComputedStyle(document.querySelector('#device')).borderTopLeftRadius };
+  });
+  if (tdeck.gap > 2) throw new Error('The trainee board should sit against the phone, with no gap: ' + JSON.stringify(tdeck));
+  if (tdeck.ends > 2) throw new Error('The trainee board and phone should end on the same line: ' + JSON.stringify(tdeck));
+  if (!tdeck.brand) throw new Error('The trainee board should carry the LSH mark, as the console does: ' + JSON.stringify(tdeck));
+  if (tdeck.deck !== tdeck.phoneDeck) throw new Error('The trainee board and phone should be the same case: ' + JSON.stringify(tdeck));
+  if (tdeck.openSide !== '0px') throw new Error("The phone's left side should be open where the board meets it: " + JSON.stringify(tdeck));
   if (!/Riley Santos|Jamie Cruz/.test(await te.textContent('#tside'))) throw new Error('The trainee switchboard should list their batch');
   if (!/Coach Ana/.test(await te.textContent('#tside'))) throw new Error('The trainee switchboard should show the trainer who is on');
   await te.click('#tside [data-fold]');
@@ -236,7 +250,7 @@ const playCall = async (pg, sid) => {
   // The console's switchboard is part of the phone: it stays put.
   if (await tr.$('#roster [data-fold]')) throw new Error('The switchboard is part of the phone: it should not fold away');
   if (!(await tr.$('#roster .tr'))) throw new Error('The console\'s switchboard should be there beside the dialer');
-  ok('☎ The trainee has the switchboard beside their phone (their batch, their line, the trainers on) and minimizes it to a rail and back; on the console the switchboard stays with the phone');
+  ok('☎ The trainee\'s switchboard is built as the console is — the LSH mark over the board, the same dark case as the phone, joined with no gap and ending on the same line — and it minimizes to a rail and back; on the console the switchboard stays with the phone');
 
   // Transfer → trainer answers "no answer"
   await te.click('[data-act="transfer"]');

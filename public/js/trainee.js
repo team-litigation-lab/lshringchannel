@@ -429,22 +429,25 @@
      ========================================================= */
   function renderAll() { if (!onPage()) { App.onCallBar(); return; } renderDevice(); renderSide(); renderWork(); App.onCallBar(); }
 
-  /* ---------- ☎ the switchboard beside the phone ----------
+  /* ---------- ☎ the switchboard, joined to the phone ----------
      The same board the trainer works from, as much of it as a trainee needs: their own desk line, the
-     trainers who are on, and the rest of their batch with their extensions. It folds away to a thin
-     rail (the phone and the workspace take the room back). */
+     trainers who are on, and the rest of their batch with their extensions. It is built as the trainer's
+     console is — the LSH mark over the board, in the same dark case as the phone and joined to it with
+     nothing between them, so the two read as one piece of equipment. It folds away to a thin rail (the
+     phone and the workspace take the room back). */
   const FOLD = 'tside';
   function renderSide() {
     const el = U.$('#tside'); if (!el) return;
     const wrap = el.parentElement;
     const folded = App.folded(FOLD);
     if (wrap) wrap.classList.toggle('side-folded', folded);
-    if (folded) { el.innerHTML = App.railHTML(FOLD, 'Switchboard', '☎'); return; }
+    if (folded) { el.innerHTML = App.railHTML(FOLD, 'Switchboard', '☎'); fitBoard(); return; }
     const peers = (App.peers || []).slice().sort((a, b) => (a.me ? -1 : b.me ? 1 : 0) || (b.hand - a.hand) || a.name.localeCompare(b.name));
     const desks = App.desks || [];
     const mine = peers.find((x) => x.me);
     const batch = (mine && mine.batch) || (App.me && App.me.batch) || '';
-    el.innerHTML = `<div class="card roster side-card">
+    el.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
+        <div class="sb-sub">Ring Channel · Switchboard</div></div><div class="card roster" id="troster">
       <div class="card-head"><h3>☎ Switchboard</h3><span class="spacer"></span><span class="badge green">${peers.length || 1} online</span>${App.foldKey(FOLD, 'the switchboard')}</div>
       <div class="my-line">
         <div class="small muted">My line</div>
@@ -459,7 +462,36 @@
         <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)}${x.me ? ' <span class="badge">you</span>' : ''} ${x.hand ? '<span class="hand-wave" title="Asked for a mock call">✋</span>' : ''}</div>
         <div class="bt">${x.ext ? `ext <span class="mono">${esc(x.ext)}</span> · ` : ''}${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}</div></div></div>`).join('') || '<div class="empty small">Nobody else is online.</div>'}
       <p class="small muted" style="margin:10px 0 0">Your trainer dials your extension to ring this phone.</p></div>`;
+    fitBoard();
   }
+
+  /* The board and the phone are one piece, so they end on the same line: whichever is shorter is
+     stretched to the other. The trainer's dialer is always the taller of its pair, but a trainee's
+     phone is short and the batch can be long, so this has to work both ways. Measured once it would
+     go stale the moment anything reflowed either of them, so it follows them. */
+  let deckWatch = null, fitting = false;
+  function fitBoard() {
+    const card = U.$('#troster'), dev = U.$('#device'), brand = U.$('#tside .side-brand');
+    if (!card || !dev || fitting) return;
+    fitting = true;
+    try {
+      card.style.minHeight = ''; dev.style.minHeight = '';
+      if (window.innerWidth <= 1060) return;
+      const brandH = brand ? brand.getBoundingClientRect().height : 0;
+      const board = card.getBoundingClientRect().height + brandH;
+      const phone = dev.getBoundingClientRect().height;
+      if (board > phone + 1) dev.style.minHeight = Math.round(board) + 'px';
+      else if (phone > board + 1) card.style.minHeight = Math.round(phone - brandH) + 'px';
+    } finally { fitting = false; }
+    if (!window.ResizeObserver) return;
+    if (deckWatch) deckWatch.disconnect();
+    deckWatch = new ResizeObserver(() => { if (!fitting) fitBoard(); });
+    deckWatch.observe(dev);
+    if (brand) deckWatch.observe(brand);
+    deckWatch.observe(card);
+  }
+  window.addEventListener('resize', () => { if (App.at('phone')) fitBoard(); });
+
   T.renderAll = renderAll;
 
   function idleInfo(mode) {
