@@ -322,7 +322,9 @@ The **No Blueprint rule:** Ring Channel shows no 🧭 Blueprint button. The blue
 
 **Browsers:** Chrome or Edge on a computer, with a headset (that's what the tests run on). Other current browsers with WebRTC should work but aren't tested. Pages must be served over https, which Cloudflare does; browsers only allow the microphone on https.
 
-**Workers limits:** Cloudflare doesn't generate preview URLs for Workers with Durable Objects, so there are no PR previews for this repo; test locally with `wrangler dev`. Each open phone pings the Switchboard every 20 seconds and idle phones hibernate, so a training class should stay well inside the free plan's Durable Object allowance.
+**🚀 PR previews:** Cloudflare Workers Builds deploys a **Preview** of every branch that isn't `main`, and comments the preview's URL on the pull request — so a branch can be opened and tried before it's merged. A Preview needs `wrangler.json`'s **`previews`** block, which says what it binds to; without it the build fails with *"Your Wrangler configuration needs a `previews` block to run this command"* and the PR's **Workers Builds** check goes red. The block is there now, and it points at the **same** `LSH_KV` namespace and the same settings as production, so a preview's recordings live beside the real ones. To keep them apart, make a second KV namespace (`npx wrangler kv namespace create LSH_KV_PREVIEW`) and put its id in `previews.kv_namespaces[0].id`.
+
+**Workers limits:** Each open phone pings the Switchboard every 20 seconds and idle phones hibernate, so a training class should stay well inside the free plan's Durable Object allowance. To try a branch without deploying it at all, run `npx wrangler dev` locally.
 
 ## Local development and tests
 
