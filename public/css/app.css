@@ -168,7 +168,9 @@ table.list tr.click:hover td { background: #f8fafc; }
   .phone-layout.with-side:not(.side-folded) .device { border-radius: 26px; }
 }
 @media (max-width: 960px) { .phone-layout, .phone-layout.with-side, .phone-layout.with-side.side-folded { grid-template-columns: 1fr; } }
-.device { background: linear-gradient(160deg, #13254d, #0a1530 70%); color: #e2e8f0; border-radius: 26px; padding: 16px; box-shadow: 0 20px 50px rgba(8, 18, 38, .35), inset 0 1px 0 rgba(255, 255, 255, .06); position: sticky; top: 76px; }
+.device { background: linear-gradient(160deg, #13254d, #0a1530 70%); color: #e2e8f0; border-radius: 26px; padding: 16px; box-shadow: 0 20px 50px rgba(8, 18, 38, .35), inset 0 1px 0 rgba(255, 255, 255, .06); position: sticky; top: 76px; display: flex; flex-direction: column; }
+.device > .lcd { flex: 1 1 auto; }
+.device .lcd .lcd-main { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
 @media (max-width: 960px) { .device { position: static; } }
 .dev-head { display: flex; align-items: center; gap: 8px; padding: 2px 4px 12px; font-size: 13px; color: #94a3b8; white-space: nowrap; }
 .dev-head > span:last-child { overflow: hidden; text-overflow: ellipsis; }

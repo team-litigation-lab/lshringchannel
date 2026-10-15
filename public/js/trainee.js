@@ -515,10 +515,22 @@
     const p = shown();
     const status = p ? (p.status === 'waiting' ? 'idle' : p.status) : 'idle';
     const led = !App.connected && mode === 'live' ? 'offline' : status === 'ringing' ? 'ringing' : ['connecting', 'live'].includes(status) ? 'live' : mode === 'live' ? App.status : 'available';
+    /* The phone is built as the trainer's dialer is, band for band: the segmented row where the dialer
+       has its line keys, then a row of keys, then the trio that comes alive on a call with the same
+       hint under it — the trainee's own, since they answer calls rather than place them. */
     const idleKeys = mode === 'live'
-      ? `<div class="dev-keys"><button class="key hand ${App.hand ? 'on' : ''}" data-act="hand"><span class="ic">✋</span>${App.hand ? 'Asked' : 'Ask for a call'}</button>
-         <button class="key" data-act="miccheck"><span class="ic">🎧</span>Audio check</button><a class="key" href="#/logs/scenarios" style="text-decoration:none" title="Pick a practice call on 🗂 Call Logs & Scenario Picker; the AI caller rings this phone"><span class="ic">🎧</span>Practice</a></div>
-         <div class="dev-status"><button class="${App.status === 'available' ? 'on' : ''}" data-act="available">● Available</button><button class="${App.status === 'away' ? 'on away' : ''}" data-act="away">◌ Away</button></div>`
+      ? `<div class="line-keys" role="group" aria-label="My line"><button class="${App.status === 'available' ? 'on' : ''}" data-act="available" aria-pressed="${App.status === 'available'}" title="Ready for a call: your trainer sees you as available">● Available</button><button class="${App.status === 'away' ? 'on' : ''}" data-act="away" aria-pressed="${App.status === 'away'}" title="Stepped out: your trainer sees you as away">◌ Away</button></div>
+         <div class="dev-keys three idle-keys" role="group" aria-label="This phone">
+           <button class="key hand ${App.hand ? 'on' : ''}" data-act="hand" title="Raise your hand on your trainer's switchboard"><span class="ic">✋</span>${App.hand ? 'Asked' : 'Ask for a call'}</button>
+           <button class="key" data-act="notify" title="Let the browser alert you when a call rings, even on another tab"><span class="ic">🔔</span>Alert me</button>
+           <a class="key" href="#/logs/scenarios" style="text-decoration:none" title="Pick a practice call on 🗂 Call Logs & Scenario Picker; the AI caller rings this phone"><span class="ic">🎭</span>Practice</a>
+         </div>
+         <div class="dev-keys three idle-keys" role="group" aria-label="On the call">
+           <button class="key" disabled title="The firm's case files, searched by name, phone, date of birth or case number (once a call is connected)"><span class="ic">🔎</span>Case lookup</button>
+           <button class="key" disabled title="The message slip, calendar entry or intake note for the line (once a call is connected)"><span class="ic">📝</span>Note</button>
+           <button class="key" disabled title="Hand the caller to one of the firm's extensions (once a call is connected)"><span class="ic">↪</span>Transfer</button>
+         </div>
+         <p class="dev-hint">These come alive once the call is connected — and the keys above answer it, hold it and hang up.</p>`
       : `<div class="dev-keys"><button class="key" data-act="miccheck"><span class="ic">🎧</span>Audio check</button></div>`;
     let msg = '';
     if (p && p.needRejoin) msg = p.elsewhere ? `<div class="dev-msg lost">You're on this call in another tab or window. <button class="btn btn-sm btn-green" data-act="rejoin" style="margin-top:6px">📞 Move the call here</button></div>`
@@ -543,7 +555,7 @@
       ${App.lcdHTML(p && p.status !== 'waiting' ? p : null, idleInfo(mode))}
       ${msg}
       ${App.keysHTML(p && p.status !== 'waiting' ? p : null, idleKeys)}
-      <div class="dev-foot"><span>🔊</span><input type="range" min="0" max="1" step="0.05" value="${App.volume == null ? 1 : App.volume}" data-act="volume" aria-label="Call volume"><span>${!App.connected && mode === 'live' ? 'Offline' : ''}</span></div>`;
+      <div class="dev-foot"><span title="Call volume">🔉</span><input type="range" min="0" max="1" step="0.05" value="${App.volume == null ? 1 : App.volume}" data-act="volume" aria-label="Call volume">${!App.connected && mode === 'live' ? '<span>Offline</span>' : `<button type="button" class="dev-link" data-act="miccheck">🎧 Audio check</button>`}</div>`;
   }
   function renderBadges() {
     const p = App.p, box = U.$('#device .lcd-badges');
