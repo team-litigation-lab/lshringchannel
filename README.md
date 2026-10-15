@@ -8,7 +8,7 @@ The trainer rings a trainee's phone in the browser and plays the caller over liv
 - uses **Hold** (the caller hears hold music) and **Transfer** (the trainer decides whether the extension picks up);
 - takes the message or intake note, which the trainer sees as it's typed.
 
-The call is recorded (the trainer can play and download it), and it's graded on the program's **Mock Calls Metrics** for its line: Reception, Calendar Management or Intake. The AI **autogrades** the call from the recording; the trainer checks the grade, edits it if needed, and sends it. The trainee reads the scorecard in **My calls**, and **📋 Graded calls** shows every trainee's grades, with a CSV export.
+The call is recorded (the trainer can play and download it), and it's graded on the program's **Mock Calls Metrics** for its line: Reception, Calendar Management or Intake. The AI **autogrades** the call from the recording; the trainer checks the grade, edits it if needed, and sends it. The trainee reads the scorecard in **🗂 Call Logs**, and **📋 Graded Calls** shows every trainee's grades, with a CSV export.
 
 When no trainer is free, trainees can **practice** the same calls with an **AI caller** that talks back out loud. The AI scores those calls with the same rubric.
 
@@ -24,7 +24,7 @@ There's **no sign-in form**: everyone comes in from the Portal, signed in there.
 - **Administrators** land on the console, as trainers, under their Portal name. The Portal makes these admin tickets for Ring Channel only; the other platforms still ask admins for their password.
 - **Each ticket works once** (the Switchboard keeps the used ones until they expire), and it leaves the address bar at once, so a link from history or another browser is no use.
 - **The ticket check:** with `PORTAL_SSO_SECRET` set on this Worker (the same value as the Portal's), Ring Channel checks the ticket itself. Without it, it asks the Portal (`POST /api/verify-ticket`), as the CMS does, so it works with no secret to copy. `PORTAL_URL` changes which Portal it asks (default `https://cm-training-activity.pages.dev`).
-- **Opening Ring Channel's own link**, or signing out, shows **🏠 Open Ring Channel from the LSH Training Portal** with a button there. Trainers get a **🏠** button in the top bar back to the Portal's Training Directory.
+- **Opening Ring Channel's own link**, or signing out, shows **🏠 Open Ring Channel from the LSH Training Portal** with a button there. Trainers get **🏠 Main Portal**, the last button on the top bar, back to the Portal's Training Directory.
 - **If the Portal is down**, *Trainer: is the Portal down?* (folded away on that page) opens the console with the trainer passphrase (`ADMIN_PASSPHRASE`). Trainees wait for the Portal.
 
 ## As an app (its own window)
@@ -33,6 +33,41 @@ Ring Channel installs as an app from Chrome or Edge: its own window with no brow
 - **⬇ Install** in the top bar (or on the "Open Ring Channel from the LSH Training Portal" page), or the browser menu (⋮) → **Install LSH Ring Channel** (Edge: **Apps → Install this site as an app**).
 - **Opening it** goes straight in while the sign-in lasts (30 days for trainees, 12 hours for trainers). After that, **Go to the LSH Training Portal** opens the Portal in the app window, and opening Ring Channel there comes back signed in.
 - The files: `public/manifest.webmanifest`, `public/sw.js` (no offline caching, since calls need the network; just a "you're offline" page) and `public/icons/`.
+
+## 🧭 The screens: what the top bar opens
+
+The top bar is the whole of the platform, and it is short on purpose: the phone is the main screen, and everything else is one button away on the next screen.
+
+**Trainer view**
+
+| Button | What it opens |
+|---|---|
+| 🎛 **Console** | **☎ The switchboard joined to the dialer**, one piece of equipment, with **how the next call is placed** at the board's foot: 📋 Graded · Record · 🙈 Hide ID · 🤖 AI caller · 🎭 Choose… · **🎭 Call to play** (which opens the Scenario Picker **in a tab of its own**, so the Console is never left behind) · 📺 Class view. Nothing else sits beside them — the calls to play and the call picked are a screen of their own. On a call the dialer is joined by what the trainer needs to play the caller: the script, the live checklist, the trainee's note and the case file they opened. |
+| 🗂 **Call Logs & Scenario Picker** | The next screen, two tabs: **📞 Call Logs** (every call, its recording and its scorecard) and **🎭 Scenario Picker** (every call to play, by line and level: **☎ Play on the Console** puts one on the dialer, and ＋ Write a new call writes your own). |
+| 🛡 **Admin** | **🗂 Call Logs · 📊 Trainee Monitoring · 📋 Graded Calls**, then the trainer's own tools: **🤖 AI calls** (with **🎧 Try one yourself** on it: the trainer takes a practice call the way a trainee does) and **⚙️ Setup**. |
+| 🏠 **Main Portal** | Back to the LSH Training Portal's Training Directory. |
+
+**Trainee view**
+
+| Button | What it opens |
+|---|---|
+| ☎ **Console** | **☎ The switchboard joined to the phone**, built as the trainer's console is — the LSH mark over the board, the same dark case as the phone, no gap between them and both ending on the same line, so the two read as one piece of equipment (« minimizes the board to a rail) — the phone itself, built band for band as the trainer's dialer is: their line and desk extension, the screen, **● Available / ◌ Away** where the dialer has its line keys, then **✋ Ask for a call · 🔔 Alert me · 🎭 Practice**, then **🔎 Case lookup · 📝 Note · ↪ Transfer** greyed until a call connects (as the dialer's ⏸ 👥 ↪ are), and the volume and 🎧 Audio check at its foot — and on the right **how a live mock call goes**, with their recent calls. Every call they take runs here: their trainer's live calls, the AI calls a trainer sends, and their own practice calls. Once a call is on the line the panes it needs (🔎 Case lookup, 📝 Note, 📇 Directory, 📘 Rules) take the right-hand side. |
+| 🗂 **Call Logs & Scenario Picker** | The next screen, two tabs: **📞 Call Logs** (their calls and scorecards) and **🎭 Scenario Picker** (🎧 Practice: pick a call and an AI caller rings their Console). |
+
+**One home per page.** Each page belongs to one screen, and an old address opens that screen on the right tab: `#/calls` → 🗂 Call Logs, `#/scenarios` → 🎭 Scenario Picker, `#/graded` → 🛡 Admin → 📋 Graded Calls, `#/trainees` → 🛡 Admin → 📊 Trainee Monitoring, `#/setup` and `#/aicalls` likewise. The address always says which tab is open (`#/admin/graded`), so the browser's Back button and a pasted link both work. It's `App.navItems`, `App.screenOf` and `App.ALIAS` in `public/js/app.js`, and the two screens themselves are `public/js/screens.js`.
+
+## 📊 Trainee Monitoring (Utilization)
+
+**🛡 Admin → 📊 Trainee Monitoring** is how much of the phone each trainee has actually used, a row per trainee with a batch filter, ⬇ Export CSV, and the batch totalled above the table:
+
+- **Live calls** their trainer rang and they answered, and how many of those are graded;
+- **On the line**: the time they spent on live calls, and the average call;
+- **Rang out**: the calls they missed or declined;
+- **Holds** and **Transfers**: how often they used those keys, and holds per call;
+- **Live average**: reviewed live calls only (with the Pass / Below badge where a pass mark is set);
+- **Practice**: their own AI practice calls, their average and their time — **kept apart from the live figures**, because a practice call is self-practice, not live work.
+
+Trainees appear here the first time they open Ring Channel from the LSH Training Portal, and this is where they're archived and restored. It's the page that was 👥 Trainees. The figures come from `/api/utilization` (`utilization()` in `src/switchboard.js`): the counts and the time from the call records' own columns, the holds and transfers from each call's metrics.
 
 ## 🤖 AI calls: the AI plays the caller
 
@@ -43,41 +78,40 @@ A trainee can take a call where the AI plays the caller, two ways:
   - **🎭 The calls the AI may play**: tick one, or a few for it to draw from; with none ticked it plays any call on the line.
   - **👥 Who to ring**: tick any number of trainees who are free (or **Everyone free**), and each gets a call drawn from what you ticked, graded or not.
   - The AI plays the call picked under the dialer, or a random call on the line when none is picked. Live-only calls can't be sent.
-  - **The trainee's own phone (My phone) rings** like any call, with the caller ID on the line. They answer and talk out loud (Hold, Transfer, Case lookup and the note all work), and **AI CALLER** shows once they answer. It rings out after 45 seconds.
-  - **🤖 AI calls**, its own page in the top bar, lists them: ringing, on the call (with the time), missed or declined, then the AI's score. Trainers can send AI callers to several trainees at once.
+  - **The trainee's own phone (☎ their Console) rings** like any call, with the caller ID on the line. They answer and talk out loud (Hold, Transfer, Case lookup and the note all work), and **AI CALLER** shows once they answer. It rings out after 45 seconds.
+  - **🤖 AI calls** (🛡 Admin → 🤖 AI calls) lists them: ringing, on the call (with the time), missed or declined, then the AI's score. Trainers can send AI callers to several trainees at once.
   - **👂 Follow** shows what's being said (both sides, as it's transcribed) and the trainee's note, live. **⏹** ends the call.
   - **The AI reviews it** when the trainee submits the note (from the recording), on the line's Mock Calls Metrics. The trainee sees the scorecard straight away; the trainer can review it too (**📋 Review**) and send their own. With **📋 Graded** on, it's in **📋 Graded calls**.
 - Both need the Gemini keys (`GEMINI_API_KEY5` … `9`); without them, 🎧 Practice and 🤖 AI caller are off.
-- **From the Portal:** the Simulators link **🤖 Take an AI call** opens Ring Channel on 🎧 Practice, and **🎛 Send AI callers** opens the console.
+- **From the Portal:** the Simulators link **🤖 Take an AI call** opens Ring Channel on the trainee's Scenario Picker, and **🎛 Send AI callers** opens the console.
 
 ## How a live mock call works
 
-**Trainee** (📞 My phone)
-1. Opens **☎ LSH Ring Channel** from the LSH Training Portal and lands on **My phone**, signed in (see *On the LSH Training Portal*). They keep it open with a headset on. **🎧 Audio check** tests the microphone, the headset and the speaker.
+**Trainee** (☎ Console)
+1. Opens **☎ LSH Ring Channel** from the LSH Training Portal and lands on **☎ Console**, their phone, signed in (see *On the LSH Training Portal*). They keep it open with a headset on. **🎧 Audio check** tests the microphone, the headset and the speaker.
    Each trainee gets a **desk extension** (7001, 7002, … in the order they first open Ring Channel), shown on their phone; it's the number the trainer dials.
-   **☎ The switchboard** sits beside the phone: their own line (name, batch, extension, available or away), the trainers who are on with their extensions, and the rest of their batch. **«** folds it away to a rail, and the rail brings it back; it stays as they left it on that computer.
+   **☎ The switchboard** is joined to the phone, in the same dark case and built as the trainer's console is — one piece of equipment, the two ending on the same line however long the batch is (whichever is shorter stretches to the other). It holds their own line (name, batch, extension, available or away), the trainers who are on with their extensions, and the rest of their batch. **«** folds it away to a rail, and the rail brings it back; it stays as they left it on that computer.
 2. Sets **● Available** (or **◌ Away**). **✋ Ask for a call** raises a hand on the trainer's switchboard.
 3. When the phone rings, it shows the line (Main Line or Intake Line) and the caller ID. The trainee answers within 3 rings.
-4. During the call, beside the phone (**🔎 Case lookup** opens first on a live call, as at the real front desk: look the caller up, then take the note):
+4. During the call the panes come up beside the phone (**🔎 Case lookup** opens first on a live call, as at the real front desk: look the caller up, then take the note):
    - **🔎 Case lookup**: the CMS Training Library case files, searched by name, phone, DOB or MC number (nothing shows until you search, like the real front desk). A hit opens as a **preview** of the file, with **✅ This is the case file** (the trainer sees which file they chose, and the grade says whether it was the right one for the call) and **🗂 Open in the CMS ↗**, which opens that case in the CMS Training Library **signed in as them** (a fresh one-use Portal ticket, as the Portal opens the CMS; it needs `PORTAL_SSO_SECRET` here, otherwise the CMS asks them to come in from the Portal);
    - **📝 Note**: the message slip, the calendar entry or the intake note, by line;
    - **📇 Directory**: the firm's extensions, with Transfer buttons;
    - **📘 Rules**: the front-desk rules and the line's reminders.
 5. The phone keys are **Mute**, **🔊 Speaker** (see *The speaker key*), **Hold** (hold music plays to the caller), **Transfer** (pick an extension; the caller is held while it rings) and **Hang up**.
-6. After the call, the trainee finishes the note and **submits** it. The trainer's review appears in **🗂 My calls**.
+6. After the call, the trainee finishes the note and **submits** it. The trainer's review appears in **🗂 Call Logs & Scenario Picker → 📞 Call Logs**.
 
 **Trainer** (🎛 Console)
 1. Opens **☎ LSH Ring Channel** from the Portal (Training Directory or Master Control) and lands on the console, signed in under their Portal name.
-2. The console is one desk: **☎ the switchboard** in the same dark case as the dialer, joined to it on the left with nothing between them (it runs as long as the batch does, never scrolling inside itself), **🎭 the calls to play** beside it on the right (**«** folds it away to a rail, and stays folded on that computer), and under the dialer the call picked, next to **🤖 the AI calls**:
+2. **The console is one desk:** ☎ the switchboard in the same dark case as the dialer, joined to it on the left with nothing between them — one piece of equipment, the board's case reaching down to the foot of the phone however short the batch is and following it when the phone reflows (it never scrolls inside itself). Nothing sits beside them: the calls to play are a screen of their own.
    - **☎ Switchboard** (left, under the LSH mark, part of the dialer and always open): the trainer's own line with **their own extension** (8001, 8002, … one per trainer account, so a batch with two trainers on sees which line each is calling from), the other trainers who are on, and every trainee online by batch with their extension: available, away, on a call, or ✋ asking for a call. It works as the phone's contact list: clicking a trainee puts their extension on the dialer.
-   - **🎭 The call to play** (right): the type of call (Reception, Calendar, Intake) and the calls on that line, one per row.
-   - The call picked sits **beside the dialer**, ready to play: the opening line, what the caller knows and how they act, what a good call does and the situation.
-   - **🤖 AI calls** has a page of its own in the top bar (see *🤖 AI calls*): those calls run on the trainees' phones, not the trainer's line.
+   - **🎭 Call to play**, at the foot of the board, opens the **Scenario Picker** (🗂 Call Logs & Scenario Picker) **in a tab of its own**, so a trainer never loses the Console mid-session: the calls on each line, one card each, with **☎ Play on the Console** — the opening line, what the caller knows and how they act, what a good call does and the situation. The call picked comes straight back to the dialer's own screen and its 🎭 key, and **✓ Done** closes the picker's tab. It's one tab, reused and brought to the front, and the two tabs agree because the call picked is kept on that computer (`mcv_play`) and the browser's own storage event tells the Console the moment it changes.
+   - **🤖 AI calls** is a tab of 🛡 Admin (see *🤖 AI calls*): those calls run on the trainees' phones, not the trainer's line.
 3. The **☎ dialer** is a desk phone on screen:
    - **Dial the trainee's extension** on the keypad (or type it; Backspace deletes, Esc clears). The screen says who it reaches: *Ready to call* with the trainee's name, *Not signed in*, a firm extension (201 is Atty. Reyes), or *No such extension*.
    - The **line keys** under the screen pick the line: Reception, Calendar (both ring the Main Line) or Intake (the Intake Line). The line decides the note the trainee takes and the metrics the call is graded on.
-   - **🎭 The call to play** is optional, in the list beside the dialer (Beginner to Advanced, by line). Pick one to play its script and it's previewed under the dialer — the opening line, what the caller knows and what a good call does — or leave **🎙 Open call: no script** selected and play any caller you like. The dialer's screen shows the caller ID the trainee will see (WIRELESS CALLER on an open call), the line, and the call.
-   - **How the next call is placed**, at the foot of the switchboard: **📋 Graded** (on by default; see *Graded mock calls and autograding*; a graded call is always recorded), **Record** (on by default), **🙈 Hide ID** (the trainee sees PRIVATE CALLER), **🤖 AI caller** and **🎭 Choose…** (see *🤖 AI calls*), and **📺 Class view**. The dialer keeps the keypad and the keys for the call on the line, so the board and the phone end at the same line.
+   - **🎭 The call to play** is optional, picked on the Scenario Picker (Beginner to Advanced, by line), or leave it at **🎙 Open call: no script** and play any caller you like. The dialer's screen shows the caller ID the trainee will see (WIRELESS CALLER on an open call), the line, and the call.
+   - **How the next call is placed**, at the foot of the switchboard: **📋 Graded** (on by default; see *Graded mock calls and autograding*; a graded call is always recorded), **Record** (on by default), **🙈 Hide ID** (the trainee sees PRIVATE CALLER), **🤖 AI caller** and **🎭 Choose…** (see *🤖 AI calls*), **🎭 Call to play** and **📺 Class view**. The dialer keeps the keypad and the keys for the call on the line, so the board and the phone end at the same line.
    - Under the keypad, the keys for the call on the line — **⏸ Coaching time-out**, **👥 Merge call**, **↪ Transfer on** — sit greyed until a call connects.
    - **📞** (or Enter) rings the trainee. The trainer hears the ringback. After a call the screen clears; 📞 on an empty screen brings back the last number (redial).
 4. On the call, the dialer shows who's on the line, the timer, 📋 GRADED, REC, the trainee's hold / mute, the connection quality (and whether it's going through the relay), and 🔊 SPEAKER. Its keys are **Mute**, **🔊 Speaker**, **⏸ Coaching time-out**, **👥 Merge call**, **↪ Transfer on** (see *↪ Transfer the caller on*) and **End call**. Beside it:
@@ -190,15 +224,15 @@ The grade is the **weighted average** of the scored metrics (n/a doesn't count),
    - **✨ Grade again with AI**.
 
    A grade that lands while the trainer is typing never overwrites their edits; they get a button to load it instead. A failed grading is retried twice, then shows **Grade again**.
-5. The trainee sees "waiting for your trainer's review" until the grade is sent, then the full scorecard in **🗂 My calls**: each metric's score and feedback, and the weighted average.
+5. The trainee sees "waiting for your trainer's review" until the grade is sent, then the full scorecard in **🗂 Call Logs & Scenario Picker → 📞 Call Logs**: each metric's score and feedback, and the weighted average.
 
-**📋 Graded calls** (trainer):
+**📋 Graded Calls** (🛡 Admin → 📋 Graded Calls):
 - a table of trainees by batch, with each trainee's latest graded Reception, Calendar and Intake call: the score, the number of attempts, and whether it's ✅ sent, 🤖 waiting for approval or ⏳ not graded yet;
 - every graded call in a list below the table;
 - click a score to open the call;
 - **⬇ Export CSV**: one row per graded call, with each metric's score and feedback (opens in Excel or Google Sheets).
 
-**⚙️ Setup → 📋 Graded mock calls and autograding:**
+**🛡 Admin → ⚙️ Setup → 📋 Graded mock calls and autograding:**
 - **Autograde every live call** (on by default; needs the Gemini keys);
 - **Send AI grades to trainees without my approval** (off by default). When on, the AI's grade goes to the trainee as soon as it's ready, signed "AI grader"; the trainer can still change it and resend;
 - **New live calls start as 📋 graded**;
@@ -207,7 +241,7 @@ The grade is the **weighted average** of the scored metrics (n/a doesn't count),
 
 **Downloads:**
 - **⬇ Download the recording** on the call's page (see *Recordings* below);
-- **⬇ Export CSV** in 📋 Graded calls.
+- **⬇ Export CSV** in 📋 Graded Calls, and in 📊 Trainee Monitoring.
 
 **Without Gemini keys:** graded calls work the same, but the trainer scores every metric by hand.
 
@@ -228,13 +262,13 @@ The grade is the **weighted average** of the scored metrics (n/a doesn't count),
 
 On a first intake call nothing is on file, so the case is hidden from **Case lookup**. After the call, the review shows the finished case file to compare with the note.
 
-**📚 Scenarios** (trainer) lists every call. **⧉ Copy** a built-in call to change it, or **＋ Write a new call**: the caller and caller ID, the case, the opening line, the caller's script, the situation, the goals, who is out of the office, and whether trainees can practice it with the AI. Written calls are saved in the Switchboard and appear in the console and in Practice.
+**🎭 The Scenario Picker** (🗂 Call Logs & Scenario Picker → 🎭 Scenario Picker) lists every call, and **☎ Play on the Console** puts one on the dialer for the trainer's next call. **⧉ Copy** a built-in call to change it, or **＋ Write a new call**: the caller and caller ID, the case, the opening line, the caller's script, the situation, the goals, who is out of the office, and whether trainees can practice it with the AI. Written calls are saved in the Switchboard and appear on the Console and in Practice.
 
 The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, update its `CASES` entry and its calls there.
 
 ## AI practice callers and AI scoring (optional)
 
-- **🎧 Practice** (trainees; **Try practice** for trainers):
+- **🎧 Practice** (trainees: 🗂 Call Logs & Scenario Picker → 🎭 Scenario Picker, and the call runs on ☎ their Console; trainers: 🛡 Admin → 🤖 AI calls → **🎧 Try one yourself**):
   - pick a call, or **🎲 Surprise me** for a random call on a line (the trainee doesn't see which call it is until after);
   - the practice phone rings, and the caller talks back out loud in a natural voice (Gemini Live), following the same script the trainer plays;
   - Hold and Transfer work: the AI is told it's on hold, and a transfer to someone who is out doesn't go through;
@@ -251,14 +285,14 @@ The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, upd
 - **Limits (enforced by the server):**
   - each practice call runs at most `AI_MAX_MINUTES` (default 8); the Switchboard closes it even if the tab was closed;
   - each trainee gets 30 practice calls, 60 live-voice connections and 40 scorings an hour.
-- **Practice scores are self-practice.** The trainee's browser runs the call, so **👥 Trainees** shows the practice average apart from the live average (reviewed live calls only). A typed practice call's conversation is kept on the server.
+- **Practice scores are self-practice.** The trainee's browser runs the call, so **📊 Trainee Monitoring** shows the practice figures apart from the live ones (the live average counts reviewed live calls only). A typed practice call's conversation is kept on the server.
 
 
 ## 🧭 Blueprint (how Ring Channel works, for trainees and for trainers)
 
-The No Blueprint rule: Ring Channel shows no 🧭 Blueprint button. The blueprints live on the Main Portal's 🧭 Blueprint page; its "📚 Program blueprints…" menu (admins) opens this full-screen slide deck through `#/blueprint` (a trainee who follows that address gets no deck).
-- **Trainee blueprint** (a cover and 9 slides), for trainees: what Ring Channel is, opening it from the Portal, My phone, answering a call, the tools during a call, the phone's keys (Mute, Speaker, Hold, Transfer, Hang up), after the call, practice with an AI caller, and when the class is listening.
-- **Trainer blueprint** (trainers only; a cover and 9 slides): opening the console from the Portal, the Switchboard and the dialer, on the call, transfers and coaching time-outs, Class view in Meet, graded calls and autograding, the Call log and Trainees, Scenarios, and Setup and AI practice.
+The **No Blueprint rule:** Ring Channel shows no 🧭 Blueprint button. The blueprints live on the Main Portal's 🧭 Blueprint page; its "📚 Program blueprints…" menu (admins) opens this full-screen slide deck through `#/blueprint` (a trainee who follows that address gets no deck).
+- **Trainee blueprint** (a cover and 9 slides), for trainees: what Ring Channel is, opening it from the Portal, ☎ the Console, answering a call, the tools during a call, the phone's keys (Mute, Speaker, Hold, Transfer, Hang up), after the call, practice with an AI caller, and when the class is listening.
+- **Trainer blueprint** (trainers only; a cover and 9 slides): opening the console from the Portal, the dialer and the Switchboard, on the call, transfers and coaching time-outs, Class view in Meet, graded calls and autograding, Call Logs and Trainee Monitoring, the Scenario Picker, and Setup and AI practice.
 - A trainer gets both decks as tabs. Neither shows in the 📺 Class view.
 - **Moving around:** ◀ ▶, the ← → keys or the contents strip. Esc closes it.
 - **Numbering:** the cover is ★ Cover (the counter says "Cover · 9 slides"); the slides are 1 to 9 everywhere: the contents strip, the counter ("9 / 9" on the last), the slide's heading and footer, and the PDF's page footers.
@@ -283,12 +317,14 @@ The No Blueprint rule: Ring Channel shows no 🧭 Blueprint button. The blueprin
 3. **Set up the TURN relay:** in Cloudflare, go to **Realtime → TURN Server → Create**, then copy the **Turn Token ID** into `TURN_KEY_ID` and the **API Token** into `TURN_KEY_API_TOKEN`.
    - Without it, most calls still connect directly. Trainees on strict home routers, mobile data or office networks may get no audio: their phone says "Still connecting the audio…".
    - The relay is paid by traffic, with a free monthly allowance; a voice call uses well under 1 MB a minute.
-   - **⚙️ Setup → 🌐 Network test** shows whether a computer gets relay candidates.
-4. **Check the setup:** open Ring Channel from the Portal as an administrator and go to **⚙️ Setup**. It shows the TURN relay, recordings, AI keys and the Portal sign-in, plus an audio check and a network test.
+   - **🛡 Admin → ⚙️ Setup → 🌐 Network test** shows whether a computer gets relay candidates.
+4. **Check the setup:** open Ring Channel from the Portal as an administrator and go to **🛡 Admin → ⚙️ Setup**. It shows the TURN relay, recordings, AI keys and the Portal sign-in, plus an audio check and a network test.
 
 **Browsers:** Chrome or Edge on a computer, with a headset (that's what the tests run on). Other current browsers with WebRTC should work but aren't tested. Pages must be served over https, which Cloudflare does; browsers only allow the microphone on https.
 
-**Workers limits:** Cloudflare doesn't generate preview URLs for Workers with Durable Objects, so there are no PR previews for this repo; test locally with `wrangler dev`. Each open phone pings the Switchboard every 20 seconds and idle phones hibernate, so a training class should stay well inside the free plan's Durable Object allowance.
+**🚀 PR previews:** Cloudflare Workers Builds deploys a **Preview** of every branch that isn't `main`, and comments the preview's URL on the pull request — so a branch can be opened and tried before it's merged. A Preview needs `wrangler.json`'s **`previews`** block, which says what it binds to; without it the build fails with *"Your Wrangler configuration needs a `previews` block to run this command"* and the PR's **Workers Builds** check goes red. The block is there now, and it points at the **same** `LSH_KV` namespace and the same settings as production, so a preview's recordings live beside the real ones. To keep them apart, make a second KV namespace (`npx wrangler kv namespace create LSH_KV_PREVIEW`) and put its id in `previews.kv_namespaces[0].id`.
+
+**Workers limits:** Each open phone pings the Switchboard every 20 seconds and idle phones hibernate, so a training class should stay well inside the free plan's Durable Object allowance. To try a branch without deploying it at all, run `npx wrangler dev` locally.
 
 ## Local development and tests
 
@@ -310,7 +346,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 
 `SHOTS=<folder>` keeps the screenshots the tests take; `LIVE_ONLY=1` runs only the live-call test; `ONLY=<test file>` runs just that one (e.g. `ONLY=e2e-portal.js`); `PORT=<port>` if 8799 is taken. Google Meet itself can't be driven in a test: the tests check that the Class view plays the call's audio, which is what Meet's "share tab audio" sends.
 
-- `e2e-live.js`: the trainer dials the trainee's extension (7001) on the dialer's keypad and rings, the trainee answers, and audio flows both ways. Then it runs:
+- `e2e-live.js`: the trainer picks the call to play (🎭 Call to play, at the foot of the switchboard, opens the Scenario Picker in its own tab; the Console stays put and the call picked there reaches the dialer), dials the trainee's extension (7001) on the keypad and rings, the trainee answers, and audio flows both ways. Then it runs:
   - 🔊 Speaker on the dialer and on the trainee's phone (the call keeps playing), and the audio check's output choices;
   - the ✋ request, the live note, hold with hold music, a transfer answered "no answer", a coaching time-out;
   - the 📺 Class view: it plays the call (the console goes quiet), the trainee is told the class is listening, it shows the live note and hold but never the script, and closing it brings the audio back to the console;
@@ -330,7 +366,8 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - a used ticket signs nobody in, and expired and forged tickets are refused;
   - signed out, the page shows the way to the Portal, with no sign-in form;
   - an administrator's ticket lands them on the console under their Portal name, and 🏠 goes back to the Portal;
-  - the trainees are on the switchboard and in 👥 Trainees;
+  - the top bar is the four buttons (🎛 Console, 🗂 Call Logs & Scenario Picker, 🛡 Admin, 🏠 Main Portal), 🛡 Admin's tabs are in order, and 🎧 Try practice is a button on 🤖 AI calls rather than a tab of its own;
+  - the trainees are on the switchboard and in 🛡 Admin → 📊 Trainee Monitoring;
   - the trainers' passphrase fallback still opens the console.
 - `portal-unit.mjs`: the Portal's ticket checked with the shared secret (a trainee, an administrator, the wrong secret, expired, too long, tampered).
 - `e2e-ai.js`: the trainer's **🤖 AI caller** (it rings the trainee's own phone; they answer and talk with the AI; the trainer follows the transcript and the note live; the AI's review reaches both, and 📋 Graded calls); a voice practice call over the Gemini Live stand-in (microphone audio up, the caller's audio and transcripts back), hold, hang up, autograding, a typed practice call, the trainer's **Grade again with AI**, and a live-only call that can't be practiced.
@@ -356,12 +393,13 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `public/js/sounds.js` | Ringing, ringback, the keypad tones, the hang-up tone and hold music, all synthesized. |
 | `public/js/ai-call.js` | The AI practice caller (Gemini Live voice, or typed). |
 | `public/js/app.js` | Sign-in, pages, the phone screen, the note form, case lookup, the directory. |
-| `public/js/trainee.js` | 📞 My phone and 🎧 Practice. |
-| `public/js/console.js` | 🎛 The trainer's console: the switchboard, ☎ the dialer, and the call (script, checklist, live note). |
-| `public/js/review.js` | 🗂 Calls, a call's review and scorecard (recording playback and download, approving the AI's grade), 📋 Graded calls (and the CSV), 📚 Scenarios, 👥 Trainees, ⚙️ Setup. |
-| `public/js/classview.js` | 📺 The Class view: a tab to present in Google Meet (plays the call, shows the live note, never the script). |
+| `public/js/trainee.js` | ☎ The trainee's Console: the switchboard, their phone (live calls, the AI calls a trainer sends, and their own practice calls) and the workspace beside it, plus the 🎧 Practice picker. |
+| `public/js/console.js` | 🎛 The trainer's Console: the switchboard joined to ☎ the dialer, and the call (script, checklist, live note). |
+| `public/js/review.js` | 🗂 Call Logs, a call's review and scorecard (recording playback and download, approving the AI's grade), 📋 Graded Calls (and the CSV), 🎭 the Scenario Picker, 📊 Trainee Monitoring (and its CSV), ⚙️ Setup. |
 | `public/js/blueprint-content.js` | 🧭 The Blueprint's slides: the trainee deck and the trainer deck. |
 | `public/js/lsh-blueprint.js` | 🧭 The Blueprint page and its PDFs (the same file on every LSH platform). |
+| `public/js/screens.js` | The two screens the top bar opens: 🗂 Call Logs & Scenario Picker and 🛡 Admin — a strip of tabs, with the open tab's own page under it. |
+| `public/js/classview.js` | 📺 The Class view: a tab to present in Google Meet (plays the call, shows the live note, never the script). |
 | `tests/` | The end-to-end tests. |
 | `.github/workflows/checks.yml` | The checks GitHub runs on every pull request and push to `main`. |
 
@@ -369,7 +407,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 - Durable Object SQLite: trainees (with their desk extensions), the Portal tickets already used, calls (timings, the note, the transcript, the AI's grade and the reviews), written scenarios, grading settings, usage counts for the AI and sign-in limits, and the Grader's queue.
 - KV (`LSH_KV`, prefix `voip:`): recordings, and their grading copies.
 
-Trainee ids match the other LSH platforms (`name--batch`). Trainers can archive trainees in **👥 Trainees**.
+Trainee ids match the other LSH platforms (`name--batch`). Trainers can archive trainees in **🛡 Admin → 📊 Trainee Monitoring**.
 
 **Recordings:**
 - Live calls are recorded on the trainer's console, both voices in one file; the trainee sees ● REC.

@@ -94,7 +94,7 @@ async function walk(page, label) {
   await te.keyboard.press('Escape');
   if (await te.evaluate(() => LSHBlueprint.isOpen())) fail('Esc didn\'t close the Blueprint');
   // the header is drawn again on another page: still no button
-  await te.click('a[href="#/calls"]'); await te.waitForTimeout(200);
+  await te.click('#nav a[href="#/logs"]'); await te.waitForTimeout(200);
   if (await te.$('#lbp-open-btn')) fail('a 🧭 Blueprint button appeared on another page');
   await te.context().close();
 

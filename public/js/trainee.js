@@ -1,10 +1,17 @@
 /* =========================================================
-   The trainee's phone
-   📞 My phone   live mock calls: the trainer rings, the trainee answers
-                 and handles the call over real audio (WebRTC), takes the
-                 note, and submits it for the trainer to score.
-   🎧 Practice   the same phone with an AI caller (Gemini Live), scored
-                 by the AI; open any time.
+   The trainee's phone: ☎ Console
+
+   One phone takes every call. On the main screen it is the phone and
+   nothing else; the panes a call needs (🔎 Case lookup, 📝 the note,
+   📇 the directory, 📘 the rules) come up beside it while the call is
+   on, and ☎ Switchboard folds the board out of the phone's own key.
+     • live mock calls: the trainer rings, the trainee answers and handles
+       the call over real audio (WebRTC), takes the note, and submits it
+       for the trainer to score;
+     • the AI calls a trainer sends;
+     • the trainee's own practice calls with an AI caller (Gemini Live),
+       picked on 🎭 the Scenario Picker and scored by the AI.
+   A trainer's own practice call runs on 🎧 Try practice (🛡 Admin).
    App.p is the call on this phone: { mode: 'live' | 'ai', status:
    ringing · connecting · live · ended, caller ID, timings, hold, mute,
    transfer, note … }.
@@ -15,8 +22,12 @@
   const T = window.Trainee = {};
   const remote = () => document.getElementById('remoteAudio');
   const active = (p) => p && ['ringing', 'connecting', 'live'].includes(p.status);
-  // My phone draws live calls and the AI calls a trainer sent; 🎧 Practice draws the trainee's own practice calls.
-  const onPage = () => (App.route.name === 'phone' && (!App.p || App.p.mode === 'live' || !!App.p.assigned)) || (App.route.name === 'practice' && App.p && App.p.mode === 'ai' && !App.p.assigned);
+  /* A trainee's ☎ Console draws every call they take — live, an AI caller a trainer sent, and their own
+     practice calls. A trainer's own practice call is drawn on 🎧 Try practice, where they start it. */
+  const onPage = () => (App.trainer() ? App.at('practice') : App.at('phone'));
+  // 'ai' while a practice call the person started themselves is on the phone; 'live' is the desk phone.
+  const modeOf = () => (App.trainer() || (App.p && App.p.mode === 'ai' && !App.p.assigned) ? 'ai' : 'live');
+
 
   /* =========================================================
      Switchboard messages
@@ -319,7 +330,9 @@
     App.p = { mode: 'ai', status: 'waiting', callId: r.callId, scenario: s, surprise: !!opts.surprise, typed: !!opts.typed, showTranscript: !!opts.transcript,
       line: s.line, lineLabel: line.label, lineNumber: line.number, callerId: s.callerId || { name: 'WIRELESS CALLER', number: '' }, track: s.track, hideCases: s.hideCases || [],
       note: {}, lines: [], muted: false, held: false, rec: App.cfg.features.recordings, metrics: { holds: [], transfers: [] } };
-    if (App.route.name === 'practice') App.views.practice.render(); else location.hash = '#/practice';
+    if (App.trainer()) { if (App.at('practice')) App.views.practice.render(); else location.hash = '#/admin/practice'; }
+    else if (App.route.name === 'phone') renderAll();
+    else location.hash = '#/phone';
     const p = App.p;
     setTimeout(() => {
       if (App.p !== p || p.status !== 'waiting') return;
@@ -416,22 +429,25 @@
      ========================================================= */
   function renderAll() { if (!onPage()) { App.onCallBar(); return; } renderDevice(); renderSide(); renderWork(); App.onCallBar(); }
 
-  /* ---------- ☎ the switchboard beside the phone ----------
+  /* ---------- ☎ the switchboard, joined to the phone ----------
      The same board the trainer works from, as much of it as a trainee needs: their own desk line, the
-     trainers who are on, and the rest of their batch with their extensions. It folds away to a thin
-     rail (the phone and the workspace take the room back). */
+     trainers who are on, and the rest of their batch with their extensions. It is built as the trainer's
+     console is — the LSH mark over the board, in the same dark case as the phone and joined to it with
+     nothing between them, so the two read as one piece of equipment. It folds away to a thin rail (the
+     phone and the workspace take the room back). */
   const FOLD = 'tside';
   function renderSide() {
     const el = U.$('#tside'); if (!el) return;
     const wrap = el.parentElement;
     const folded = App.folded(FOLD);
     if (wrap) wrap.classList.toggle('side-folded', folded);
-    if (folded) { el.innerHTML = App.railHTML(FOLD, 'Switchboard', '☎'); return; }
+    if (folded) { el.innerHTML = App.railHTML(FOLD, 'Switchboard', '☎'); fitBoard(); return; }
     const peers = (App.peers || []).slice().sort((a, b) => (a.me ? -1 : b.me ? 1 : 0) || (b.hand - a.hand) || a.name.localeCompare(b.name));
     const desks = App.desks || [];
     const mine = peers.find((x) => x.me);
     const batch = (mine && mine.batch) || (App.me && App.me.batch) || '';
-    el.innerHTML = `<div class="card roster side-card">
+    el.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
+        <div class="sb-sub">Ring Channel · Switchboard</div></div><div class="card roster" id="troster">
       <div class="card-head"><h3>☎ Switchboard</h3><span class="spacer"></span><span class="badge green">${peers.length || 1} online</span>${App.foldKey(FOLD, 'the switchboard')}</div>
       <div class="my-line">
         <div class="small muted">My line</div>
@@ -446,7 +462,36 @@
         <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)}${x.me ? ' <span class="badge">you</span>' : ''} ${x.hand ? '<span class="hand-wave" title="Asked for a mock call">✋</span>' : ''}</div>
         <div class="bt">${x.ext ? `ext <span class="mono">${esc(x.ext)}</span> · ` : ''}${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}</div></div></div>`).join('') || '<div class="empty small">Nobody else is online.</div>'}
       <p class="small muted" style="margin:10px 0 0">Your trainer dials your extension to ring this phone.</p></div>`;
+    fitBoard();
   }
+
+  /* The board and the phone are one piece, so they end on the same line: whichever is shorter is
+     stretched to the other. The trainer's dialer is always the taller of its pair, but a trainee's
+     phone is short and the batch can be long, so this has to work both ways. Measured once it would
+     go stale the moment anything reflowed either of them, so it follows them. */
+  let deckWatch = null, fitting = false;
+  function fitBoard() {
+    const card = U.$('#troster'), dev = U.$('#device'), brand = U.$('#tside .side-brand');
+    if (!card || !dev || fitting) return;
+    fitting = true;
+    try {
+      card.style.minHeight = ''; dev.style.minHeight = '';
+      if (window.innerWidth <= 1060) return;
+      const brandH = brand ? brand.getBoundingClientRect().height : 0;
+      const board = card.getBoundingClientRect().height + brandH;
+      const phone = dev.getBoundingClientRect().height;
+      if (board > phone + 1) dev.style.minHeight = Math.round(board) + 'px';
+      else if (phone > board + 1) card.style.minHeight = Math.round(phone - brandH) + 'px';
+    } finally { fitting = false; }
+    if (!window.ResizeObserver) return;
+    if (deckWatch) deckWatch.disconnect();
+    deckWatch = new ResizeObserver(() => { if (!fitting) fitBoard(); });
+    deckWatch.observe(dev);
+    if (brand) deckWatch.observe(brand);
+    deckWatch.observe(card);
+  }
+  window.addEventListener('resize', () => { if (App.at('phone')) fitBoard(); });
+
   T.renderAll = renderAll;
 
   function idleInfo(mode) {
@@ -459,21 +504,33 @@
       : { state: 'Ready', title: 'Waiting for a call', sub: App.hand ? '✋ Your trainer can see you asked for a mock call.' : `Your trainer will ring this phone${App.myExt ? ` (ext ${esc(App.myExt)})` : ''}.` };
   }
 
-  // My phone shows live calls and the AI calls a trainer sent; 🎧 Practice shows the trainee's own practice calls.
+  // A trainee's Console shows every call; 🎧 Try practice shows the trainer's own practice call.
   function shown() {
     const p = App.p; if (!p) return null;
-    return App.route.name === 'practice' ? (p.mode === 'ai' && !p.assigned ? p : null) : (p.mode === 'live' || p.assigned ? p : null);
+    return App.trainer() ? (p.mode === 'ai' && !p.assigned ? p : null) : p;
   }
   function renderDevice() {
     const el = U.$('#device'); if (!el) return;
-    const mode = App.route.name === 'practice' ? 'ai' : 'live';
+    const mode = modeOf();
     const p = shown();
     const status = p ? (p.status === 'waiting' ? 'idle' : p.status) : 'idle';
     const led = !App.connected && mode === 'live' ? 'offline' : status === 'ringing' ? 'ringing' : ['connecting', 'live'].includes(status) ? 'live' : mode === 'live' ? App.status : 'available';
+    /* The phone is built as the trainer's dialer is, band for band: the segmented row where the dialer
+       has its line keys, then a row of keys, then the trio that comes alive on a call with the same
+       hint under it — the trainee's own, since they answer calls rather than place them. */
     const idleKeys = mode === 'live'
-      ? `<div class="dev-keys"><button class="key hand ${App.hand ? 'on' : ''}" data-act="hand"><span class="ic">✋</span>${App.hand ? 'Asked' : 'Ask for a call'}</button>
-         <button class="key" data-act="miccheck"><span class="ic">🎧</span>Audio check</button><a class="key" href="#/practice" style="text-decoration:none"><span class="ic">🎧</span>Practice</a></div>
-         <div class="dev-status"><button class="${App.status === 'available' ? 'on' : ''}" data-act="available">● Available</button><button class="${App.status === 'away' ? 'on away' : ''}" data-act="away">◌ Away</button></div>`
+      ? `<div class="line-keys" role="group" aria-label="My line"><button class="${App.status === 'available' ? 'on' : ''}" data-act="available" aria-pressed="${App.status === 'available'}" title="Ready for a call: your trainer sees you as available">● Available</button><button class="${App.status === 'away' ? 'on' : ''}" data-act="away" aria-pressed="${App.status === 'away'}" title="Stepped out: your trainer sees you as away">◌ Away</button></div>
+         <div class="dev-keys three idle-keys" role="group" aria-label="This phone">
+           <button class="key hand ${App.hand ? 'on' : ''}" data-act="hand" title="Raise your hand on your trainer's switchboard"><span class="ic">✋</span>${App.hand ? 'Asked' : 'Ask for a call'}</button>
+           <button class="key" data-act="notify" title="Let the browser alert you when a call rings, even on another tab"><span class="ic">🔔</span>Alert me</button>
+           <a class="key" href="#/logs/scenarios" style="text-decoration:none" title="Pick a practice call on 🗂 Call Logs & Scenario Picker; the AI caller rings this phone"><span class="ic">🎭</span>Practice</a>
+         </div>
+         <div class="dev-keys three idle-keys" role="group" aria-label="On the call">
+           <button class="key" disabled title="The firm's case files, searched by name, phone, date of birth or case number (once a call is connected)"><span class="ic">🔎</span>Case lookup</button>
+           <button class="key" disabled title="The message slip, calendar entry or intake note for the line (once a call is connected)"><span class="ic">📝</span>Note</button>
+           <button class="key" disabled title="Hand the caller to one of the firm's extensions (once a call is connected)"><span class="ic">↪</span>Transfer</button>
+         </div>
+         <p class="dev-hint">These come alive once the call is connected — and the keys above answer it, hold it and hang up.</p>`
       : `<div class="dev-keys"><button class="key" data-act="miccheck"><span class="ic">🎧</span>Audio check</button></div>`;
     let msg = '';
     if (p && p.needRejoin) msg = p.elsewhere ? `<div class="dev-msg lost">You're on this call in another tab or window. <button class="btn btn-sm btn-green" data-act="rejoin" style="margin-top:6px">📞 Move the call here</button></div>`
@@ -498,7 +555,7 @@
       ${App.lcdHTML(p && p.status !== 'waiting' ? p : null, idleInfo(mode))}
       ${msg}
       ${App.keysHTML(p && p.status !== 'waiting' ? p : null, idleKeys)}
-      <div class="dev-foot"><span>🔊</span><input type="range" min="0" max="1" step="0.05" value="${App.volume == null ? 1 : App.volume}" data-act="volume" aria-label="Call volume"><span>${!App.connected && mode === 'live' ? 'Offline' : ''}</span></div>`;
+      <div class="dev-foot"><span title="Call volume">🔉</span><input type="range" min="0" max="1" step="0.05" value="${App.volume == null ? 1 : App.volume}" data-act="volume" aria-label="Call volume">${!App.connected && mode === 'live' ? '<span>Offline</span>' : `<button type="button" class="dev-link" data-act="miccheck">🎧 Audio check</button>`}</div>`;
   }
   function renderBadges() {
     const p = App.p, box = U.$('#device .lcd-badges');
@@ -507,14 +564,15 @@
     box.innerHTML = tmp.querySelector('.lcd-badges').innerHTML;
   }
 
+  // What comes up beside the phone: how a live mock call goes while it's idle, and the panes a call needs once one is on.
   function renderWork() {
     const el = U.$('#work'); if (!el) return;
-    const mode = App.route.name === 'practice' ? 'ai' : 'live';
+    const mode = modeOf();
     const p = shown();
     if (!p || p.status === 'waiting') {
       if (mode === 'ai' && p) { el.innerHTML = briefHTML(p); return; }
-      el.innerHTML = mode === 'live' ? welcomeHTML() : '';
-      if (mode === 'live') loadRecent();
+      el.innerHTML = welcomeHTML();
+      loadRecent();
       return;
     }
     const track = p.track;
@@ -558,7 +616,7 @@
         <li>Look the caller up in <b>🔎 Case lookup</b>, verify before you share anything, and use <b>Hold</b> and <b>Transfer</b> like on a real phone.</li>
         <li>Fill in the <b>📝 Note</b> while you talk (your trainer sees it live), then submit it when the call ends.</li>
       </ol>
-      <div class="row" style="margin:6px 0 18px"><button class="btn" data-act="miccheck">🎙 Check my microphone</button><button class="btn" data-act="notify">🔔 Alert me when a call rings</button><a class="btn" href="#/practice">🎧 Practice with an AI caller</a></div>
+      <div class="row" style="margin:6px 0 18px"><button class="btn" data-act="miccheck">🎙 Check my microphone</button><button class="btn" data-act="notify">🔔 Alert me when a call rings</button><a class="btn" href="#/logs/scenarios">🎧 Practice with an AI caller</a></div>
       <h3>Recent calls</h3><div id="recent" class="small muted">Loading…</div>`;
   }
   async function loadRecent() {
@@ -598,6 +656,7 @@
         U.$$('[data-pane]', w).forEach((x) => x.classList.toggle('on', x.dataset.pane === tab.dataset.tab));
         return;
       }
+
       const fold = e.target.closest('[data-fold]');
       if (fold) { App.folded(fold.dataset.fold, !App.folded(fold.dataset.fold)); renderSide(); return; }
       const b = e.target.closest('[data-act]'); if (!b) return;
@@ -615,7 +674,7 @@
       else if (act === 'submit') submitNote();
       else if (act === 'regrade') gradeAi(App.p, true);
       else if (act === 'send') sendTyped();
-      else if (act === 'next') { App.p = null; renderAll(); if (App.route.name === 'practice') App.views.practice.render(); }
+      else if (act === 'next') { App.p = null; renderAll(); if (App.trainer() && App.at('practice')) App.views.practice.render(); }
       else if (act === 'hand') { App.hand = !App.hand; App.board.send({ t: 'hand', up: App.hand }); renderDevice(); if (App.hand) askNotify(); }
       else if (act === 'available' || act === 'away') { App.status = act; App.board.send({ t: 'status', status: act }); renderDevice(); if (act === 'available') askNotify(); }
       else if (act === 'notify') askNotify(true);
@@ -640,28 +699,36 @@
   /* =========================================================
      Pages
      ========================================================= */
+  /* ☎ Console: the trainee's main screen. ☎ The switchboard beside the phone (« minimizes it to a
+     rail), the phone itself, and on the right how a live mock call goes — replaced by the panes the
+     call needs once one is on the line. */
   App.register('phone', {
     trainee: true,
     render() {
-      const app = U.$('#app');
-      if (App.p && App.p.mode === 'ai' && !App.p.assigned && active(App.p)) { location.hash = '#/practice'; return; }
-      if (App.p && App.p.mode === 'ai' && !App.p.assigned) App.p = null;
-      if (App.p && App.p.assigned && App.p.status === 'ended' && App.p.submitted && !App.p.grading && App.p.seenGrade) App.p = null;
-      if (App.p && App.p.status === 'ended' && App.p.submitted) App.p = null;   // finished and submitted: ready for the next call
-      app.innerHTML = `<div class="phone-layout with-side"><div class="tside" id="tside"></div><div class="device" id="device"></div><div class="work card" id="work"></div></div>`;
+      const app = App.host();
+      /* A finished call is cleared once the trainee has seen what came of it, and the phone is ready for
+         the next one: an AI call (a trainer's, or their own practice) waits until its score is read. */
+      if (App.p && App.p.mode === 'ai' && App.p.status === 'ended' && App.p.submitted && !App.p.grading && App.p.seenGrade) App.p = null;
+      if (App.p && App.p.mode === 'live' && App.p.status === 'ended' && App.p.submitted) App.p = null;
+      app.innerHTML = `<div class="phone-layout with-side" id="phoneGrid"><div class="tside" id="tside"></div><div class="device" id="device"></div><div class="work card" id="work"></div></div>`;
       bindPage(app.firstChild);
       renderAll();
     }
   });
 
+  /* 🎭 The Scenario Picker's practice calls (a tab of 🗂 Call Logs & Scenario Picker for a trainee,
+     🎧 Try practice under 🛡 Admin for a trainer). A trainee's practice call then runs on ☎ their
+     Console, the one phone they take every call on; a trainer's runs here. */
   App.register('practice', {
     render() {
-      const app = U.$('#app');
-      if (App.p && (App.p.mode === 'live' || App.p.assigned) && active(App.p)) { U.toast('You are on a call.'); location.hash = '#/' + (App.trainer() ? 'console' : 'phone'); return; }
+      const app = App.host();
       if (App.p && App.p.assigned && !active(App.p)) App.p = null;   // a finished AI call a trainer sent stays in My calls
       if (App.p && App.p.mode === 'ai' && App.p.status === 'ended' && App.p.submitted && !App.p.grading) App.p = null;   // finished: back to the picker
+      if (App.p && (App.p.mode === 'live' || App.p.assigned) && active(App.p)) { U.toast('You are on a call.'); location.hash = '#/' + (App.trainer() ? 'console' : 'phone'); return; }
+      // A trainee's practice call runs on ☎ their Console: the picker hands it over and follows it there.
+      if (!App.trainer() && App.p && App.p.mode === 'ai' && !App.p.assigned) { location.hash = '#/phone'; return; }
       if (App.p && App.p.mode === 'ai') {
-        app.innerHTML = `<div class="phone-layout"><div class="device" id="device"></div><div class="work card" id="work"></div></div>`;
+        app.innerHTML = `<div class="phone-layout" id="phoneGrid"><div class="device" id="device"></div><div class="work card" id="work"></div></div>`;
         bindPage(app.firstChild);
         renderAll();
         return;
@@ -674,7 +741,7 @@
       const track = T.track || 'reception';
       const list = App.cfg.scenarios.filter((s) => s.track === track && s.ai !== false);
       app.innerHTML = `<div class="card">
-        <div class="card-head"><h2>🎧 Practice with an AI caller</h2></div>
+        <div class="card-head"><h2>🎭 ${App.trainer() ? 'Try a practice call' : 'Practice with an AI caller'}</h2>${App.trainer() ? '<span class="spacer"></span><a class="btn btn-sm" href="#/admin/aicalls">← 🤖 AI calls</a>' : ''}</div>
         <p class="muted">An AI caller rings your practice phone and talks with you out loud, like a real caller (use a headset). Handle the call, take the note, and the AI scores it with the same rubric your trainer uses. Calls last up to ${App.cfg.features.aiMinutes} minutes.</p>
         <div class="row" style="margin:12px 0 16px">
           <div class="pill-tabs" id="trk">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === track ? 'on' : ''}">${t.icon} ${esc(t.label)}</button>`).join('')}</div>
