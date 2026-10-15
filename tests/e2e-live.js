@@ -56,6 +56,17 @@ const playCall = async (pg, sid) => {
   if ((await tr.evaluate(() => App.me.name)) !== 'Coach Ana') throw new Error('The trainer should be signed in under their Portal name');
   ok('Trainer opened Ring Channel from the Portal (on the Console, as Coach Ana); trainee appears on the switchboard with desk extension 7001 (also on their phone)');
 
+  /* ⌨ The trainee's phone is built as the trainer's dialer is, keypad and all. A trainee takes calls
+     rather than places them, so the number keyed in is looked up in the firm's directory and the big
+     key only comes alive on a call, to hand the caller over. */
+  for (const d of '201') await te.click(`#device [data-dk="${d}"]`);
+  const keyed = await te.evaluate(() => ({ lcd: document.querySelector('#device .lcd').textContent, dial: document.querySelector('#device .lcd-dial').textContent.trim(), off: document.querySelector('#device .dial-call').disabled }));
+  if (keyed.dial !== '201' || !/Firm extension/.test(keyed.lcd) || !/Marcus Reyes/.test(keyed.lcd)) throw new Error('The keypad should look the extension up in the directory: ' + JSON.stringify(keyed));
+  if (!keyed.off) throw new Error('A trainee takes calls: the call key should stay dead while the phone is idle');
+  await te.keyboard.press('Escape');
+  await te.waitForFunction(() => !document.querySelector('#device .lcd-dial'));
+  ok('⌨ The trainee\'s phone has the dialer\'s keypad: 201 finds Atty. Marcus Reyes, the call key stays dead while idle, and Esc clears the screen');
+
   // Trainee raises a hand
   await te.click('[data-act="hand"]');
   await tr.waitForSelector('#roster .hand-wave');
@@ -252,12 +263,14 @@ const playCall = async (pg, sid) => {
   if (!(await tr.$('#roster .tr'))) throw new Error('The console\'s switchboard should be there beside the dialer');
   ok('☎ The trainee\'s switchboard is built as the console is — the LSH mark over the board, the same dark case as the phone, joined with no gap and ending on the same line — and it minimizes to a rail and back; on the console the switchboard stays with the phone');
 
-  // Transfer → trainer answers "no answer"
-  await te.click('[data-act="transfer"]');
-  await te.click('.modal [data-act="transfer-to"][data-ext="201"]');
+  // Transfer → trainer answers "no answer". Keyed in on the phone's own keypad, as on a desk phone.
+  if (!(await te.$('[data-pane="dir"] [data-act="transfer-to"][data-ext="201"]'))) throw new Error('📇 Directory should still offer ↪ Transfer on a live call');
+  for (const d of '201') await te.click(`#device [data-dk="${d}"]`);
+  await te.waitForFunction(() => !document.querySelector('#device .dial-call').disabled);
+  await te.click('#device .dial-call');
   await tr.waitForSelector('.xfer-panel');
   const scenSays = await tr.textContent('.xfer-panel');
-  ok(`Transfer to 201 reaches the trainer (${/not available/.test(scenSays) ? 'panel says Reyes is not available' : 'no availability note'})`);
+  ok(`↪ Transfer keyed in on the trainee's keypad reaches the trainer (${/not available/.test(scenSays) ? 'panel says Reyes is not available' : 'no availability note'})`);
   await tr.screenshot({ path: OUT + '/04-trainer-live.png', fullPage: true });
   await tr.click('[data-xfer="no-answer"]');
   await te.waitForFunction(() => /No answer at ext 201/.test(document.querySelector('#device').textContent));
