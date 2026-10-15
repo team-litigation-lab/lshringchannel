@@ -584,6 +584,15 @@
 
   T.renderAll = renderAll;
 
+  /* The screen's foot, where the trainer's dialer says who it calls as: the lines that ring this
+     phone, and on a call the one the caller came in on. */
+  function lineCid(p, mode) {
+    if (mode !== 'live') return p ? '🎧 <b>AI caller</b> · practice' : '🎧 <b>Practice phone</b> · an AI caller rings it';
+    const f = App.cfg.firm;
+    if (p && p.lineLabel) return `Came in on <b>${esc(p.lineLabel)}${p.lineNumber ? ' ' + esc(p.lineNumber) : ''}</b>`;
+    return `Takes calls on <b>Main ${esc(f.mainLine)}</b> · <b>Intake ${esc(f.intakeLine)}</b>`;
+  }
+
   function idleInfo(mode) {
     if (mode === 'ai') {
       const p = App.p;
@@ -647,7 +656,7 @@
     const pad = padHTML(shownCall);
     el.classList.toggle('pad', !!pad);
     el.innerHTML = `<div class="dev-head">${head}</div>
-      ${App.lcdHTML(shownCall, idleInfo(mode), dialLcd(shownCall))}
+      ${App.lcdHTML(shownCall, idleInfo(mode), dialLcd(shownCall), lineCid(shownCall, mode))}
       ${msg}
       ${shownCall ? '' : lineKeys}
       ${pad}
@@ -664,8 +673,14 @@
   // What comes up beside the phone: how a live mock call goes while it's idle, and the panes a call needs once one is on.
   function renderWork() {
     const el = U.$('#work'); if (!el) return;
+    const grid = el.parentElement;
     const mode = modeOf();
     const p = shown();
+    /* ☎ The Console is the switchboard and the phone and nothing else, as the trainer's is: the panes
+       a call needs come up when a call does, and the trainee's own screens are a tab away. */
+    const solo = !p && grid && grid.classList.contains('with-side');
+    if (grid) grid.classList.toggle('solo', !!solo);
+    if (solo) { el.innerHTML = ''; fitBoard(); return; }
     if (!p || p.status === 'waiting') {
       if (mode === 'ai' && p) { el.innerHTML = briefHTML(p); return; }
       el.innerHTML = welcomeHTML();

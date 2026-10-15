@@ -67,6 +67,18 @@ const playCall = async (pg, sid) => {
   await te.waitForFunction(() => !document.querySelector('#device .lcd-dial'));
   ok('⌨ The trainee\'s phone has the dialer\'s keypad: 201 finds Atty. Marcus Reyes, the call key stays dead while idle, and Esc clears the screen');
 
+  /* ☎ With no call on, the Console is the switchboard and the phone and nothing else — the trainer's
+     console beside it. The screen's foot says which lines ring this phone. */
+  const idleDesk = await te.evaluate(() => ({
+    solo: document.querySelector('#phoneGrid').classList.contains('solo'),
+    work: getComputedStyle(document.querySelector('#work')).display,
+    cols: getComputedStyle(document.querySelector('#phoneGrid')).gridTemplateColumns.split(' ').length,
+    cid: (document.querySelector('#device .lcd-cid') || {}).textContent || ''
+  }));
+  if (!idleDesk.solo || idleDesk.work !== 'none' || idleDesk.cols !== 2) throw new Error('An idle Console should be the board and the phone and nothing else: ' + JSON.stringify(idleDesk));
+  if (!/Main .*Intake/.test(idleDesk.cid)) throw new Error('The screen should say which lines ring this phone: ' + JSON.stringify(idleDesk));
+  ok(`☎ With no call on, the trainee's Console is the board and the phone and nothing else, and the screen's foot says which lines ring it (${idleDesk.cid.trim()})`);
+
   // Trainee raises a hand
   await te.click('[data-act="hand"]');
   await tr.waitForSelector('#roster .hand-wave');
@@ -103,7 +115,9 @@ const playCall = async (pg, sid) => {
   await tr.click('[data-act="ring"]');
   await te.waitForSelector('.lcd.ringing');
   const cid = await te.textContent('.lcd-name');
-  ok(`Trainee phone rings with caller ID "${cid}"`);
+  const ringWork = await te.evaluate(() => ({ solo: document.querySelector('#phoneGrid').classList.contains('solo'), work: getComputedStyle(document.querySelector('#work')).display }));
+  if (ringWork.solo || ringWork.work === 'none') throw new Error('The panes a call needs should come up when a call does: ' + JSON.stringify(ringWork));
+  ok(`Trainee phone rings with caller ID "${cid}", and the panes a call needs come up beside the phone`);
   await te.screenshot({ path: OUT + '/03-trainee-ringing.png' });
   await sleep(1500);
   await te.click('[data-act="answer"]');

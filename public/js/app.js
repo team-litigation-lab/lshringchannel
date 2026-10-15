@@ -322,7 +322,7 @@
   /* ---------- the phone's screen (trainee side, live and practice) ---------- */
   /* The screen. `dial` (the trainee's keypad) draws the number being keyed in, the way the
      trainer's dialer does: on its own while the phone is idle, under the caller during a call. */
-  App.lcdHTML = function (p, idle, dial) {
+  App.lcdHTML = function (p, idle, dial, cid) {
     const status = p ? p.status : 'idle';
     const lineLabel = p && p.lineLabel ? p.lineLabel : 'LSH Training Law Group';
     const lineNo = p && p.lineNumber ? p.lineNumber : App.cfg.firm.mainLine;
@@ -346,7 +346,7 @@
       if (p.mode === 'ai') badges.push(`<span class="lb">${p.voice === 'text' ? 'TYPED' : 'AI CALLER'}</span>`);
     }
     if (p && ['ringing', 'connecting', 'live'].includes(status) && VoIP.Speaker.on) badges.push('<span class="lb spk">🔊 SPEAKER</span>');
-    return `<div class="lcd ${status}"><div class="lcd-top"><span>${esc(lineLabel)} ${esc(lineNo)}</span><span data-clock></span></div><div class="lcd-main">${main}</div><div class="lcd-badges">${badges.join('')}</div></div>`;
+    return `<div class="lcd ${status}"><div class="lcd-top"><span>${esc(lineLabel)} ${esc(lineNo)}</span><span data-clock></span></div><div class="lcd-main">${main}</div><div class="lcd-badges">${badges.join('')}</div>${cid ? `<div class="lcd-cid">${cid}</div>` : ''}</div>`;
   };
 
   // The keys under the screen: Answer / Decline while it rings; Mute, Hold, Transfer and Hang up on a
