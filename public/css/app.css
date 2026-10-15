@@ -156,6 +156,10 @@ table.list tr.click:hover td { background: #f8fafc; }
    them, the phone in the same flat case, and its left side open where the board meets it */
 .phone-layout.with-side { grid-template-columns: var(--ts, 250px) 360px minmax(0, 1fr); column-gap: 0; row-gap: 18px; }
 .phone-layout.with-side .work { margin-left: 18px; }
+/* No call on: the board and the phone stand on their own, as the trainer's console does.
+   Only where there is room for the pair side by side; narrower than that they stack as ever. */
+@media (min-width: 1061px) { .phone-layout.with-side.solo { grid-template-columns: var(--ts, 250px) 360px; justify-content: start; } }
+.phone-layout.solo .work { display: none; }
 .phone-layout.with-side:not(.side-folded) .device {
   background: var(--deck, #0e1f42); border-top-left-radius: 0; border-bottom-left-radius: 0;
   box-shadow: 10px 22px 44px -16px rgba(8, 18, 38, .5);
