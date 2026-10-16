@@ -30,16 +30,23 @@ p { margin: 0 0 .7em; }
 @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
 
 /* ---------- top bar ---------- */
-.top { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 18px; padding: 0 20px; height: 58px; background: var(--navy-deep); color: #fff; border-bottom: 3px solid var(--orange); }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .2px; white-space: nowrap; }
-/* the standard LSH logo, as the other LSH sites show it: drawn for a navy background, so it sits
-   straight on the top bar with no white square behind it */
-/* a window on the logo, showing the mark alone: the wordmark under it can't be read at this size,
-   and "LSH Ring Channel" beside it already says the name */
-/* half the mark is LSH navy, which disappears on the navy bar, so it sits on a light tile */
-.logo-mark { display: block; flex: none; width: 38px; height: 38px; overflow: hidden; background: #fff; border-radius: 10px; padding: 4px; }
-/* the mark is x 170-473, y 8-310 of the 646x397 file: at 47px tall that is 36px square, 20px in and 1px down */
-.brand .logo { height: 47px; width: auto; display: block; margin: 0 0 0 -19px; }
+.top { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 18px; padding: 0 20px; height: 66px; background: var(--navy-deep); color: #fff; border-bottom: 3px solid var(--orange); }
+/* The whole logo now, not a window on its mark. Half of it is LSH navy — its left side and all
+   of its wordmark — which is why it used to need either a crop or a white tile to survive the
+   navy bar. It reads against the Training Portal's panel instead: a cool slate fading
+   left-to-right to nothing, spent before this bar's own name begins. The bar is 8px taller to
+   give the wordmark the height it needs to be read. */
+.top::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 164px; pointer-events: none;
+  background: linear-gradient(to right,
+    rgba(210,223,239,.50) 0, rgba(210,223,239,.50) 26%, rgba(210,223,239,.41) 44%,
+    rgba(210,223,239,.26) 60%, rgba(210,223,239,.13) 76%, rgba(210,223,239,.045) 88%,
+    rgba(210,223,239,0) 100%);
+}
+.top > * { position: relative; z-index: 1; }
+.brand { display: flex; align-items: center; gap: 52px; font-weight: 800; letter-spacing: .2px; white-space: nowrap; }
+.logo-mark { display: block; flex: none; }
+.brand .logo { height: 46px; width: auto; display: block; margin: 0; }
 .brand small { font-weight: 600; color: #94a3b8; font-size: 12px; }
 .nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
 .nav a { color: #cbd5e1; text-decoration: none; padding: 7px 12px; border-radius: 9px; font-weight: 600; font-size: 14px; white-space: nowrap; position: relative; }
