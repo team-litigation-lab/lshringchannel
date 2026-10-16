@@ -585,7 +585,7 @@
   function renderRoster() {
     const side = U.$('#sideL'); if (!side) return;
     if (!U.$('#roster', side)) {
-      side.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
+      side.innerHTML = `<div class="side-brand"><span class="sb-logo"><img src="lsh-logo-dark.svg" alt="Legal Support Help" width="160" height="98"></span>
         <div class="sb-sub">Ring Channel · Switchboard</div></div><div class="card roster" id="roster"></div>`;
     }
     const el = U.$('#roster', side); if (!el) return;

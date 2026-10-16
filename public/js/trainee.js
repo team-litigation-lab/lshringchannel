@@ -462,7 +462,7 @@
     const desks = App.desks || [];
     const mine = peers.find((x) => x.me);
     const batch = (mine && mine.batch) || (App.me && App.me.batch) || '';
-    el.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
+    el.innerHTML = `<div class="side-brand"><span class="sb-logo"><img src="lsh-logo-dark.svg" alt="Legal Support Help" width="160" height="98"></span>
         <div class="sb-sub">Ring Channel · Switchboard</div></div><div class="card roster" id="troster">
       <div class="card-head"><h3>☎ Switchboard</h3><span class="spacer"></span><span class="badge green">${peers.length || 1} online</span>${App.foldKey(FOLD, 'the switchboard')}</div>
       <div class="my-line">
