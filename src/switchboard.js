@@ -21,6 +21,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { SCENARIOS, cleanScenario, openCall, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM, CASES, weightedScore, DEFAULT_SETTINGS, traineeView, voiceOk, courseCall, programOk } from './scenarios.js';
 import { reportGradedCall, splitName } from './portal.js';
+import { threadById, traineeThread, dueBeats, nextBeatAt, msgScore, MESSAGE_LINE, msgProgramOk } from './messaging.js';
 
 const RING_MS = 45000;     // an unanswered call rings out after 45 seconds
 const GRACE_MS = 30000;    // a dropped phone has 30 seconds to reconnect before its call ends
@@ -51,6 +52,11 @@ export class Switchboard extends DurableObject {
     this.sql.exec(`CREATE INDEX IF NOT EXISTS calls_by_trainee ON calls (trainee_id, created_at)`);
     this.sql.exec(`CREATE INDEX IF NOT EXISTS calls_by_time ON calls (created_at)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS scenarios (id TEXT PRIMARY KEY, data TEXT, updated_at INTEGER, deleted INTEGER DEFAULT 0)`);
+    // 💬 Automated Messaging threads (src/messaging.js): the texting simulator's own records, kept apart
+    // from the calls so a thread is never a call in the Call Logs, the graded calls or the metrics.
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS msgs (id TEXT PRIMARY KEY, thread_id TEXT, title TEXT, trainee_id TEXT, trainee_name TEXT, batch TEXT,
+      status TEXT, created_at INTEGER, ended_at INTEGER, score REAL, data TEXT)`);
+    this.sql.exec(`CREATE INDEX IF NOT EXISTS msgs_by_trainee ON msgs (trainee_id, created_at)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS usage (id INTEGER PRIMARY KEY AUTOINCREMENT, who TEXT, kind TEXT, at INTEGER)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS tickets (sig TEXT PRIMARY KEY, exp INTEGER)`);   // Portal tickets already used
@@ -984,6 +990,187 @@ export class Switchboard extends DurableObject {
     r.data.recording = meta;
     this.save(r);
     return true;
+  }
+
+  /* =========================================================
+     💬 The Automated Messaging simulator (src/messaging.js)
+     ---------------------------------------------------------
+     A thread is a record of its own: the automation's messages, the
+     client's, the trainee's replies, and the scorecard at the end. A
+     graded thread goes to the LSH Training Portal the way the CMS's
+     💬 Client Messaging conversations do (kind: 'message'), so it
+     counts in the trainee's course on the Automated Messaging line.
+     ========================================================= */
+  msgRow(id) {
+    const r = this.sql.exec('SELECT * FROM msgs WHERE id = ?', id).toArray()[0];
+    if (!r) return null;
+    r.data = JSON.parse(r.data || '{}');
+    return r;
+  }
+  msgSave(r) {
+    this.sql.exec(`INSERT OR REPLACE INTO msgs (id, thread_id, title, trainee_id, trainee_name, batch, status, created_at, ended_at, score, data)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    r.id, r.thread_id, r.title, r.trainee_id, r.trainee_name, r.batch, r.status, r.created_at, r.ended_at || null, r.score == null ? null : r.score, JSON.stringify(r.data || {}));
+  }
+  // What a page shows of a thread: the trainee's own view of it (never the contact's persona, and the
+  // checklist only once the thread has ended).
+  msgBrief(r) {
+    const t = threadById(r.thread_id);
+    const d = r.data || {};
+    const done = r.status === 'ended';
+    const view = traineeThread(t) || { id: r.thread_id, title: r.title };
+    if (done && t) Object.assign(view, { goals: t.goals || [], contact: { name: t.contact.name, role: t.contact.role, number: t.contact.number }, caseId: t.caseId || '' });
+    return {
+      id: r.id, threadId: r.thread_id, title: r.title, status: r.status, createdAt: r.created_at, endedAt: r.ended_at,
+      traineeId: r.trainee_id, traineeName: r.trainee_name, batch: r.batch, score: r.score,
+      thread: view, program: d.program || '', graded: !!d.graded, turns: d.turns || [], sentBeats: d.sentBeats || 0,
+      nextBeatAt: r.status === 'live' ? nextBeatAt(t, r.created_at, d.sentBeats || 0) : 0,
+      grade: d.grade || null, grading: d.grading ? { state: d.grading.state, error: d.grading.error || '' } : null,
+      reported: d.reported ? { ok: !!d.reported.ok, error: d.reported.error || '' } : null
+    };
+  }
+  // 💬 Start a thread: the automation's first message is already on it (the beats that are due at once).
+  async startMsgThread(who, threadId, program, graded) {
+    const t = threadById(String(threadId || ''));
+    if (!t) return { error: 'No such messaging thread', status: 404 };
+    const open = this.sql.exec(`SELECT id FROM msgs WHERE trainee_id = ? AND status = 'live'`, who.id).toArray();
+    for (const o of open) this.endMsgThread(o.id, who, 'left');   // one thread at a time, like one call at a time
+    const at = now();
+    const r = { id: newId(), thread_id: t.id, title: t.title, trainee_id: who.id, trainee_name: who.name, batch: who.batch || '',
+      status: 'live', created_at: at, ended_at: null, score: null,
+      data: { program: msgProgramOk(program) || msgProgramOk(t.program) || 'FT', graded: !!graded, byTrainer: who.role === 'a', turns: [], sentBeats: 0 } };
+    this.msgSave(r);
+    this.deliverBeats(r.id);
+    return { id: r.id, msg: this.msgBrief(this.msgRow(r.id)) };
+  }
+  // The automation's sequence, as far as it has come due. It sends whether or not the trainee replied.
+  deliverBeats(id) {
+    const r = this.msgRow(id);
+    if (!r || r.status !== 'live') return null;
+    const t = threadById(r.thread_id);
+    const d = r.data;
+    const beats = dueBeats(t, r.created_at, d.sentBeats || 0, now());
+    if (!beats.length) return r;
+    d.turns = (d.turns || []).concat(beats).slice(-200);
+    d.sentBeats = (d.sentBeats || 0) + beats.length;
+    this.msgSave(r);
+    return r;
+  }
+  // The thread as it stands, with anything the automation owes it delivered first.
+  msgThread(id, who) {
+    const r = this.msgRow(id);
+    if (!r || (who.role !== 'a' && r.trainee_id !== who.id)) return null;
+    return this.msgBrief(this.deliverBeats(id) || r);
+  }
+  // The trainee's own message. The reply is the AI contact's, written by the Worker (it holds the key).
+  appendMsg(id, who, text) {
+    const r = this.msgRow(id);
+    if (!r || r.trainee_id !== who.id || r.status !== 'live') return { error: 'This thread is closed.', status: 404 };
+    const said = String(text || '').trim().slice(0, 1500);
+    this.deliverBeats(id);
+    const row = this.msgRow(id);
+    const d = row.data;
+    if (said) {
+      d.turns = (d.turns || []).concat([{ who: 'trainee', text: said, at: now() }]).slice(-200);
+      if (d.firstReplyAt == null) {
+        const first = (d.turns || []).find((x) => x.who === 'contact');
+        if (first) d.firstReplyAt = now();
+      }
+      this.msgSave(row);
+    }
+    return { msg: this.msgBrief(this.msgRow(id)) };
+  }
+  // The contact's reply, once the Worker has it from the AI.
+  appendMsgReply(id, text) {
+    const r = this.msgRow(id);
+    if (!r || r.status !== 'live') return null;
+    const said = String(text || '').trim().slice(0, 1500);
+    if (!said) return this.msgBrief(r);
+    r.data.turns = (r.data.turns || []).concat([{ who: 'contact', text: said, at: now() }]).slice(-200);
+    this.msgSave(r);
+    return this.msgBrief(this.msgRow(id));
+  }
+  // What the scorer is given: the thread, its timings, and how fast the trainee answered.
+  msgForGrading(id) {
+    const r = this.msgRow(id);
+    if (!r) return null;
+    const d = r.data || {}, turns = d.turns || [];
+    const firstContact = turns.find((x) => x.who === 'contact' || x.who === 'auto');
+    return {
+      threadId: r.thread_id, openedAt: r.created_at, turns,
+      sent: turns.filter((x) => x.who === 'trainee').length,
+      secs: Math.round(Math.max(0, (r.ended_at || now()) - r.created_at) / 1000),
+      firstReplySec: d.firstReplyAt && firstContact ? Math.max(0, Math.round((d.firstReplyAt - firstContact.at) / 1000)) : null
+    };
+  }
+  endMsgThread(id, who, why) {
+    const r = this.msgRow(id);
+    if (!r || (who.role !== 'a' && r.trainee_id !== who.id)) return null;
+    if (r.status === 'live') {
+      this.deliverBeats(id);
+      const row = this.msgRow(id);
+      row.status = 'ended'; row.ended_at = now();
+      row.data.endedBy = who.role === 'a' ? 'trainer' : 'trainee';
+      if (why) row.data.endReason = String(why).slice(0, 40);
+      this.msgSave(row);
+    }
+    return this.msgBrief(this.msgRow(id));
+  }
+  msgGradingState(id, patch) {
+    const r = this.msgRow(id);
+    if (!r) return null;
+    r.data.grading = Object.assign({}, r.data.grading || {}, patch, { at: now() });
+    this.msgSave(r);
+    return this.msgBrief(this.msgRow(id));
+  }
+  // The scorecard: the trainee's result on the thread, and the Portal's copy of it.
+  async applyMsgGrade(id, grade) {
+    const r = this.msgRow(id);
+    if (!r) return null;
+    const sc = msgScore(grade.criteria);
+    grade.at = now(); grade.ai = true;
+    grade.avg = sc ? sc.avg : null; grade.pct = sc ? sc.pct : null;
+    r.data.grade = grade;
+    r.data.grading = { state: 'done', at: now(), model: grade.model || '' };
+    r.score = grade.pct;
+    this.msgSave(r);
+    if (r.score != null && r.data.graded) await this.reportMsgThread(id);
+    return this.msgBrief(this.msgRow(id));
+  }
+  /* 📊 A graded thread to the LSH Training Portal, so it counts in the trainee's course: the same
+     /api/call-results the Call Simulator posts to, with kind: 'message', which files it as the
+     Portal's 💬 Client Messaging simulator on the Automated Messaging line (src/portal.js).
+     Best effort, as a call's is: why it didn't go is kept on the record (data.reported). */
+  async reportMsgThread(id) {
+    const r = this.msgRow(id);
+    if (!r || r.score == null) return null;
+    const d = r.data || {};
+    if (d.byTrainer || !d.graded) return null;
+    if (d.reported && d.reported.ok && d.reported.score === r.score) return null;
+    const name = splitName(r.trainee_name);
+    if (!name) return null;
+    const grade = d.grade || {};
+    const res = await reportGradedCall(this.env, {
+      first: name.first, last: name.last, batch: r.batch || '', username: r.trainee_id, kind: 'message',
+      call: {
+        id: r.id, program: msgProgramOk(d.program) || 'FT', line: MESSAGE_LINE, lesson: null, title: r.title,
+        score: Math.round(r.score), verdict: String(grade.verdict || grade.summary || '').slice(0, 400),
+        secs: Math.round(Math.max(0, (r.ended_at || now()) - r.created_at) / 1000), voice: '', at: new Date(now()).toISOString()
+      }
+    });
+    const row = this.msgRow(id);
+    if (row) { row.data.reported = { at: now(), score: r.score, ok: !!res.ok, error: res.ok ? '' : res.code || '' }; this.msgSave(row); }
+    return res;
+  }
+  // The threads a page lists: a trainee's own, or every trainee's for a trainer.
+  listMsgThreads(f) {
+    f = f || {};
+    const where = [], args = [];
+    if (f.traineeId) { where.push('trainee_id = ?'); args.push(f.traineeId); }
+    if (f.status) { where.push('status = ?'); args.push(String(f.status)); }
+    const rows = this.sql.exec(`SELECT * FROM msgs ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY created_at DESC LIMIT ?`,
+      ...args, Math.min(200, Math.max(1, Number(f.limit) || 60))).toArray();
+    return rows.map((r) => { r.data = JSON.parse(r.data || '{}'); return this.msgBrief(r); });
   }
 
   logUsage(who, kind) { this.sql.exec('INSERT INTO usage (who, kind, at) VALUES (?, ?, ?)', who, kind, now()); if (Math.random() < 0.02) this.sql.exec('DELETE FROM usage WHERE at < ?', now() - 7 * 86400000); }

@@ -13,6 +13,7 @@
   const App = window.App = {
     cfg: null, me: null, board: null, views: {}, route: { name: '', arg: '', sub: '' }, leave: null,
     callLink: { track: '', line: '', program: '', graded: false },   // what a Call Simulator link from the Portal asked for
+    msgLink: { thread: '', program: '', graded: false, used: false },   // … and what a messaging link asked for (💬 Automated Messaging)
     p: null,          // the trainee's call (live or practice)
     t: null,          // the trainer's live call
     presence: { trainees: [], trainers: [] }, trainersOnline: 0,
@@ -41,6 +42,7 @@
   function fromPortal() {
     let ticket = '', admin = false;
     const link = { track: '', line: '', program: '', graded: false };
+    const msg = { thread: '', program: '', graded: false, used: false };
     try {
       const u = new URL(location.href);
       ticket = u.searchParams.get('ticket') || ''; admin = u.searchParams.get('admin') === '1';
@@ -48,10 +50,19 @@
       link.line = (u.searchParams.get('line') || '').trim().slice(0, 80);
       link.program = (u.searchParams.get('program') || '').trim().toUpperCase().slice(0, 4);
       link.graded = u.searchParams.get('graded') === '1' || u.searchParams.get('mode') === 'graded' || u.searchParams.get('random') === '1';
-      const taken = ['ticket', 'admin', 'track', 'flow', 'line', 'program', 'graded', 'mode', 'random'].filter((k) => u.searchParams.has(k));
+      // 💬 Automated Messaging (?messaging=1): the Portal's messaging links already read this way
+      // (&thread=, &program=, &mode=graded), so one here opens the thread on the texting simulator.
+      if (u.searchParams.get('messaging') === '1' || u.searchParams.has('thread')) {
+        msg.thread = (u.searchParams.get('thread') || '').trim().toLowerCase().slice(0, 40);
+        msg.program = link.program;
+        msg.graded = link.graded;
+        if (msg.thread && !location.hash) u.hash = '#/logs/messaging';
+      }
+      const taken = ['ticket', 'admin', 'track', 'flow', 'line', 'program', 'graded', 'mode', 'random', 'messaging', 'thread'].filter((k) => u.searchParams.has(k));
       if (taken.length) { taken.forEach((k) => u.searchParams.delete(k)); history.replaceState(history.state, '', u.pathname + u.search + u.hash); }
     } catch (e) { /* an odd address: nothing to take */ }
     App.callLink = link;
+    App.msgLink = msg;
     return { ticket, admin };
   }
 
@@ -119,7 +130,7 @@
     return 'logs';
   };
   // One home per page: an old address (or a link from inside a page) opens the screen that now holds it.
-  App.ALIAS = { calls: 'logs/calls', scenarios: 'logs/scenarios', graded: 'admin/graded', trainees: 'admin/monitoring', monitoring: 'admin/monitoring', aicalls: 'admin/aicalls', setup: 'admin/setup' };
+  App.ALIAS = { calls: 'logs/calls', scenarios: 'logs/scenarios', messaging: 'logs/messaging', graded: 'admin/graded', trainees: 'admin/monitoring', monitoring: 'admin/monitoring', aicalls: 'admin/aicalls', setup: 'admin/setup' };
 
   App.header = function () {
     const nav = document.getElementById('nav'), who = document.getElementById('who');

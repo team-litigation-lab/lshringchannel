@@ -2,7 +2,8 @@
    The screens the top bar opens besides the Console
 
    🗂 Call Logs & Scenario Picker   the screen the Console directs to: the
-                                    call log, and the calls to play
+                                    call log, the calls to play, and the
+                                    💬 Automated Messaging threads
    🛡 Admin (trainers)              Call Logs · Trainee Monitoring
                                     (Utilization) · Graded Calls · 🤖 AI
                                     calls · 🎧 Try practice · ⚙️ Setup
@@ -18,7 +19,10 @@
   // 🗂 Call Logs & Scenario Picker. A trainee's Scenario Picker is 🎧 Practice: the calls an AI caller plays.
   const logTabs = () => [
     { k: 'calls', label: '📞 Call Logs', view: 'calls' },
-    { k: 'scenarios', label: '🎭 Scenario Picker', view: App.trainer() ? 'scenarios' : 'practice' }
+    { k: 'scenarios', label: '🎭 Scenario Picker', view: App.trainer() ? 'scenarios' : 'practice' },
+    // 💬 Automated Messaging: the texting simulator (public/js/messaging.js). A trainee takes a
+    // thread here; a trainer sees every trainee's threads.
+    { k: 'messaging', label: '💬 Automated Messaging', view: 'messaging' }
   ];
   /* 🛡 Admin. The first three are the admin screen proper; then the trainer's own tools.
      A tab with no label isn't on the strip: it's a page one of the tabs opens, and it lights that tab
