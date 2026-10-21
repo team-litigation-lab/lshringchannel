@@ -97,7 +97,12 @@ export async function readPortalTicket(env, ticket) {
    practice call, or the trainer sent the review), the call goes to the Portal server to server:
 
      POST <PORTAL_URL>/api/call-results   header X-Gateway-Key: AI_GATEWAY_SECRET
-          { first, last, batch, username, via: 'ringchannel', call: { id, program, line, lesson, title, score, verdict, secs, voice, at } }
+          { first, last, batch, username, via: 'ringchannel', kind: 'call' | 'message',
+            call: { id, program, line, lesson, title, score, verdict, secs, voice, at } }
+
+   A graded 💬 Automated Messaging thread (src/messaging.js) goes the same way with kind: 'message',
+   which the Portal files as its 💬 Client Messaging simulator, on the Automated Messaging line, exactly
+   as the CMS's own messaging conversations are filed. Anything else is a call (kind: 'call').
 
    The Portal keeps it on the trainee's Portal account (its progress page) and in the course's own
    store, where the course shows it on their progress. It needs AI_GATEWAY_SECRET on this Worker, the
@@ -110,7 +115,7 @@ export async function reportGradedCall(env, body) {
   try {
     const r = await fetch(portalUrl(env) + '/api/call-results', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Gateway-Key': key },
-      body: JSON.stringify(Object.assign({ via: 'ringchannel' }, body))
+      body: JSON.stringify(Object.assign({ via: 'ringchannel' }, body, { kind: body.kind === 'message' ? 'message' : 'call' }))
     });
     const j = await r.json().catch(() => null);
     if (j && j.success) return { ok: true, course: j.course || null };

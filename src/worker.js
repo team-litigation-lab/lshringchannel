@@ -5,6 +5,7 @@
  *   /             the app (public/), a softphone for trainees and a console for trainers
  *   /ws           each phone's WebSocket to the Switchboard (presence, ringing, WebRTC signaling)
  *   /api/...      sign-in from the LSH Training Portal, scenarios, call records, recordings, TURN credentials, AI practice and scoring
+ *   /api/msg/...  💬 Automated Messaging (src/messaging.js): the texting simulator's threads, the client's AI replies and its scoring
  *
  * Secrets (wrangler secret put <NAME>):
  *   ADMIN_PASSPHRASE     required: signs sign-in tokens, and the trainers' fallback sign-in if the Portal is down
@@ -24,8 +25,9 @@ import { Switchboard } from './switchboard.js';
 import { Grader, GRADE_AUDIO } from './grader.js';
 import { makeToken, readToken, readTokenString, safeEqual, traineeId, secretOf } from './auth.js';
 import { FIRM, CASES, TRACKS, NOTE_FORMS, LINES, LEVELS, CMS_URL, AI_VOICES, traineeView, openCall } from './scenarios.js';
-import { hasAI, keyNames, generate, liveToken } from './gemini.js';
+import { hasAI, keyNames, generate, parseJson, liveToken } from './gemini.js';
 import { callerPrompt, liveSetup } from './prompts.js';
+import { traineeThreads, threadById, contactPrompt, msgGradePrompt, cleanMsgGrade, MSG_RUBRIC, MSG_SHEET, MSG_RULES, MESSAGE_LINE, MESSAGE_PROGRAMS } from './messaging.js';
 import { readPortalTicket, portalHome, mintTicket } from './portal.js';
 
 export { Switchboard, Grader };
@@ -85,6 +87,28 @@ async function iceServers(env) {
     return { iceServers: list, turn: true };
   } catch (e) {
     return { iceServers: fallback, turn: false, error: String(e.message || e) };
+  }
+}
+
+/* 💬 Scoring one Automated Messaging thread (src/messaging.js): the thread, its timings and the firm's
+   texting policy go to the AI, and its scorecard comes back on the record. A thread is short, so it is
+   scored here and now rather than through the Grader's queue (which grades calls with their recordings).
+   A failure is kept on the record, so the page can offer to try again instead of losing the thread. */
+async function gradeThread(env, sb, id) {
+  const m = await sb.msgThread(id, { role: 'a' });
+  const t = m && threadById(m.threadId);
+  if (!m || !t) return null;
+  await sb.msgGradingState(id, { state: 'grading', error: '' });
+  try {
+    const forGrading = await sb.msgForGrading(id);
+    const p = msgGradePrompt(t, forGrading);
+    const g = await generate(env, { system: p.system, parts: [{ text: p.prompt }], json: true, maxTokens: 6000 });
+    const grade = cleanMsgGrade(t, parseJson(g.text));
+    if (!grade) throw new Error('The AI\'s answer couldn\'t be read.');
+    grade.model = g.model;
+    return await sb.applyMsgGrade(id, grade);
+  } catch (e) {
+    return await sb.msgGradingState(id, { state: 'failed', error: String((e && e.message) || e).slice(0, 300) });
   }
 }
 
@@ -162,6 +186,8 @@ export default {
         return json({
           me, firm: FIRM, cases: CASES, tracks: TRACKS, forms: NOTE_FORMS, lines: LINES, levels: LEVELS, cms: CMS_URL, portal: portalHome(env), openCaller: openCall('reception').caller, voices: AI_VOICES,
           scenarios: admin ? all : all.map(traineeView),
+          // 💬 The Automated Messaging simulator: its threads, its metrics and the firm's texting policy.
+          messaging: { threads: traineeThreads(), rubric: MSG_RUBRIC, sheet: MSG_SHEET, rules: MSG_RULES, line: MESSAGE_LINE, programs: MESSAGE_PROGRAMS },
           features: { ai: hasAI(env), recordings: !!env.LSH_KV, aiMinutes: aiMinutes(env), cmsAuth: !!String(env.PORTAL_SSO_SECRET || '').trim(), courseResults: !!String(env.AI_GATEWAY_SECRET || '').trim() },
           settings: admin ? st : { weights: st.weights, passMark: st.passMark }
         });
@@ -320,6 +346,90 @@ export default {
           if (text) await sb.appendTyped(r.id, me, [{ who: 'caller', text }]);
           return json({ text });
         } catch (e) { return json({ error: String(e.message || e) }, 502); }
+      }
+
+      /* ---------- 💬 Automated Messaging (src/messaging.js) ----------
+         The texting half of the training phone: the firm's automation texts a client, the client texts
+         back, and the trainee answers the thread. The automation's own messages are the Switchboard's
+         (they land on their own schedule, replied to or not); the client's free replies are the AI's,
+         written here because the Worker holds the Gemini key. A graded thread is scored on the
+         Client Messaging Metrics when it ends and goes to the Portal's course (kind: 'message'). */
+      if (path === '/api/msg/list') {
+        const f = Object.assign({}, body || {});
+        if (!admin) f.traineeId = me.id;
+        return json({ threads: await sb.listMsgThreads(f) });
+      }
+      if (path === '/api/msg/get') {
+        const m = await sb.msgThread(String(body.id || ''), me);
+        if (!m) return json({ error: 'No such thread' }, 404);
+        return json({ msg: m });
+      }
+      if (path === '/api/msg/start') {
+        if (!hasAI(env)) return json({ error: 'The Automated Messaging simulator isn\'t set up on this site yet.' }, 501);
+        if (!admin && (await sb.countUsage(me.id, 'msgthread', 3600000)) >= 20) return json({ error: 'That\'s a lot of practice threads this hour. Take a short break and try again.' }, 429);
+        const res = await sb.startMsgThread(me, String(body.threadId || ''), String(body.program || ''), !!body.graded);
+        if (res.error) return json({ error: res.error }, res.status || 400);
+        await sb.logUsage(me.id, 'msgthread');
+        return json({ msg: res.msg });
+      }
+      // The trainee's text, and the client's answer to it. The automation's messages arrive here too.
+      if (path === '/api/msg/send') {
+        if (!hasAI(env)) return json({ error: 'The Automated Messaging simulator isn\'t set up on this site yet.' }, 501);
+        if ((await sb.countUsage(me.id, 'msgtext', 3600000)) >= 300) return json({ error: 'Too many messages this hour.' }, 429);
+        await sb.logUsage(me.id, 'msgtext');
+        const id = String(body.id || '');
+        const sent = await sb.appendMsg(id, me, String(body.text || ''));
+        if (sent.error) return json({ error: sent.error }, sent.status || 404);
+        const t = threadById(sent.msg.threadId);
+        if (!t) return json({ error: 'No such thread' }, 404);
+        // The client answers the thread as it now stands: their own messages are the model's turns,
+        // the trainee's and the automation's are what they are reading.
+        const contents = [];
+        for (const x of (sent.msg.turns || []).slice(-60)) {
+          const role = x.who === 'contact' ? 'model' : 'user';
+          const text = x.who === 'auto' ? `(The firm's automated messaging system texts you: ${String(x.text || '')})` : String(x.text || '');
+          if (!text) continue;
+          if (contents.length && contents[contents.length - 1].role === role) contents[contents.length - 1].parts[0].text += '\n' + text;
+          else contents.push({ role, parts: [{ text }] });
+        }
+        if (!contents.length || contents[0].role !== 'user') contents.unshift({ role: 'user', parts: [{ text: '(The thread opens.)' }] });
+        if (contents[contents.length - 1].role !== 'user') contents.push({ role: 'user', parts: [{ text: '(Nobody has answered you yet.)' }] });
+        try {
+          const g = await generate(env, { system: contactPrompt(t), contents, maxTokens: 200, temperature: 0.9 });
+          const text = g.text.replace(/^\s*([A-Z][a-z]+( [A-Z][a-z]+)?|client|me)\s*:\s*/i, '').trim();
+          const msg = text ? await sb.appendMsgReply(id, text) : sent.msg;
+          return json({ msg: msg || sent.msg, text });
+        } catch (e) {
+          return json({ msg: sent.msg, error: String(e.message || e) }, 502);
+        }
+      }
+      // Nothing was typed: the page is only asking what the automation has sent since it last looked.
+      if (path === '/api/msg/poll') {
+        const m = await sb.msgThread(String(body.id || ''), me);
+        if (!m) return json({ error: 'No such thread' }, 404);
+        return json({ msg: m });
+      }
+      /* Ending a thread scores it, the way a practice call is scored when it ends: the Client Messaging
+         Metrics, the thread's own checklist, and the firm's texting policy. A thread the trainee only
+         practised with is scored for them alone; a graded one also counts in their course. */
+      if (path === '/api/msg/end') {
+        const id = String(body.id || '');
+        const ended = await sb.endMsgThread(id, me, String(body.why || ''));
+        if (!ended) return json({ error: 'No such thread' }, 404);
+        if (!hasAI(env)) return json({ msg: await sb.msgGradingState(id, { state: 'off', error: 'No AI key is set on this site (GEMINI_API_KEY5 …).' }) });
+        if (!admin && (await sb.countUsage(me.id, 'msggrade', 3600000)) >= 30) return json({ msg: await sb.msgGradingState(id, { state: 'off', error: 'Too many gradings this hour. Open the thread again in a while.' }) });
+        await sb.logUsage(me.id, 'msggrade');
+        return json({ msg: await gradeThread(env, sb, id) });
+      }
+      // Score it again (a grading that failed, or a trainer asking for a fresh scorecard).
+      if (path === '/api/msg/grade') {
+        if (!hasAI(env)) return json({ error: 'AI grading isn\'t set up on this site yet.' }, 501);
+        const m = await sb.msgThread(String(body.id || ''), me);
+        if (!m) return json({ error: 'No such thread' }, 404);
+        if (m.status !== 'ended') return json({ error: 'Finish the thread first.' }, 409);
+        if (!admin && (await sb.countUsage(me.id, 'msggrade', 3600000)) >= 30) return json({ error: 'Too many gradings this hour.' }, 429);
+        await sb.logUsage(me.id, 'msggrade');
+        return json({ msg: await gradeThread(env, sb, String(body.id || '')) });
       }
 
       /* ---------- AI grading (the Grader queue, src/grader.js) ---------- */
