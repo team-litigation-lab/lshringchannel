@@ -79,8 +79,33 @@ const lines = (pg) => pg.$$eval('#msgLines .tl', (x) => x.map((e) => e.textConte
   const row = await tr.textContent('table.list tr:nth-child(2)');
   if (!/Riley Santos/.test(row)) throw new Error('The trainer should see the trainee\'s thread: ' + row);
   if (!/Graded/.test(row)) throw new Error('The thread should show as graded: ' + row);
-  ok('A trainer sees the trainee\'s graded thread on 💬 Automated Messaging');
+  ok('A trainer sees the trainee\'s graded thread on 🤖 Automated Messaging');
+
+  /* 💬 Client Messaging: the Portal's other messaging link (?messages=1&program=<tab>) opens the tab
+     where a client texts the firm first — no automation on the thread at all. */
+  const cm = await mk();
+  await cm.goto(Portal.trainee(B, 'Jordan Blake', 'B093026') + '&messages=1&program=cm&thread=cm_danger&mode=graded');
+  await cm.waitForSelector('#msgLines .tl', { timeout: 20000 });
+  if (!/#\/logs\/clientmessaging$/.test(await cm.evaluate(() => location.hash))) throw new Error('A Client Messaging link should land on 💬 Client Messaging: ' + await cm.evaluate(() => location.hash));
+  const opened = await lines(cm);
+  if (!/^Client/.test(opened[0].trim())) throw new Error('The client should text first on a Client Messaging thread: ' + JSON.stringify(opened));
+  if (opened.some((l) => /Automated message/.test(l))) throw new Error('No automation belongs on a Client Messaging thread: ' + JSON.stringify(opened));
+  ok('A Portal Client Messaging link opens the graded thread, with the client\'s own text first');
+
+  // The picker is this simulator's own threads, its program tab first.
+  cm.on('dialog', (d) => d.accept());   // closing a thread nobody answered asks first
+  await cm.click('[data-act="end"]');
+  await cm.waitForSelector('.score-big', { timeout: 30000 });
+  await cm.click('[data-act="another"]');
+  await cm.waitForSelector('.scen-grid .scen');
+  const head = await cm.textContent('h2');
+  if (!/Client Messaging/.test(head)) throw new Error('The tab should be 💬 Client Messaging: ' + head);
+  const picks = await cm.$$eval('.scen-grid .scen h4', (x) => x.map((e) => e.textContent));
+  if (picks.length < 6) throw new Error('The Client Messaging picker should list its threads: ' + JSON.stringify(picks));
+  if (picks.some((x) => /Appointment reminder the client answers late/.test(x))) throw new Error('An Automated Messaging thread is on the Client Messaging picker: ' + JSON.stringify(picks));
+  ok(`💬 Client Messaging lists its own ${picks.length} threads, the link's program tab first`);
+  await cm.screenshot({ path: OUT + '/22-client-messaging.png', fullPage: true });
 
   await browser.close();
-  console.log('✅ Automated Messaging end to end: the Portal link, the automation, the AI client, the scorecard, and the trainer\'s list');
+  console.log('✅ The texting simulators end to end: both Portal links, the automation, the AI client, the scorecard, and the trainer\'s list');
 })().catch((e) => { console.error('❌', e.message); process.exit(1); });

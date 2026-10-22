@@ -448,7 +448,7 @@ const playCall = async (pg, sid) => {
     hash: location.hash
   }));
   if (teBar.nav.join() !== '#/phone,#/logs') throw new Error('A trainee\'s top bar should be ☎ Console and 🗂 Call Logs & Scenario Picker: ' + JSON.stringify(teBar));
-  if (teBar.tabs.join() !== '#/logs/calls,#/logs/scenarios,#/logs/messaging' || teBar.on !== '#/logs/calls' || teBar.hash !== '#/logs/calls') throw new Error('The trainee\'s screen: ' + JSON.stringify(teBar));
+  if (teBar.tabs.join() !== '#/logs/calls,#/logs/scenarios,#/logs/clientmessaging,#/logs/messaging' || teBar.on !== '#/logs/calls' || teBar.hash !== '#/logs/calls') throw new Error('The trainee\'s screen: ' + JSON.stringify(teBar));
   ok('🗂 A trainee has two screens: ☎ Console and Call Logs & Scenario Picker (its Call Logs, 🎭 Scenario Picker and 💬 Automated Messaging tabs), and an old #/calls link opens it on Call Logs');
   const row = await te.textContent('[data-open]');
   if (!/%/.test(row)) throw new Error('No score in My calls: ' + row);

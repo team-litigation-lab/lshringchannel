@@ -1,7 +1,8 @@
-// 💬 The Automated Messaging simulator (src/messaging.js): its thread library, the automation's own
-// schedule, the scorecard it keeps, and the graded thread it sends to the Portal's course as a
+// 💬 The texting simulators (src/messaging.js): the Client Messaging threads a client starts and the
+// Automated Messaging ones the firm's automation starts, their libraries, the automation's own
+// schedule, the scorecard they keep, and the graded thread they send to the Portal's course as a
 // messaging conversation (kind: 'message'). Run by tests/run.sh.
-import { THREADS, threadById, threadFromLink, traineeThread, traineeThreads, dueBeats, nextBeatAt, msgScore, cleanMsgGrade, msgGradePrompt, contactPrompt, msgProgramOk, MSG_RUBRIC, MESSAGE_LINE } from '../src/messaging.js';
+import { THREADS, CLIENT_THREADS, threadById, threadFromLink, traineeThread, traineeThreads, dueBeats, nextBeatAt, msgScore, cleanMsgGrade, msgGradePrompt, contactPrompt, msgProgramOk, msgRoleOk, roleProgram, lineOfThread, MSG_RUBRIC, MESSAGE_LINE, CLIENT_LINE, MESSAGE_ROLES } from '../src/messaging.js';
 import { reportGradedCall } from '../src/portal.js';
 import { CASES } from '../src/scenarios.js';
 
@@ -15,9 +16,18 @@ for (const t of THREADS) {
   if (ids.has(t.id)) fail(`two threads share the id ${t.id}`);
   ids.add(t.id);
   if (!t.title || !t.you || !t.facts || !t.hidden) fail(`${t.id} is missing part of its brief`);
-  if (!(t.beats || []).length) fail(`${t.id} has no automated messages`);
+  if (!(t.beats || []).length) fail(`${t.id} opens with nothing`);
   if (!(t.goals || []).length) fail(`${t.id} has no checklist`);
-  if (!t.beats.some((b) => b.from === 'auto')) fail(`${t.id} has nothing from the automation`);
+  if (t.kind === 'client') {
+    // A Client Messaging thread is the client's own: no automation in it, and a program tab to sit on.
+    if (t.beats.some((b) => b.from === 'auto')) fail(`${t.id} is a client thread with the automation in it`);
+    if (!msgRoleOk(t.role)) fail(`${t.id} sits on no program tab: ${t.role}`);
+    if (roleProgram(t.role) !== t.program) fail(`${t.id}'s tab and course program disagree: ${t.role} / ${t.program}`);
+    if (lineOfThread(t) !== CLIENT_LINE) fail(`${t.id} should count on the Client Messaging line`);
+  } else {
+    if (!t.beats.some((b) => b.from === 'auto')) fail(`${t.id} has nothing from the automation`);
+    if (lineOfThread(t) !== MESSAGE_LINE) fail(`${t.id} should count on the Automated Messaging line`);
+  }
   // The beats are in order, so a later message never lands before an earlier one.
   let last = -1;
   for (const b of t.beats) { if (Number(b.after) < last) fail(`${t.id}'s automation is out of order`); last = Number(b.after); }
@@ -113,4 +123,22 @@ if (!sent || JSON.parse(sent.opts.body).kind !== 'call') fail('anything but a me
 globalThis.fetch = realFetch;
 
 if (bad) process.exit(1);
-console.log(`✅ Automated Messaging: ${THREADS.length} threads, the automation's schedule, ${MSG_RUBRIC.length} metrics, the scorecard, and a graded thread in the Portal's course`);
+console.log(`✅ The texting simulators: ${THREADS.length} threads (${CLIENT_THREADS.length} of them Client Messaging), the automation's schedule, ${MSG_RUBRIC.length} metrics, the scorecard, and a graded thread in the Portal's course`);
+
+/* ---------- 💬 Client Messaging: the threads a client starts ---------- */
+if (CLIENT_THREADS.length < 6) fail(`the Client Messaging library should cover its program tabs, not ${CLIENT_THREADS.length} threads`);
+for (const r of MESSAGE_ROLES) if (!CLIENT_THREADS.some((t) => t.role === r)) fail(`no Client Messaging thread for the ${r} tab`);
+if (CLIENT_THREADS.some((t) => t.kind !== 'client')) fail('a Client Messaging thread is not marked as one');
+if (!CLIENT_THREADS.every((t) => THREADS.includes(t))) fail('the library does not hold every Client Messaging thread');
+if (msgRoleOk('RECEPTION') !== 'reception') fail('a tab name should not care about letter case');
+if (msgRoleOk('../x') || msgRoleOk('') || msgRoleOk(null)) fail('an unknown tab should be dropped');
+if (roleProgram('md') !== 'MD' || roleProgram('reception') !== 'FT' || roleProgram('nope')) fail('a tab counts in the wrong course');
+// The client texts first, and the AI is never told an automation opened the thread.
+const ct = CLIENT_THREADS[0];
+if (ct.beats[0].from !== 'contact') fail('a Client Messaging thread should open with the client\'s own text');
+const cPrompt = contactPrompt(ct);
+if (/automated messaging system texted you first/.test(cPrompt)) fail('the AI client is told an automation opened a thread it started itself');
+if (!/You texted the firm yourself/.test(cPrompt)) fail('the AI client is not told it texted the firm');
+if (/AUTOMATION is the firm/.test(msgGradePrompt(ct, { turns: [], sent: 0, secs: 60 }).prompt)) fail('the scorer is told about an automation that was never on the thread');
+if (!/client messaging/.test(msgGradePrompt(ct, { turns: [], sent: 0, secs: 60 }).prompt)) fail('the scorer is not told which simulator it is grading');
+if (traineeThread(ct).kind !== 'client' || traineeThread(ct).role !== ct.role) fail('the picker cannot tell the two simulators apart');
