@@ -21,7 +21,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { SCENARIOS, cleanScenario, openCall, lineOf, LINES, NOTE_FORMS, TRACKS, FIRM, CASES, weightedScore, DEFAULT_SETTINGS, traineeView, voiceOk, courseCall, programOk } from './scenarios.js';
 import { reportGradedCall, splitName } from './portal.js';
-import { threadById, traineeThread, dueBeats, nextBeatAt, msgScore, MESSAGE_LINE, msgProgramOk } from './messaging.js';
+import { threadById, traineeThread, dueBeats, nextBeatAt, msgScore, lineOfThread, msgProgramOk, roleProgram } from './messaging.js';
 
 const RING_MS = 45000;     // an unanswered call rings out after 45 seconds
 const GRACE_MS = 30000;    // a dropped phone has 30 seconds to reconnect before its call ends
@@ -999,7 +999,8 @@ export class Switchboard extends DurableObject {
      client's, the trainee's replies, and the scorecard at the end. A
      graded thread goes to the LSH Training Portal the way the CMS's
      💬 Client Messaging conversations do (kind: 'message'), so it
-     counts in the trainee's course on the Automated Messaging line.
+     counts in the trainee's course on its own line: 'Automated Messaging' for the
+     automation's threads, 'Client Messaging' for the ones a client starts.
      ========================================================= */
   msgRow(id) {
     const r = this.sql.exec('SELECT * FROM msgs WHERE id = ?', id).toArray()[0];
@@ -1038,7 +1039,7 @@ export class Switchboard extends DurableObject {
     const at = now();
     const r = { id: newId(), thread_id: t.id, title: t.title, trainee_id: who.id, trainee_name: who.name, batch: who.batch || '',
       status: 'live', created_at: at, ended_at: null, score: null,
-      data: { program: msgProgramOk(program) || msgProgramOk(t.program) || 'FT', graded: !!graded, byTrainer: who.role === 'a', turns: [], sentBeats: 0 } };
+      data: { program: msgProgramOk(program) || roleProgram(program) || msgProgramOk(t.program) || 'FT', graded: !!graded, byTrainer: who.role === 'a', turns: [], sentBeats: 0 } };
     this.msgSave(r);
     this.deliverBeats(r.id);
     return { id: r.id, msg: this.msgBrief(this.msgRow(r.id)) };
@@ -1139,7 +1140,7 @@ export class Switchboard extends DurableObject {
   }
   /* 📊 A graded thread to the LSH Training Portal, so it counts in the trainee's course: the same
      /api/call-results the Call Simulator posts to, with kind: 'message', which files it as the
-     Portal's 💬 Client Messaging simulator on the Automated Messaging line (src/portal.js).
+     Portal's 💬 Client Messaging simulator on the thread's own line (lineOfThread, src/portal.js).
      Best effort, as a call's is: why it didn't go is kept on the record (data.reported). */
   async reportMsgThread(id) {
     const r = this.msgRow(id);
@@ -1153,7 +1154,7 @@ export class Switchboard extends DurableObject {
     const res = await reportGradedCall(this.env, {
       first: name.first, last: name.last, batch: r.batch || '', username: r.trainee_id, kind: 'message',
       call: {
-        id: r.id, program: msgProgramOk(d.program) || 'FT', line: MESSAGE_LINE, lesson: null, title: r.title,
+        id: r.id, program: msgProgramOk(d.program) || 'FT', line: lineOfThread(threadById(r.thread_id)), lesson: null, title: r.title,
         score: Math.round(r.score), verdict: String(grade.verdict || grade.summary || '').slice(0, 400),
         secs: Math.round(Math.max(0, (r.ended_at || now()) - r.created_at) / 1000), voice: '', at: new Date(now()).toISOString()
       }

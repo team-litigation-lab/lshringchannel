@@ -5,7 +5,7 @@
  *   /             the app (public/), a softphone for trainees and a console for trainers
  *   /ws           each phone's WebSocket to the Switchboard (presence, ringing, WebRTC signaling)
  *   /api/...      sign-in from the LSH Training Portal, scenarios, call records, recordings, TURN credentials, AI practice and scoring
- *   /api/msg/...  💬 Automated Messaging (src/messaging.js): the texting simulator's threads, the client's AI replies and its scoring
+ *   /api/msg/...  💬 Automated Messaging and 💬 Client Messaging (src/messaging.js): the texting simulator's threads, the client's AI replies and its scoring
  *
  * Secrets (wrangler secret put <NAME>):
  *   ADMIN_PASSPHRASE     required: signs sign-in tokens, and the trainers' fallback sign-in if the Portal is down
@@ -27,7 +27,7 @@ import { makeToken, readToken, readTokenString, safeEqual, traineeId, secretOf }
 import { FIRM, CASES, TRACKS, NOTE_FORMS, LINES, LEVELS, CMS_URL, AI_VOICES, traineeView, openCall } from './scenarios.js';
 import { hasAI, keyNames, generate, parseJson, liveToken } from './gemini.js';
 import { callerPrompt, liveSetup } from './prompts.js';
-import { traineeThreads, threadById, contactPrompt, msgGradePrompt, cleanMsgGrade, MSG_RUBRIC, MSG_SHEET, MSG_RULES, MESSAGE_LINE, MESSAGE_PROGRAMS } from './messaging.js';
+import { traineeThreads, threadById, contactPrompt, msgGradePrompt, cleanMsgGrade, MSG_RUBRIC, MSG_SHEET, MSG_RULES, MESSAGE_LINE, CLIENT_LINE, MESSAGE_PROGRAMS, MESSAGE_ROLES, ROLE_LABELS } from './messaging.js';
 import { readPortalTicket, portalHome, mintTicket } from './portal.js';
 
 export { Switchboard, Grader };
@@ -187,7 +187,7 @@ export default {
           me, firm: FIRM, cases: CASES, tracks: TRACKS, forms: NOTE_FORMS, lines: LINES, levels: LEVELS, cms: CMS_URL, portal: portalHome(env), openCaller: openCall('reception').caller, voices: AI_VOICES,
           scenarios: admin ? all : all.map(traineeView),
           // 💬 The Automated Messaging simulator: its threads, its metrics and the firm's texting policy.
-          messaging: { threads: traineeThreads(), rubric: MSG_RUBRIC, sheet: MSG_SHEET, rules: MSG_RULES, line: MESSAGE_LINE, programs: MESSAGE_PROGRAMS },
+          messaging: { threads: traineeThreads(), rubric: MSG_RUBRIC, sheet: MSG_SHEET, rules: MSG_RULES, line: MESSAGE_LINE, clientLine: CLIENT_LINE, programs: MESSAGE_PROGRAMS, roles: MESSAGE_ROLES, roleLabels: ROLE_LABELS },
           features: { ai: hasAI(env), recordings: !!env.LSH_KV, aiMinutes: aiMinutes(env), cmsAuth: !!String(env.PORTAL_SSO_SECRET || '').trim(), courseResults: !!String(env.AI_GATEWAY_SECRET || '').trim() },
           settings: admin ? st : { weights: st.weights, passMark: st.passMark }
         });
@@ -348,7 +348,7 @@ export default {
         } catch (e) { return json({ error: String(e.message || e) }, 502); }
       }
 
-      /* ---------- 💬 Automated Messaging (src/messaging.js) ----------
+      /* ---------- 💬 Automated Messaging and 💬 Client Messaging (src/messaging.js) ----------
          The texting half of the training phone: the firm's automation texts a client, the client texts
          back, and the trainee answers the thread. The automation's own messages are the Switchboard's
          (they land on their own schedule, replied to or not); the client's free replies are the AI's,
@@ -365,7 +365,7 @@ export default {
         return json({ msg: m });
       }
       if (path === '/api/msg/start') {
-        if (!hasAI(env)) return json({ error: 'The Automated Messaging simulator isn\'t set up on this site yet.' }, 501);
+        if (!hasAI(env)) return json({ error: 'The messaging simulator isn\'t set up on this site yet.' }, 501);
         if (!admin && (await sb.countUsage(me.id, 'msgthread', 3600000)) >= 20) return json({ error: 'That\'s a lot of practice threads this hour. Take a short break and try again.' }, 429);
         const res = await sb.startMsgThread(me, String(body.threadId || ''), String(body.program || ''), !!body.graded);
         if (res.error) return json({ error: res.error }, res.status || 400);
@@ -374,7 +374,7 @@ export default {
       }
       // The trainee's text, and the client's answer to it. The automation's messages arrive here too.
       if (path === '/api/msg/send') {
-        if (!hasAI(env)) return json({ error: 'The Automated Messaging simulator isn\'t set up on this site yet.' }, 501);
+        if (!hasAI(env)) return json({ error: 'The messaging simulator isn\'t set up on this site yet.' }, 501);
         if ((await sb.countUsage(me.id, 'msgtext', 3600000)) >= 300) return json({ error: 'Too many messages this hour.' }, 429);
         await sb.logUsage(me.id, 'msgtext');
         const id = String(body.id || '');
