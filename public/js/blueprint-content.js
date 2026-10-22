@@ -22,7 +22,7 @@
         where: 'The LSH Training Portal · ☎ Console → 🎧 Audio check.',
         tip: 'Keep the Portal open in its own tab: it\'s your way back in.' },
       { icon: '☎', title: 'The Console: your phone', points: [
-          'You have two buttons on the top bar: ☎ Console, your phone, and 🗂 Call Logs & Scenario Picker, the next screen.',
+          'You have three buttons on the top bar: ☎ Console, your phone, 🗂 Call Logs & Scenario Picker, the next screen, and 💬 Messaging, the texting simulators.',
           'The Console is the phone and nothing else. Keep it open with your headset on; it shows your desk extension (ext 7001…), the number your trainer dials.',
           'Set ● Available when you\'re ready for a call, or ◌ Away when you step out.',
           '✋ Ask for a call raises your hand on your trainer\'s switchboard; ☎ Switchboard, at the foot of the phone, folds the board out beside it (your line, the trainers on, the rest of your batch).'],
@@ -75,7 +75,7 @@
     slides: [
       { icon: '🏠', title: 'Opening the console', points: [
           'Open ☎ LSH Ring Channel from the LSH Training Portal (Training Directory or Master Control): you arrive on the console, under your Portal name.',
-          'Your top bar has four buttons: 🎛 Console, 🗂 Call Logs & Scenario Picker, 🛡 Admin and 🏠 Main Portal. 🛡 Admin holds Call Logs, 📊 Trainee Monitoring, 📋 Graded Calls, 🤖 AI calls, 🎧 Try practice and ⚙️ Setup.',
+          'Your top bar has five buttons: 🎛 Console, 🗂 Call Logs & Scenario Picker, 💬 Messaging, 🛡 Admin and 🏠 Main Portal. 🛡 Admin holds Call Logs, 📊 Trainee Monitoring, 📋 Graded Calls, 🤖 AI calls, 🎧 Try practice and ⚙️ Setup.',
           'Trainees open it from the Portal too: no sign-in form, no PINs. The trainer passphrase is only for when the Portal is down.'],
         where: 'The LSH Training Portal · the top bar.',
         tip: 'Open 🛡 Admin → ⚙️ Setup once before your first session to check the relay, recordings and AI keys.' },

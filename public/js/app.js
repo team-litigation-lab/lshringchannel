@@ -13,7 +13,7 @@
   const App = window.App = {
     cfg: null, me: null, board: null, views: {}, route: { name: '', arg: '', sub: '' }, leave: null,
     callLink: { track: '', line: '', program: '', graded: false },   // what a Call Simulator link from the Portal asked for
-    msgLink: { thread: '', program: '', graded: false, used: false },   // … and what a messaging link asked for (💬 Automated Messaging)
+    msgLink: { thread: '', program: '', graded: false, used: false },   // … and what a messaging link asked for (💬 Messaging)
     p: null,          // the trainee's call (live or practice)
     t: null,          // the trainer's live call
     presence: { trainees: [], trainers: [] }, trainersOnline: 0,
@@ -64,7 +64,7 @@
       if (msg.kind) {
         msg.thread = (u.searchParams.get('thread') || '').trim().toLowerCase().slice(0, 40);
         msg.graded = link.graded;
-        if (!location.hash) u.hash = msg.kind === 'client' ? '#/logs/clientmessaging' : msg.thread ? '#/logs/messaging' : location.hash;
+        if (!location.hash) u.hash = '#/messages';
       }
       const taken = ['ticket', 'admin', 'track', 'flow', 'line', 'program', 'graded', 'mode', 'random', 'messaging', 'messages', 'thread'].filter((k) => u.searchParams.has(k));
       if (taken.length) { taken.forEach((k) => u.searchParams.delete(k)); history.replaceState(history.state, '', u.pathname + u.search + u.hash); }
@@ -116,9 +116,10 @@
     App.go();
   };
 
-  /* 🧭 The top bar. Four buttons for a trainer, two for a trainee, and one screen behind each:
+  /* 🧭 The top bar. Five buttons for a trainer, three for a trainee, and one screen behind each:
        ☎ Console                        the dialer, and nothing else on the main screen
        🗂 Call Logs & Scenario Picker   the next screen: the call log, and the calls to play
+       💬 Messaging                     the texting simulators, 💬 Client Messaging and 🤖 Automated Messaging, on one page
        🛡 Admin (trainers)              Call Logs · Trainee Monitoring · Graded Calls · 🤖 AI calls · 🎧 Try practice · ⚙️ Setup
        🏠 Main Portal (trainers)        back to the LSH Training Portal
      Every other page is a tab of one of those screens, so the bar never grows: `App.screenOf` says
@@ -127,18 +128,19 @@
   const LOGS_LABEL = '🗂 Call Logs<span class="long"> &amp; Scenario Picker</span>';
   App.navItems = function () {
     return App.trainer()
-      ? [['console', '🎛 Console'], ['logs', LOGS_LABEL], ['admin', '🛡 Admin']]
-      : [['phone', '☎ Console'], ['logs', LOGS_LABEL]];
+      ? [['console', '🎛 Console'], ['logs', LOGS_LABEL], ['messages', '💬 Messaging'], ['admin', '🛡 Admin']]
+      : [['phone', '☎ Console'], ['logs', LOGS_LABEL], ['messages', '💬 Messaging']];
   };
   // The pages 🛡 Admin holds (trainers): a page not listed here belongs to the Call Logs screen.
   const ADMIN_PAGES = ['admin', 'monitoring', 'graded', 'aicalls', 'practice', 'setup'];
   App.screenOf = function (name) {
     if (name === 'console' || name === 'phone') return App.trainer() ? 'console' : 'phone';
+    if (name === 'messages') return 'messages';
     if (App.trainer() && ADMIN_PAGES.includes(name)) return 'admin';
     return 'logs';
   };
   // One home per page: an old address (or a link from inside a page) opens the screen that now holds it.
-  App.ALIAS = { calls: 'logs/calls', scenarios: 'logs/scenarios', messaging: 'logs/messaging', clientmessaging: 'logs/clientmessaging', graded: 'admin/graded', trainees: 'admin/monitoring', monitoring: 'admin/monitoring', aicalls: 'admin/aicalls', setup: 'admin/setup' };
+  App.ALIAS = { calls: 'logs/calls', scenarios: 'logs/scenarios', messaging: 'messages', clientmessaging: 'messages', graded: 'admin/graded', trainees: 'admin/monitoring', monitoring: 'admin/monitoring', aicalls: 'admin/aicalls', setup: 'admin/setup' };
 
   App.header = function () {
     const nav = document.getElementById('nav'), who = document.getElementById('who');
@@ -157,6 +159,8 @@
     const h = location.hash.replace(/^#\/?/, '');
     let [name, arg] = h.split('/');
     if (App.isClassView) name = 'class';
+    // The texting simulators were tabs of 🗂 Call Logs & Scenario Picker: their old addresses open 💬 Messaging.
+    if (name === 'logs' && (arg === 'messaging' || arg === 'clientmessaging')) { history.replaceState(null, '', '#/messages'); name = 'messages'; arg = ''; }
     // An old address opens the screen that now holds the page (#/graded → #/admin/graded).
     if (!App.isClassView && !arg && App.ALIAS[name]) { history.replaceState(null, '', '#/' + App.ALIAS[name]); [name, arg] = App.ALIAS[name].split('/'); }
     if (!App.views[name] || (App.views[name].trainer && !App.trainer()) || (App.views[name].trainee && App.trainer())) { name = def; arg = ''; if (location.hash !== '#/' + def) { history.replaceState(null, '', '#/' + def); } }

@@ -2,9 +2,7 @@
    The screens the top bar opens besides the Console
 
    🗂 Call Logs & Scenario Picker   the screen the Console directs to: the
-                                    call log, the calls to play, and the
-                                    💬 Client Messaging and 💬 Automated
-                                    Messaging threads
+                                    call log, and the calls to play
    🛡 Admin (trainers)              Call Logs · Trainee Monitoring
                                     (Utilization) · Graded Calls · 🤖 AI
                                     calls · 🎧 Try practice · ⚙️ Setup
@@ -12,6 +10,9 @@
    Each is a strip of tabs over one page. The tab's own page renders into
    #appHost inside the screen (App.host()), so every page still works on
    its own — and App.route.sub tells it that a screen is hosting it.
+
+   💬 Messaging, the texting simulators, has the page to itself
+   (public/js/messaging.js).
    ========================================================= */
 (function () {
   'use strict';
@@ -20,12 +21,7 @@
   // 🗂 Call Logs & Scenario Picker. A trainee's Scenario Picker is 🎧 Practice: the calls an AI caller plays.
   const logTabs = () => [
     { k: 'calls', label: '📞 Call Logs', view: 'calls' },
-    { k: 'scenarios', label: '🎭 Scenario Picker', view: App.trainer() ? 'scenarios' : 'practice' },
-    /* The two texting simulators (public/js/messaging.js), one engine, one page: 💬 Client Messaging
-       is the thread a client starts on their own file, 💬 Automated Messaging the one the firm's
-       automation starts. A trainee takes a thread here; a trainer sees every trainee's threads. */
-    { k: 'clientmessaging', label: '💬 Client Messaging', view: 'clientmessaging' },
-    { k: 'messaging', label: '🤖 Automated Messaging', view: 'messaging' }
+    { k: 'scenarios', label: '🎭 Scenario Picker', view: App.trainer() ? 'scenarios' : 'practice' }
   ];
   /* 🛡 Admin. The first three are the admin screen proper; then the trainer's own tools.
      A tab with no label isn't on the strip: it's a page one of the tabs opens, and it lights that tab

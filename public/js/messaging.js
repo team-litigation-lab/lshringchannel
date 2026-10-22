@@ -13,19 +13,20 @@
    graded thread counts in the trainee's course on the Portal exactly as
    the CMS's Client Messaging conversations do (src/messaging.js).
 
-   Two simulators, one engine and one page. 💬 Client Messaging is the
+   Two simulators, one engine and one page, 💬 Messaging on the top bar. 💬 Client Messaging is the
    thread a client (or someone saying they are one) starts on the firm's
    number, answered from the file in the trainee's program's role —
    the Portal's 💬 Client Messaging card opens it (?messages=1&program=
    <reception|intake|cm|md|pd|ea>), and a graded thread counts on the
    course's Client Messaging line. 💬 Automated Messaging is the one the
-   firm's automation starts, on its own line. KIND says which is open.
+   firm's automation starts, on its own line. KIND says which one the
+   open thread is.
 
-   Two pages, one view (App.views.clientmessaging and App.views.messaging,
-   the two messaging tabs of 🗂 Call Logs & Scenario Picker):
-     the picker     the threads to take, and the trainee's own recent ones
+   Two pages, one view (App.views.messages, 💬 Messaging on the top bar):
+     the picker     both simulators' threads to take, and the trainee's
+                    own recent ones
      the thread     the conversation, 🔎 Case lookup, 📘 Policy, the scorecard
-   A trainer sees every trainee's threads instead, and can open one.
+   A trainer sees every trainee's threads on both instead, and can open one.
    ========================================================= */
 (function () {
   'use strict';
@@ -34,20 +35,20 @@
   // The thread the trainee is on, kept here the way the phone keeps its call (App.p).
   let M = null;
   let timer = null;
-  // Which simulator the page is open on: 'client' (a client texts in) or 'auto' (the automation does).
+  // Which simulator the open thread is on: 'client' (a client texts in) or 'auto' (the automation does).
   let KIND = 'client';
   const CLIENT = () => KIND === 'client';
-  const SIM = () => CLIENT()
+  const SIM = (kind) => (kind || KIND) === 'client'
     ? { icon: '💬', name: 'Client Messaging', line: cfg().clientLine || 'Client Messaging' }
     : { icon: '🤖', name: 'Automated Messaging', line: cfg().line || 'Automated Messaging' };
 
   const cfg = () => (App.cfg && App.cfg.messaging) || { threads: [], rubric: [], rules: [], sheet: 'Client Messaging Metrics' };
   const threadOf = (id) => cfg().threads.find((t) => t.id === id) || null;
   const kindOf = (t) => (t && t.kind === 'client' ? 'client' : 'auto');
-  // The threads this tab shows: its own simulator's, and a link's program tab first where it names one.
-  function threads() {
-    const list = cfg().threads.filter((t) => kindOf(t) === KIND);
-    const role = CLIENT() ? ((App.msgLink || {}).role || '') : '';
+  // One simulator's threads, and a link's program tab first where it names one.
+  function threads(kind) {
+    const list = cfg().threads.filter((t) => kindOf(t) === kind);
+    const role = kind === 'client' ? ((App.msgLink || {}).role || '') : '';
     if (!role) return list;
     const mine = list.filter((t) => t.role === role);
     return mine.length ? mine.concat(list.filter((t) => t.role !== role)) : list;
@@ -72,6 +73,7 @@
     if (!msg || (M && msg.id !== M.id)) return;
     const was = sig(M);
     M = Object.assign({}, M || {}, msg);
+    KIND = kindOf(threadOf(M.threadId));
     // The scorecard is what the trainee came back for: it opens on it when it arrives.
     if (M.grade && M.tab === 'chat') M.tab = 'grade';
     if (sig(M) !== was) render();
@@ -80,19 +82,26 @@
   }
 
   /* ---------- the picker ---------- */
+  // Both simulators on one page: the one a Portal link asked for first, 💬 Client Messaging otherwise.
   function pickerHTML(mine) {
-    const t = threads();
+    const order = (App.msgLink || {}).kind === 'auto' ? ['auto', 'client'] : ['client', 'auto'];
+    return `${App.cfg.features && App.cfg.features.ai ? '' : '<div class="warn-box">The AI isn\'t set up on this site yet, so a thread can\'t be answered or scored here. Ask your administrator to add a Gemini key.</div>'}
+      ${order.map(sectionHTML).join('')}
+      <h3 style="margin-top:22px">My recent threads</h3>
+      <div id="msgMine">${mine ? mineHTML(mine) : '<div class="small muted">Loading…</div>'}</div>`;
+  }
+  function sectionHTML(kind) {
+    const t = threads(kind);
     const labels = cfg().roleLabels || {};
     const prog = (x) => {
-      const tag = CLIENT() ? labels[x.role] || '' : x.program || '';
+      const tag = kind === 'client' ? labels[x.role] || '' : x.program || '';
       return tag ? `<span class="badge">${esc(tag)}</span>` : '';
     };
-    const intro = CLIENT()
+    const intro = kind === 'client'
       ? 'A client texts the firm on their own file and you answer it in your program\'s role. Verify before you share, follow the firm\'s texting policy, keep advice and figures off text, and leave the client with a clear next step — then say what goes on the file as a Case Note.'
       : 'The firm\'s automation texts a client and the client texts back. Answer the thread the way the firm\'s texting policy says to: verify before you share, keep advice and figures off text, and leave the client with a clear next step. The automation keeps sending while you work, so read what has already landed.';
-    return `<h2>${SIM().icon} ${esc(SIM().name)}</h2>
+    return `<section class="msg-sim" data-kind="${kind}"><h2>${SIM(kind).icon} ${esc(SIM(kind).name)}</h2>
       <p class="muted">${esc(intro)}</p>
-      ${App.cfg.features && App.cfg.features.ai ? '' : '<div class="warn-box">The AI isn\'t set up on this site yet, so a thread can\'t be answered or scored here. Ask your administrator to add a Gemini key.</div>'}
       <div class="scen-grid">${t.map((x) => `<div class="scen" style="cursor:default">
         <h4>${esc(x.title)}</h4>
         <div class="meta"><span class="badge lvl-${esc(x.level === 'Core' ? 'Intermediate' : x.level)}">${esc(x.level)}</span>${prog(x)}</div>
@@ -101,27 +110,27 @@
         <div class="row" style="margin-top:4px">
           <button class="btn btn-primary btn-sm" data-start="${esc(x.id)}">Practice this thread</button>
           <button class="btn btn-orange btn-sm" data-start="${esc(x.id)}" data-graded="1" title="Scored on the ${esc(cfg().sheet)}; it counts in your course on the Portal">Take it graded</button>
-        </div></div>`).join('') || `<div class="empty">No ${esc(SIM().name)} threads on this site yet.</div>`}</div>
-      <h3 style="margin-top:22px">My recent threads</h3>
-      <div id="msgMine">${mine ? mineHTML(mine) : '<div class="small muted">Loading…</div>'}</div>`;
+        </div></div>`).join('') || `<div class="empty">No ${esc(SIM(kind).name)} threads on this site yet.</div>`}</div></section>`;
   }
+  // Which simulator a thread on a list is on, as a badge.
+  const simBadge = (m) => { const s = SIM(kindOf(threadOf(m.threadId))); return `<span class="badge">${s.icon} ${esc(s.name)}</span>`; };
   function mineHTML(list) {
     if (!list.length) return '<div class="small muted">No threads yet.</div>';
     return `<table class="list">${list.map((m) => `<tr class="click" data-open="${esc(m.id)}">
-      <td>${U.when(m.createdAt)}</td><td><b>${esc(m.title)}</b></td>
+      <td>${U.when(m.createdAt)}</td><td><b>${esc(m.title)}</b></td><td>${simBadge(m)}</td>
       <td>${m.graded ? '<span class="badge orange">Graded</span>' : '<span class="badge">Practice</span>'}</td>
       <td>${m.status === 'live' ? '<span class="badge amber">Open</span>' : m.score != null ? `<b>${m.score}%</b>` : m.grading && m.grading.state === 'grading' ? '<span class="badge">Scoring…</span>' : '<span class="badge">Ended</span>'}</td></tr>`).join('')}</table>`;
   }
 
   /* ---------- a trainer's list ---------- */
   function trainerHTML(list) {
-    return `<h2>${SIM().icon} ${esc(SIM().name)} threads</h2>
-      <p class="muted">Every trainee's threads on this texting simulator, newest first. A graded thread is scored on the ${esc(cfg().sheet)} when it ends and counts in the trainee's course on the Portal, on the ${esc(SIM().line)} line.</p>
-      ${list.length ? `<table class="list"><tr><th>When</th><th>Trainee</th><th>Thread</th><th></th><th>Score</th></tr>
+    return `<h2>💬 Messaging threads</h2>
+      <p class="muted">Every trainee's threads on both texting simulators, 💬 Client Messaging and 🤖 Automated Messaging, newest first. A graded thread is scored on the ${esc(cfg().sheet)} when it ends and counts in the trainee's course on the Portal, on its simulator's line (${esc(SIM('client').line)} or ${esc(SIM('auto').line)}).</p>
+      ${list.length ? `<table class="list"><tr><th>When</th><th>Trainee</th><th>Thread</th><th>Simulator</th><th></th><th>Score</th></tr>
         ${list.map((m) => `<tr class="click" data-open="${esc(m.id)}"><td>${U.when(m.createdAt)}</td><td><b>${esc(m.traineeName)}</b>${m.batch ? `<div class="small muted">${esc(m.batch)}</div>` : ''}</td>
-          <td>${esc(m.title)}</td><td>${m.graded ? '<span class="badge orange">Graded</span>' : '<span class="badge">Practice</span>'}</td>
+          <td>${esc(m.title)}</td><td>${simBadge(m)}</td><td>${m.graded ? '<span class="badge orange">Graded</span>' : '<span class="badge">Practice</span>'}</td>
           <td>${m.score != null ? `<b>${m.score}%</b>` : m.status === 'live' ? '<span class="badge amber">Open</span>' : '<span class="badge">—</span>'}</td></tr>`).join('')}</table>`
-        : `<div class="empty">No threads yet. Trainees take them on ${SIM().icon} ${esc(SIM().name)}.</div>`}`;
+        : '<div class="empty">No threads yet. Trainees take them on 💬 Messaging.</div>'}`;
   }
 
   /* ---------- the thread ---------- */
@@ -213,15 +222,16 @@
   async function startThread(threadId, graded) {
     try {
       const link = App.msgLink || {};
+      KIND = kindOf(threadOf(threadId));
       const program = CLIENT() ? link.role || (threadOf(threadId) || {}).role || '' : link.program || '';
       const r = await API.post('/api/msg/start', { threadId, program, graded: !!graded });
       M = r.msg; M.tab = 'chat';
-      location.hash = CLIENT() ? '#/logs/clientmessaging' : '#/logs/messaging';
+      KIND = kindOf(threadOf(M.threadId));
       render(); startPolling();
     } catch (e) { U.toast(e.message, 'error'); }
   }
   async function openThread(id) {
-    try { const r = await API.post('/api/msg/get', { id }); M = r.msg; render(); if (M.status === 'live') startPolling(); }
+    try { const r = await API.post('/api/msg/get', { id }); M = r.msg; KIND = kindOf(threadOf(M.threadId)); render(); if (M.status === 'live') startPolling(); }
     catch (e) { U.toast(e.message, 'error'); }
   }
   async function send() {
@@ -268,16 +278,14 @@
     catch (e) { const box = U.$('#msgMine'); if (box) box.innerHTML = `<div class="small muted">${esc(e.message)}</div>`; }
   }
 
-  async function open(kind) {
-    // The page is one simulator at a time: switching tabs leaves the other one's thread on the server.
-    if (kind !== KIND) { stopPolling(); M = null; KIND = kind; }
+  async function open() {
     /* A Portal link may ask for one thread (?messages=1&thread=…&mode=graded, or ?messaging=1 for the
        automation's): it opens straight away, once, the way a Call Simulator link rings a graded call
        at once (app.js). */
     const link = App.msgLink || {};
     if (link.thread && !link.used) {
       const t = threadOf(link.thread);
-      if (t && kindOf(t) === KIND && !App.trainer()) { link.used = true; return startThread(t.id, link.graded); }
+      if (t && kindOf(t) === (link.kind || kindOf(t)) && !App.trainer()) { link.used = true; return startThread(t.id, link.graded); }
     }
     /* Leaving the page stops the asking; the thread stays open on the server and the tab picks it
        back up (App.leave is the router's own cleanup hook). */
@@ -287,11 +295,10 @@
     M = null;
     return picker();
   }
-  App.register('clientmessaging', { render: () => open('client') });
-  App.register('messaging', { render: () => open('auto') });
+  App.register('messages', { render: open });
 
   document.addEventListener('click', (e) => {
-    if (!App.at('messaging') && !App.at('clientmessaging')) return;
+    if (!App.at('messages')) return;
     const start = e.target.closest('[data-start]');
     if (start) return startThread(start.dataset.start, start.dataset.graded === '1');
     const open = e.target.closest('[data-open]');
@@ -306,7 +313,7 @@
     if (act.dataset.act === 'another') { M = null; return picker(); }
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter' || (!App.at('messaging') && !App.at('clientmessaging'))) return;
+    if (e.key !== 'Enter' || !App.at('messages')) return;
     if (e.target && e.target.id === 'msgIn') { e.preventDefault(); send(); }
   });
 })();

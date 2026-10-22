@@ -437,7 +437,7 @@ const playCall = async (pg, sid) => {
   await tr.screenshot({ path: OUT + '/16-trainee-monitoring.png', fullPage: true });
 
   /* 🗂 A trainee has two screens and no more: ☎ Console, and Call Logs & Scenario Picker with its own
-     tabs (Call Logs, 🎭 Scenario Picker and 💬 Automated Messaging). An old address (#/calls) opens
+     tabs (Call Logs and 🎭 Scenario Picker), and 💬 Messaging is a button of its own. An old address (#/calls) opens
      that screen on the Call Logs tab. */
   await te.goto(B + '/#/calls');
   await te.waitForSelector('[data-open]');
@@ -447,9 +447,9 @@ const playCall = async (pg, sid) => {
     on: (document.querySelector('.screen-tabs a.on') || {}).getAttribute && document.querySelector('.screen-tabs a.on').getAttribute('href'),
     hash: location.hash
   }));
-  if (teBar.nav.join() !== '#/phone,#/logs') throw new Error('A trainee\'s top bar should be ☎ Console and 🗂 Call Logs & Scenario Picker: ' + JSON.stringify(teBar));
-  if (teBar.tabs.join() !== '#/logs/calls,#/logs/scenarios,#/logs/clientmessaging,#/logs/messaging' || teBar.on !== '#/logs/calls' || teBar.hash !== '#/logs/calls') throw new Error('The trainee\'s screen: ' + JSON.stringify(teBar));
-  ok('🗂 A trainee has two screens: ☎ Console and Call Logs & Scenario Picker (its Call Logs, 🎭 Scenario Picker and 💬 Automated Messaging tabs), and an old #/calls link opens it on Call Logs');
+  if (teBar.nav.join() !== '#/phone,#/logs,#/messages') throw new Error('A trainee\'s top bar should be ☎ Console, 🗂 Call Logs & Scenario Picker and 💬 Messaging: ' + JSON.stringify(teBar));
+  if (teBar.tabs.join() !== '#/logs/calls,#/logs/scenarios' || teBar.on !== '#/logs/calls' || teBar.hash !== '#/logs/calls') throw new Error('The trainee\'s screen: ' + JSON.stringify(teBar));
+  ok('🗂 A trainee has three screens: ☎ Console, Call Logs & Scenario Picker (its Call Logs and 🎭 Scenario Picker tabs) and 💬 Messaging, and an old #/calls link opens it on Call Logs');
   const row = await te.textContent('[data-open]');
   if (!/%/.test(row)) throw new Error('No score in My calls: ' + row);
   ok(`Trainee's My calls shows the score (${row.match(/\d+%/)[0]})`);

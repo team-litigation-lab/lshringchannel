@@ -58,11 +58,11 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.waitForSelector('#roster');
   const t = await tr.evaluate(() => ({ role: App.me.role, name: App.me.name, hash: location.hash }));
   if (t.role !== 'a' || t.name !== 'Coach Ana' || t.hash !== '#/console') throw new Error('The trainer from the Portal: ' + JSON.stringify(t));
-  // 🏠 Main Portal is a button on the top bar, last of the four (Console · Call Logs & Scenario Picker · Admin · Main Portal).
+  // 🏠 Main Portal is a button on the top bar, last of the five (Console · Call Logs & Scenario Picker · Messaging · Admin · Main Portal).
   const bar = await tr.evaluate(() => [...document.querySelectorAll('#nav a')].map((a) => ({ href: a.getAttribute('href'), text: a.textContent.trim() })));
-  if (bar.length !== 4 || bar[0].href !== '#/console' || bar[1].href !== '#/logs' || bar[2].href !== '#/admin') throw new Error('The trainer\'s top bar: ' + JSON.stringify(bar));
-  if (bar[3].href !== PORTAL_HOME || !/Main Portal/.test(bar[3].text)) throw new Error('🏠 Main Portal should be the last button on the bar, to the Portal: ' + JSON.stringify(bar[3]));
-  ok('From the Portal, an administrator lands on the Console as Coach Ana (no passphrase), with four buttons on the bar — 🎛 Console, 🗂 Call Logs & Scenario Picker, 🛡 Admin and 🏠 Main Portal, which goes back to the Portal');
+  if (bar.length !== 5 || bar[0].href !== '#/console' || bar[1].href !== '#/logs' || bar[2].href !== '#/messages' || bar[3].href !== '#/admin') throw new Error('The trainer\'s top bar: ' + JSON.stringify(bar));
+  if (bar[4].href !== PORTAL_HOME || !/Main Portal/.test(bar[4].text)) throw new Error('🏠 Main Portal should be the last button on the bar, to the Portal: ' + JSON.stringify(bar[4]));
+  ok('From the Portal, an administrator lands on the Console as Coach Ana (no passphrase), with five buttons on the bar — 🎛 Console, 🗂 Call Logs & Scenario Picker, 💬 Messaging, 🛡 Admin and 🏠 Main Portal, which goes back to the Portal');
 
   // The trainee is on the switchboard, with their extension, and in 👥 Trainees
   await te.goto(Portal.trainee(B, 'Riley Santos', 'B100626'));

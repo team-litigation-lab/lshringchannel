@@ -271,6 +271,8 @@ table.list tr.click:hover td { background: #f8fafc; }
 /* 💬 Automated Messaging: a message the firm's own automation sent, not the client's and not the
    trainee's, so a thread shows at a glance what landed on its own (public/js/messaging.js). */
 .tl.auto { background: #fff7ed; border: 1px dashed #fdba74; align-self: center; max-width: 95%; font-style: italic; }
+/* 💬 Messaging: the two simulators, one section each, on the one page. */
+.msg-sim + .msg-sim { margin-top: 26px; }
 
 /* ---------- the screens the top bar opens (🗂 Call Logs & Scenario Picker, 🛡 Admin) ----------
    A name, a strip of tabs, and the open tab's own page under them. */
