@@ -367,7 +367,7 @@ export const LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
      dir       'out' when the trainee places the call in the CMS: on Ring Channel the trainer rings them and plays the
                person they phoned
    What only a phone has (the caller ID, who doesn't pick up a transfer, a first caller hidden from Case lookup) is
-   RING below, by the call's id; a call without it shows WIRELESS CALLER. */
+   RING below, by the call's id; a call without it shows WIRELESS CALLER (a call the trainee places: the name they phoned). */
 const PROGRAM_NAMES = Object.fromEntries(CMS.PROGRAMS.map((p) => [p.k, p]));
 const caller = (idName, number) => ({ idName, number });
 const RING = {
@@ -407,7 +407,7 @@ function cmsScenario(c) {
     id: c.id, source: `The CMS's Call Simulator · ${p.label} · ${c.line}`, program: c.program, cmsLine: c.line, dir: c.dir === 'out' ? 'out' : 'in',
     track: trackOfLine(c.line), level: LEVELS.includes(c.level) ? c.level : 'Intermediate', title: c.title, caseId,
     hideCases: r.hideCases || [], reference: r.reference || null, unavailable: r.unavailable || [],
-    caller: Object.assign({ name: c.name, role: c.role, gender: c.gender === 'm' ? 'm' : 'f' }, r.caller || caller('WIRELESS CALLER', anyNumber(c.id))),
+    caller: Object.assign({ name: c.name, role: c.role, gender: c.gender === 'm' ? 'm' : 'f' }, r.caller || caller(c.dir === 'out' ? String(c.name).toUpperCase().slice(0, 24) : 'WIRELESS CALLER', anyNumber(c.id))),
     you: ringBrief(c, caseId), facts: c.facts, goals: c.goals || [], hidden: CMS.scriptOf(c), opening: c.opening,
     // what the CMS's grader weighs on this line, beside the Mock Calls Metrics (src/prompts.js gradePrompt)
     focus: c.program === 'FT' ? [] : CMS.rubricOf(c) || [],

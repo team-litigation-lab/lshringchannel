@@ -277,7 +277,7 @@ How a CMS call plays on the phone:
 - **The metrics:** a call on a calendaring line is graded on the Calendar Management Mock Calls Metrics, a call on an intake line on the Intake metrics, every other line on the Reception metrics (the phone skills every line shares). For the other programs the grader also gets what the CMS weighs on that line.
 - **📤 Calls the trainee places** (in the CMS, the trainee phones an adjuster, a provider, Elias…): the trainer rings the trainee's phone and plays the person they phoned; when the trainee picks up they are through, and open the call as the one calling. The AI caller answers the phone the same way.
 - **Where a graded call counts:** Standard Training by its lesson; the other programs by the call's CMS line, as the CMS counts them.
-- **What only a phone has** (the caller ID, who doesn't pick up a transfer, a first caller hidden from Case lookup) is `RING` in `src/scenarios.js`, by the call's id. A call without it rings as WIRELESS CALLER.
+- **What only a phone has** (the caller ID, who doesn't pick up a transfer, a first caller hidden from Case lookup) is `RING` in `src/scenarios.js`, by the call's id. A call without it rings as WIRELESS CALLER (or, on a call the trainee places, the name of the person they phoned).
 
 On a first intake call nothing is on file, so the case is hidden from **Case lookup**. After the call, the review shows the finished case file to compare with the note.
 
