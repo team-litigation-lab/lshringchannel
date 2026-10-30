@@ -627,11 +627,11 @@
            <a class="key" href="#/logs/scenarios" style="text-decoration:none" title="Pick a practice call on 🗂 Call Logs & Scenario Picker; the AI caller rings this phone"><span class="ic">🎭</span>Practice</a>
          </div>
          <div class="dev-keys three idle-keys" role="group" aria-label="On the call">
-           <button class="key" disabled title="The firm's case files, searched by name, phone, date of birth or case number (once a call is connected)"><span class="ic">🔎</span>Case lookup</button>
-           <button class="key" disabled title="The message slip, calendar entry or intake note for the line (once a call is connected)"><span class="ic">📝</span>Note</button>
+           <button class="key mute" disabled title="Turn your microphone off while you check something; the caller still hears the line (once a call is connected)"><span class="ic">🎙</span>Mute</button>
+           <button class="key" disabled title="Ask the caller first, then put them on hold: they hear hold music until you resume (once a call is connected)"><span class="ic">⏸</span>Hold</button>
            <button class="key" disabled title="Hand the caller to one of the firm's extensions (once a call is connected)"><span class="ic">↪</span>Transfer</button>
          </div>
-         <p class="dev-hint">These come alive once the call is connected — and the keys above answer it, hold it and hang up.</p>`
+         <p class="dev-hint">These come alive once the call is connected: ask to hold, Hold, then Transfer — as at the real front desk.</p>`
       : '';
     let msg = '';
     if (p && p.needRejoin) msg = p.elsewhere ? `<div class="dev-msg lost">You're on this call in another tab or window. <button class="btn btn-sm btn-green" data-act="rejoin" style="margin-top:6px">📞 Move the call here</button></div>`
