@@ -44,7 +44,8 @@ const course = [
   ['Reception is lesson 4', courseCall('reception', 'FT'), { program: 'FT', line: 'Reception Mock Calls', lesson: 4 }],
   ['Intake is lesson 6', courseCall('intake', 'ft'), { program: 'FT', line: 'Intake Mock Calls', lesson: 6 }],
   ['another program counts it by its line', courseCall('intake', 'EA'), { program: 'EA', line: 'Intake Mock Calls', lesson: null }],
-  ['no program named: Standard Training', courseCall('reception', 'nonsense'), { program: 'FT', line: 'Reception Mock Calls', lesson: 4 }]
+  ['no program named: Standard Training', courseCall('reception', 'nonsense'), { program: 'FT', line: 'Reception Mock Calls', lesson: 4 }],
+  ['a CMS call from another program counts on its CMS line', courseCall('reception', 'PD', 'Claim Setup'), { program: 'PD', line: 'Claim Setup', lesson: null }]
 ];
 for (const [what, got, want] of course) if (JSON.stringify(got) !== JSON.stringify(want)) { bad++; console.log(`❌ ${what}: ${JSON.stringify(got)}`); }
 if (programOk('pd') !== 'PD' || programOk('XX') !== '') { bad++; console.log(`❌ the programs a call can count in: ${programOk('pd')} / ${programOk('XX')}`); }

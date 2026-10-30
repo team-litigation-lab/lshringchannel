@@ -1,0 +1,46 @@
+# 🔁 Keeps Ring Channel's calls the CMS's: copies CaseManagementTraining/call-packs.js to src/cms/call-packs.js
+# (scripts/sync-cms-calls.mjs) every hour and on Run workflow, checks Ring Channel still builds its calls from it,
+# and commits the change to main, so a call changed in the CMS is the call the trainers play on the Console.
+# If the CMS's file stops looking the way src/scenarios.js reads it, the run fails and nothing is committed.
+name: Sync CMS calls
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-cms-calls
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Mirror the CMS's calls
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Copy the CMS's call-packs.js
+        run: node scripts/sync-cms-calls.mjs
+      - name: Ring Channel's calls are the CMS's (tests/cms-unit.mjs)
+        run: node --no-warnings tests/cms-unit.mjs
+      - name: The Worker still builds (wrangler dry run)
+        run: |
+          npm ci
+          npm run check
+      - name: Commit the change to main
+        run: |
+          if git diff --quiet -- src/cms/call-packs.js; then echo "No change in the CMS's calls."; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898699+github-actions[bot]@users.noreply.github.com"
+          git add src/cms/call-packs.js
+          git commit -m "Mirror the CMS's Call Simulator calls (CaseManagementTraining/call-packs.js)"
+          git push origin HEAD:main

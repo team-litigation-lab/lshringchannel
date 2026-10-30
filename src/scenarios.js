@@ -5,13 +5,14 @@
    trainee can look up during a call, the note forms, the rubrics,
    and the mock calls themselves.
 
-   Source: the Training Portal's Foundational call pack
-   (Training-Portal/simulators/call-pack-ft.js: 7 reception, 4
-   calendar and 3 intake calls) on the training CMS's Training
-   Library cases (CaseManagementTraining/mock-cases.js), plus
-   reception and intake calls written here on MC-12, MC-16, MC-19,
-   MC-24, MC-28 and MC-36. Case facts are the CMS's own: if a case
-   changes there, update its CASES entry and its calls here.
+   Source: the CMS. The calls are the CMS's Call Simulator calls
+   (CaseManagementTraining/call-packs.js, mirrored to src/cms/ by
+   scripts/sync-cms-calls.mjs; SCENARIOS below), for every program.
+   The case files are the CMS's Training Library cases
+   (CaseManagementTraining/mock-cases.js, MC-xx), with the text of
+   the ones the calls are about taken from the CMS's own copy, and
+   the Case Management, Property Damage and EA / PA case summaries
+   the CMS's calls are played on.
 
    A scenario is what the trainer plays on a live call (and what
    the AI caller plays in practice):
@@ -29,6 +30,7 @@
      reference   the finished case file shown after the call
      unavailable extensions that don't pick up a transfer
    ========================================================= */
+import CMS from './cms/call-packs.js';
 
 export const CMS_URL = 'https://lshcasemanagementtraining-trainingcrm.pages.dev/';
 
@@ -181,6 +183,18 @@ Date of loss 09/22/2026: in the Harbor Street crosswalk with the walk signal; a 
 Police: RPD-26-092219. Van's insurer: TransAmerica Freight Insurance, claim TFI-26-51770. Health: Blue Horizon PPO.
 Retainer signed by e-sign 09/27/2026. Intake packet (HIPAA forms, insurance card, photos) not returned yet; a case manager is being assigned this week.`)
 };
+// The CMS's copy of a Training Library file a call is about wins: it's the file the trainee has in the CMS on that call.
+for (const [id, d] of Object.entries(CMS.DOCS)) {
+  if (CASES[id]) CASES[id].text = d.text;
+  else { const m = /^\S+ · (.+?) \((.+)\)$/.exec(d.title) || []; CASES[id] = C(id, m[1] || id, m[2] || '', d.text); }
+}
+// The other programs' case summaries (the CMS's CASES: cm, pd, ea), as case files in 🔎 Case lookup.
+const CMS_CASE_NAMES = { cm: ['CMS-CM', 'John Doe', 'MVA v. Apex Delivery Services (Case Management)'], pd: ['CMS-PD', 'Angela Carter', 'Property damage claim, 2022 RAV4 (Property Damage)'], ea: ['CMS-EA', 'Elias Thorne', 'Client profile (EA / PA)'] };
+const CMS_CASE_IDS = {};
+for (const [k, c] of Object.entries(CMS.CASES)) {
+  const [id, name, title] = CMS_CASE_NAMES[k] || ['CMS-' + k.toUpperCase(), c.label, c.label];
+  CMS_CASE_IDS[k] = id; CASES[id] = C(id, name, title, c.text);
+}
 
 // The trainee's note for each kind of call.
 export const NOTE_FORMS = {
@@ -336,242 +350,71 @@ export const DEFAULT_SETTINGS = {
   weights: { reception: {}, calendar: {}, intake: {} }
 };
 
-const you = (role, id) => `You are the ${role} at LSH Training Law Group (fictional). The call is about ${CASES[id].name}: look the case up in 🔎 Case lookup (or open it in the CMS Training Library) while you handle it.`;
 const youIntake = 'You are the intake specialist at LSH Training Law Group (fictional). This is a FIRST call to the firm: nothing is on file yet. Take the intake and fill in the Intake note as you go.';
 
-const RC = { track: 'reception' }, CAL = { track: 'calendar' }, IN = { track: 'intake' };
-const S = (base, o) => Object.assign({ source: 'LSH Training Portal · Foundational call pack' }, base, o);
-const N = (base, o) => Object.assign({ source: 'LSH Ring Channel' }, base, o);
-
-export const SCENARIOS = [
-  /* ---------- Reception (the Foundational call pack) ---------- */
-  S(RC, {
-    id: 'ft_rc_appt', caseId: 'MC-01', level: 'Beginner', title: 'A Client Lost Her Appointment Card',
-    caller: { name: 'Maria Santos', role: 'Client (MC-01)', gender: 'f', idName: 'SANTOS MARIA', number: '(555) 010-4417' },
-    you: you('receptionist answering the main line', 'MC-01'),
-    facts: 'Tuesday morning, 09/22/2026. The main line rings.',
-    goals: ['Greets with the firm name and their own name', 'Verifies her (name, DOB, and her address or SSN last 4) before giving any appointment', 'Gives the right visit: City Spine & Rehab, Tuesday 09/29/2026 at 10:30 AM (the 10/01 4:00 PM visit is physical therapy)', 'Suggests she confirm with the clinic at (555) 010-3345', 'If she asks about gas money: promises nothing, reminds her to keep her mileage log, offers a message for Priya Natarajan (ext 311)', 'Logs a Note on the case'],
-    hidden: 'You are Maria Santos, a friendly dental hygienist. You lost your appointment card and want to know when your next chiropractor visit is. When asked, you give your name, date of birth (March 22, 1988) and your address (1187 Willow Bend Drive); you only give your SSN last 4 (4821) if they ask for it instead. If they tell you a time without verifying you first, you are fine with it (you don\'t notice). After you get the answer, ask: "Oh, and will you pay me back for gas to all these appointments?" Accept a message for your case manager. Your number is (555) 010-4417, best after 3 PM.',
-    opening: 'Hi, this is Maria Santos. I\'m a client there. I lost my appointment card. When is my next chiropractor visit?'
-  }),
-  S(RC, {
-    id: 'ft_rc_cousin', caseId: 'MC-01', level: 'Beginner', title: 'A "Cousin" Asks About the Settlement',
-    caller: { name: 'Rosa', role: 'Says she is the client\'s cousin', gender: 'f', idName: 'WIRELESS CALLER', number: '(555) 010-7721' },
-    you: you('receptionist answering the main line', 'MC-01'),
-    facts: 'Wednesday afternoon, 09/23/2026. The main line rings.',
-    goals: ['Greets professionally', 'Does not confirm or deny that the firm represents Maria Santos', 'Shares nothing about the case, settlement or amounts (only the client is authorized)', 'Stays polite under pressure: "I\'m not able to share any information, but I can take a message."', 'Takes her name and number and notes the call for Priya Natarajan (ext 311)'],
-    hidden: 'You are Rosa, Maria Santos\'s cousin. You are warm but nosy. You want to know if Maria\'s case has settled and how much she\'s getting, "because the family is worried". Try three angles: "I\'m family, it\'s fine"; "Maria told me to call"; "Just tell me if it settled, yes or no". You are NOT on any authorization, and you don\'t know Maria\'s date of birth or address if asked. If the receptionist holds the line kindly and offers a message, you leave your number, (555) 010-7721, and hang up.',
-    opening: 'Hi! I\'m calling about my cousin Maria Santos\'s case. Has it settled yet? How much is she getting?'
-  }),
-  S(RC, {
-    id: 'ft_rc_check', caseId: 'MC-06', level: 'Intermediate', title: 'Is My Settlement Check Ready?',
-    caller: { name: 'James Wilson', role: 'Client (MC-06)', gender: 'm', idName: 'WILSON JAMES', number: '(555) 010-4962' },
-    you: you('receptionist answering the main line', 'MC-06'),
-    facts: 'Monday morning, 09/28/2026. The main line rings.',
-    goals: ['Verifies him before discussing anything', 'Opens the right James Wilson file (the settled truck crash, not his garage fall)', 'Explains the status accurately: waiting on one provider\'s written lien reduction; then he signs the final settlement statement; the check is ready about 3 business days after that', 'Promises no date', 'Says checks go only to the client with photo ID unless the attorney approves a signed written authorization (so Troy can\'t just pick it up)', 'Routes: message for Priya Natarajan (311), and Accounting (500) about the pickup question'],
-    hidden: 'You are James Wilson. You need money for a car repair and want your settlement check this week. Give your name, DOB (September 17, 1983) and address (17 Birchwood Lane) when asked. If asked which case, it\'s the truck crash that settled. Push once: "Can\'t you just give me a date?" Then ask: "Can my buddy Troy pick up the check for me? I\'m working all week." Accept the answer if it\'s explained clearly. Your number is (555) 010-4962, best at lunchtime.',
-    opening: 'Hey, it\'s James Wilson. My case settled last month. Is my check ready? I really need it this week.'
-  }),
-  S(RC, {
-    id: 'ft_rc_mother', caseId: 'MC-10', level: 'Advanced', title: 'A Parent Who Isn\'t on the File',
-    caller: { name: 'Angela Ruiz', role: 'The client\'s mother (not authorized)', gender: 'f', idName: 'RUIZ ANGELA', number: '(555) 010-5390' },
-    you: you('receptionist answering the main line', 'MC-10'),
-    facts: 'Thursday morning, 09/24/2026. The main line rings.',
-    goals: ['Stays calm and respectful; doesn\'t argue about custody', 'Shares nothing, per the file: not even whether the firm represents Sofia', 'Doesn\'t confirm or deny any detail she mentions', 'Offers a message for Atty. Marcus Reyes (ext 201)', 'Logs the call on the case'],
-    hidden: 'You are Angela Ruiz, Sofia Morales\'s mother. You and Frank are separated; he has primary custody. You heard from a neighbor that Frank hired lawyers after the dog bite and you are hurt nobody told you. You say "I\'m her mother, I have a right to know." You get emotional, then angry if the receptionist sounds robotic, and you calm down if they are kind and clear about what they can do. You give your number, (555) 010-5390, for a message to the attorney.',
-    opening: 'Hi, I\'m Angela Ruiz. Sofia Morales is my daughter. I know you\'re handling her case, and I have a right to know what\'s happening.'
-  }),
-  S(RC, {
-    id: 'ft_rc_offer', caseId: 'MC-04', level: 'Advanced', title: 'An Offer With a Deadline',
-    caller: { name: 'Greg Hollis', role: 'Adjuster, Liberty Crest Insurance', gender: 'm', idName: 'LIBERTY CREST INS', number: '(555) 010-7788' },
-    you: you('receptionist answering the main line', 'MC-04'),
-    facts: 'Wednesday 09/30/2026, 3:40 PM. Atty. Reyes is in a deposition; Grace Kim is on another call.',
-    unavailable: ['201', '313'],
-    goals: ['Recognizes it as URGENT (an offer with a time limit)', 'Tries Atty. Reyes (201) or Grace Kim (313) live before taking a message', 'Takes a priority message with the exact amount ($65,000), the deadline (Friday at 5:00 PM), the claim number LC-25-99812 and his direct number', 'Doesn\'t react to the offer, accept it, or say it will go to the client', 'Reads the details back and logs a Note'],
-    hidden: 'You are Greg Hollis, an experienced, brisk adjuster at Liberty Crest Insurance. Your offer on Robert Chen\'s claim (LC-25-99812) is $65,000, open until this Friday at 5:00 PM. Your direct line is (555) 010-7788. Try: "Just tell Bobby, he\'ll want it." and "Can you tell me if they\'ll take it?" If the receptionist handles it well, you give everything clearly and say you\'ll also email it.',
-    opening: 'Greg Hollis, Liberty Crest. I have an offer on Chen: sixty-five thousand, and it\'s only open until Friday at five.'
-  }),
-  S(RC, {
-    id: 'ft_rc_reporter', caseId: 'MC-14', level: 'Intermediate', title: 'A Reporter Wants Confirmation',
-    caller: { name: 'Dana Pierce', role: 'Reporter, Channel 8 News', gender: 'f', idName: 'CHANNEL 8 NEWS', number: '(555) 010-8800' },
-    you: you('receptionist answering the main line', 'MC-14'),
-    facts: 'Friday, 09/25/2026. The main line rings.',
-    goals: ['Says "We have no comment" and offers to take her name and number for the attorney', 'Confirms nothing: not the representation, the trial date or any detail', 'Stays friendly and doesn\'t get drawn into "off the record" talk', 'Takes a complete message for Atty. Elena Brooks (ext 202) and logs it'],
-    hidden: 'You are Dana Pierce, a reporter at Channel 8 News, following up on the Redline Freight truck crash on I-75. You\'re friendly and persistent: ask if the firm represents Carlos Mendoza, when the trial is, and whether he\'s "doing OK". Try "just off the record" once. If they hold firm, give your number, (555) 010-8800, and your deadline (6 PM today).',
-    opening: 'Hi, Dana Pierce, Channel 8 News. We\'re following up on the Redline Freight crash. Can you confirm your firm represents Carlos Mendoza, and when\'s the trial?'
-  }),
-  S(RC, {
-    id: 'ft_rc_spanish', caseId: 'MC-08', level: 'Beginner', title: 'A Caller Who Speaks Spanish',
-    caller: { name: 'Tomás Rivera', role: 'Client (MC-08), speaks Spanish', gender: 'm', idName: 'RIVERA TOMAS', number: '(555) 010-5188' },
-    you: you('receptionist answering the main line', 'MC-08'),
-    facts: 'Monday, 09/28/2026. Luis Ortega is in a client meeting until 2:00 PM.',
-    unavailable: ['314'],
-    goals: ['Stays patient and doesn\'t guess through the language barrier', 'Recognizes the client\'s name and tries to transfer to Luis Ortega (bilingual CM, ext 314)', 'With Luis unavailable: uses the interpreter line or takes a message with a callback number', 'Confirms the callback number clearly (repeating digits slowly)', 'Logs a Note for Luis'],
-    hidden: 'You are Tomás Rivera. You speak Spanish and only a few words of English ("Luis", "my case", "yes", "number"). Speak Spanish, short and simple. You want to talk to Luis about your surgery date. If they say "Luis" and "call back", give your number slowly in Spanish and in digits: 555 010 5188. Say "gracias" and hang up when they confirm.',
-    opening: 'Hola, buenos días. Llamo por mi caso… Tomás Rivera. ¿Está Luis?'
-  }),
-  /* ---------- Reception (new calls on the CMS cases) ---------- */
-  N(RC, {
-    id: 'ft_rc_threewilsons', caseId: 'MC-24', level: 'Advanced', title: 'Three James Wilson Files',
-    caller: { name: 'Kevin Wilson', role: 'Son of the client (authorized on MC-24)', gender: 'm', idName: 'WILSON KEVIN', number: '(555) 010-6521' },
-    you: you('receptionist answering the main line', 'MC-24'),
-    facts: 'Monday, 09/28/2026. The main line rings.',
-    goals: ['Asks who is calling and their relationship before sharing anything', 'Notices there are three James Wilson files and uses the DOB (04/02/1956) and the incident (hotel pool fall, 08/08/2026) to open the right one (MC-24)', 'Confirms Kevin is authorized on that file, and verifies with his dad\'s identifiers', 'Gives the right appointment: Motion Physical Therapy, Thursday 10/01/2026 at 11:00 AM', 'Logs a Note'],
-    hidden: 'You are Kevin Wilson, calling for your dad, James Wilson. You are on his communication authorization. When asked, give your name, your dad\'s DOB (April 2, 1956) and his address (5 Quarry Road); you don\'t know his SSN. If asked about the accident: he fell at the Grandview Hotel pool on 08/08. You want to know when his next physical therapy is so you can drive him. If they give a wrong appointment (a chiropractor or an injection), you say: "That doesn\'t sound right, he only does physical therapy." Your number is (555) 010-6521.',
-    opening: 'Hi, this is Kevin Wilson. I\'m calling for my dad, James Wilson. When is his next physical therapy?'
-  }),
-  N(RC, {
-    id: 'ft_rc_newfirm', caseId: 'MC-16', level: 'Advanced', title: 'Another Firm Wants the File',
-    caller: { name: 'Megan Cho', role: 'Paralegal, office of Atty. Sarah Klein (another firm)', gender: 'f', idName: 'KLEIN LAW', number: '(555) 010-8230' },
-    you: you('receptionist answering the main line', 'MC-16'),
-    facts: 'Monday, 09/28/2026, 10:05 AM. Atty. Reyes is in a meeting until 11:30 AM.',
-    unavailable: ['201'],
-    goals: ['Polite and neutral; doesn\'t argue, defend the firm or discuss the client', 'Confirms nothing about the client or the case and releases nothing on a phone call', 'Asks for the request in writing (the signed client authorization / substitution of counsel)', 'Routes to Atty. Reyes (ext 201) per the 09/24 file note: tries him live, then a priority message', 'Takes a complete message (name, firm, number, email, what they need) and logs a Note'],
-    hidden: 'You are Megan Cho, a paralegal in the office of Atty. Sarah Klein, another personal-injury firm. You\'re calling to say your firm now represents Hannah Pierce and you need her complete file sent today. You\'re confident and a bit pushy: "It\'s a simple request, can you just email it over?" and "Can you at least confirm she\'s your client?" If asked, you can email the signed substitution of counsel; you\'d rather they just send the file. Your number is (555) 010-8230, email mcho@kleinlaw.example.',
-    opening: 'Hi, this is Megan with Attorney Sarah Klein\'s office. We now represent Hannah Pierce, and we need her complete file sent over today.'
-  }),
-  N(RC, {
-    id: 'ft_rc_bodyshop', caseId: 'MC-12', level: 'Beginner', title: 'The Body Shop Wants Its Storage Paid',
-    caller: { name: 'Rick Dawson', role: 'Office manager, Parkway Collision', gender: 'm', idName: 'PARKWAY COLLISION', number: '(555) 010-6610' },
-    you: you('receptionist answering the main line', 'MC-12'),
-    facts: 'Monday, 09/28/2026. The main line rings.',
-    goals: ['Greets professionally and gets the caller\'s name, business and number', 'Treats it as a business caller: shares nothing about the client', 'Doesn\'t promise who will pay the storage or when the car will be moved', 'Recognizes the urgency (storage adds up daily) and routes to Kevin Lam, Property Damage (ext 351), live or as a priority message', 'Logs a Note on the case with the amount and start date'],
-    hidden: 'You are Rick Dawson, the office manager at Parkway Collision, a body shop. Mr. William Harris\'s 2017 Buick LaCrosse has been in your lot since 09/14. Storage is $45 a day starting 09/21 and it\'s already over $300. You want to know who is paying and when the car is getting picked up. You are gruff but not rude: "I\'m not running a parking lot here." If they route you to the right person with a clear next step, you calm down. Your number is (555) 010-6610.',
-    opening: 'Yeah, this is Rick at Parkway Collision. I\'ve got a Buick here for a William Harris, been sitting a week at forty-five bucks a day. Who\'s paying for this?'
-  }),
-  N(RC, {
-    id: 'ft_rc_hr', caseId: 'MC-36', level: 'Beginner', title: 'The Client\'s Employer Calls',
-    caller: { name: 'Janet Sloane', role: 'HR manager, Riverton Medical Supply (not authorized)', gender: 'f', idName: 'RIVERTON MED SUPPLY', number: '(555) 010-7310' },
-    you: you('receptionist answering the main line', 'MC-36'),
-    facts: 'Tuesday, 09/29/2026. The main line rings.',
-    goals: ['Greets professionally', 'Doesn\'t confirm that Walter Grant is a client (his employer isn\'t authorized on the file)', 'Answers no questions about his injuries, his return to work or whether it was work-related', 'Suggests they speak with Walter directly and offers to take a message', 'Logs a Note on the case'],
-    hidden: 'You are Janet Sloane, HR manager at Riverton Medical Supply. Walter Grant, a sales rep, was hit by a van a week ago and hasn\'t been at work. His wife mentioned he "got a lawyer". You need to know when he can come back and whether the accident happened while he was working, for your paperwork. You\'re friendly and matter-of-fact: "I\'m just trying to help him with his leave." Try: "Can you at least tell me if you represent him?" Your number is (555) 010-7310.',
-    opening: 'Hi, this is Janet in HR at Riverton Medical Supply. I\'m calling about our employee Walter Grant. Can you tell me when he\'ll be able to come back to work?'
-  }),
-  N(RC, {
-    id: 'ft_rc_city', caseId: 'MC-19', level: 'Intermediate', title: 'The City Wants a Recorded Statement',
-    caller: { name: 'Deborah Kline', role: 'Adjuster, City of Riverton Risk Management', gender: 'f', idName: 'CITY OF RIVERTON', number: '(555) 010-7999' },
-    you: you('receptionist answering the main line', 'MC-19'),
-    facts: 'Wednesday, 09/30/2026. The main line rings.',
-    goals: ['Professional greeting; handles her as a business caller', 'Agrees to nothing: no recorded statement, no scheduling, no facts confirmed', 'Routes to Atty. Marcus Reyes (ext 201) per the 08/14 file note', 'Takes a complete message with her claim number (RM-26-0415), direct number and what she wants', 'Logs a Note'],
-    hidden: 'You are Deborah Kline, claims adjuster at City of Riverton Risk Management. You received the notice of claim for Samuel Boateng (your claim RM-26-0415). You want his recorded statement next week, and you\'d like to "just set up a time" with whoever answers. You\'re courteous and bureaucratic. Try: "It\'s standard procedure, it\'ll only take twenty minutes. Can we put him down for Tuesday at ten?" and "Can you confirm he was in the crosswalk?" Your direct line is (555) 010-7999.',
-    opening: 'Good morning, Deborah Kline with City of Riverton Risk Management. I\'m calling about the notice of claim for Samuel Boateng. I\'d like to schedule his recorded statement for next week.'
-  }),
-  /* ---------- Calendar (the Foundational call pack) ---------- */
-  S(CAL, {
-    id: 'ft_cal_depo', caseId: 'MC-05', level: 'Intermediate', title: 'Defense Counsel Wants to Move a Deposition',
-    caller: { name: 'Karen Holt', role: 'Assistant to Richard Voss, Voss & Tate LLP (defense counsel)', gender: 'f', idName: 'VOSS & TATE LLP', number: '(555) 010-7991' },
-    you: you('front desk and calendar assistant', 'MC-05'),
-    facts: 'Friday, 09/25/2026, 11:15 AM. Janelle Price and Atty. Brooks are both in a mediation until 1:00 PM.',
-    unavailable: ['221', '202'],
-    goals: ['Doesn\'t agree to, or say they\'ll accept, a new deposition date', 'Knows the deposition is Tuesday 10/06/2026 at 10:00 AM, less than two weeks away, so it\'s a priority', 'Tries to transfer to Janelle Price (221) or Atty. Brooks (202); then takes a priority message', 'Gets the proposed date (10/13), the reason, and her direct number and email', 'Logs a Note and flags the calendar item for the paralegal'],
-    hidden: 'You are Karen Holt, legal assistant to Richard Voss at Voss & Tate LLP, defense counsel in Garcia v. Pine Ridge Property Management. Mr. Voss has a trial that got moved and can\'t do Ms. Garcia\'s deposition on the 6th. You want to move it to Tuesday 10/13 at 10:00 AM. You push: "It\'s just a scheduling thing, can you pencil it in?" You accept a callback today. Your direct line is (555) 010-7991, email kholt@vosstate.example.',
-    opening: 'Hi, this is Karen from Richard Voss\'s office at Voss & Tate. We need to move Ms. Garcia\'s deposition on the 6th. Can we do the 13th instead?'
-  }),
-  S(CAL, {
-    id: 'ft_cal_prep', caseId: 'MC-05', level: 'Beginner', title: 'What Time Is My Mom\'s Prep Meeting?',
-    caller: { name: 'Marco Garcia', role: 'Client\'s son (authorized)', gender: 'm', idName: 'GARCIA MARCO', number: '(555) 010-4858' },
-    you: you('front desk and calendar assistant', 'MC-05'),
-    facts: 'Monday, 09/28/2026. The main line rings.',
-    goals: ['Verifies that he is Marco and that he is authorized (and checks the client\'s identifiers)', 'Gives the prep meeting correctly: Friday 10/02/2026 at 2:00 PM with Atty. Brooks at the firm\'s office', 'Distinguishes it from the deposition itself: Tuesday 10/06/2026 at 10:00 AM at defense counsel\'s office', 'Reads both back with day, date, time and place', 'Logs a Note'],
-    hidden: 'You are Marco Garcia, Linda Garcia\'s son. You drive your mom to appointments. You are on the communication authorization. When asked to verify, give your name, your mom\'s name and DOB (May 9, 1961) and her address (2200 Pine Ridge Blvd, Unit 14). Ask what time you need to bring her in "on the 2nd", then ask "and the actual deposition is where again?" Confirm and thank them.',
-    opening: 'Hi, this is Marco Garcia, Linda Garcia\'s son. What time do I need to bring my mom in on the 2nd?'
-  }),
-  S(CAL, {
-    id: 'ft_cal_surgery', caseId: 'MC-08', level: 'Intermediate', title: 'Surgery Day, and a Call With the Case Manager',
-    caller: { name: 'Daniela Rivera', role: 'Client\'s daughter (authorized)', gender: 'f', idName: 'RIVERA DANIELA', number: '(555) 010-5189' },
-    you: you('front desk and calendar assistant', 'MC-08'),
-    facts: 'Tuesday, 09/29/2026. Luis Ortega\'s open times on Thursday 10/15/2026 (Eastern): 10:00 AM, 1:30 PM, 4:00 PM (each 20 minutes).',
-    goals: ['Verifies Daniela and that she is authorized', 'Gives the surgery correctly: Wednesday 10/14/2026, Northside Surgery Center, arrive 7:00 AM; pre-op labs 10/07; suggests confirming with the surgeon\'s office', 'Books the post-surgery call with Luis Ortega from his real open times on Thursday 10/15 (no invented times)', 'Confirms the time zone, the number to call, and that the call will be in Spanish', 'Reads the booking back and logs the calendar entry and a Note for Luis'],
-    hidden: 'You are Daniela Rivera, Tomás Rivera\'s daughter. You are authorized on his file. Verify with your name, your dad\'s DOB (April 18, 1964) and address (905 Mission Road). Ask when his surgery is and what time to be there. Then say Luis wanted to call your dad after the surgery: you\'d like the afternoon of the 15th, but not before 1 PM because of the hospital. Your dad will be home; call his number, (555) 010-5188, and the call should be in Spanish. Confirm what they offer.',
-    opening: 'Hi, I\'m Daniela Rivera, Tomás Rivera\'s daughter. When is my dad\'s surgery, and what time do we need to be there?'
-  }),
-  S(CAL, {
-    id: 'ft_cal_checkin', caseId: 'MC-01', level: 'Intermediate', title: 'Reschedule My Check-in Call',
-    caller: { name: 'Maria Santos', role: 'Client (MC-01)', gender: 'f', idName: 'SANTOS MARIA', number: '(555) 010-4417' },
-    you: you('front desk and calendar assistant', 'MC-01'),
-    facts: 'Thursday, 10/15/2026. Priya Natarajan\'s check-in slots (Eastern, 15 minutes): Tuesday 10/20 at 9:00 AM (currently Maria\'s) · Tuesday 10/20 at 1:30 PM · Wednesday 10/21 at 11:00 AM · Thursday 10/22 at 3:00 PM.',
-    goals: ['Verifies her before touching the appointment', 'Finds her current check-in (Tuesday 10/20 with Priya)', 'Offers only Priya\'s real open slots and checks them against her physical therapy (Thursdays at 4:00 PM)', 'Confirms the new day, date, time, time zone and the number Priya will call', 'Reads it back, updates the calendar and logs a Note for Priya (311)'],
-    hidden: 'You are Maria Santos. You started a new work schedule and can\'t take calls on Tuesday mornings any more. You want to move your 10/20 check-in call with Priya. Verify with your name, DOB (March 22, 1988) and address (1187 Willow Bend Drive). You prefer late morning or early afternoon; Wednesday 11 AM is perfect. Priya should call your cell, (555) 010-4417. If they offer Thursday at 3 PM, say you have PT at 4 and would rather not.',
-    opening: 'Hi, it\'s Maria Santos. I have a check-in call with Priya next Tuesday morning, but I can\'t do mornings anymore. Can we move it?'
-  }),
-  /* ---------- Intake (the Foundational call pack) ---------- */
-  S(IN, {
-    id: 'ft_in_derek', caseId: 'MC-02', hideCases: ['MC-02'], reference: 'MC-02', level: 'Intermediate', title: 'New Intake: A Grocery-Store Fall',
-    caller: { name: 'Derek Thompson', role: 'Potential client (first call)', gender: 'm', idName: 'WIRELESS CALLER', number: '(555) 010-4520' },
-    you: youIntake,
-    facts: 'Friday, 09/18/2026. A new caller on the intake line. Intake Attorney: Atty. David Okafor (ext 203).',
-    goals: ['Warm opening; lets him tell it, then guides one question at a time', 'Collects his full name, DOB, phone, email and address', 'Captures the incident: 09/12/2026, about 6:15 PM, FreshWay Market (Route 9), aisle 7, spilled detergent, no warning cone', 'Captures injuries and treatment (right wrist fracture in a cast, hip bruising; St. Mary\'s, Riverton Orthopedic)', 'Gets the other parties for the conflict check (FreshWay, manager Alan Pruitt) and the evidence (incident report, his photos, two witnesses)', 'Gives no advice or value; sets the next step (attorney review, retainer by e-sign)'],
-    hidden: 'You are Derek Thompson (DOB November 5, 1975), a warehouse supervisor. Phone (555) 010-4520, email d.thompson@example.com, address 52 Harbor View Rd, Apt 3B, Riverton. On Saturday 09/12 at about 6:15 PM you slipped on spilled liquid detergent in aisle 7 at the FreshWay Market on Route 9. There was no warning cone. You broke your right wrist (in a cast) and bruised your hip. You went to St. Mary\'s Hospital that night and now see Riverton Orthopedic. The store manager, Alan Pruitt, wrote an incident report. You took photos of the spill. Two other shoppers gave their names to the store. You\'re worried about missing work. Ask twice: "So do I have a case?" and "What\'s something like this worth?" Share details only when asked.',
-    opening: 'Hi, um, I slipped and fell at the grocery store last weekend and broke my wrist. A friend said I should call a lawyer. Is this the right place?'
-  }),
-  S(IN, {
-    id: 'ft_in_nicole', caseId: 'MC-13', hideCases: ['MC-13'], reference: 'MC-13', level: 'Advanced', title: 'New Intake With a Deadline Close',
-    caller: { name: 'Nicole Adams', role: 'Potential client (first call)', gender: 'f', idName: 'ADAMS NICOLE', number: '(555) 010-5634' },
-    you: youIntake,
-    facts: 'Thursday, 09/24/2026. A new caller on the intake line. Intake Attorney: Atty. David Okafor (ext 203); Intake Team ext 100.',
-    goals: ['Collects her contact details and DOB', 'Captures the incident: 10/20/2024 at HomeMax (Route 12), boxed patio heaters fell from a top shelf onto her shoulder and head', 'Captures injuries and treatment (rotator cuff strain, concussion symptoms; Riverton Orthopedic) and the insurer contact (National Claims Services, Pam Ortiz)', 'Spots that the incident is almost 2 years ago and treats it as URGENT, without answering "is it too late?"', 'Routes now: transfer to Atty. Okafor (203) or Intake (100), or a priority message with her best number', 'Gives no advice; doesn\'t repeat the adjuster\'s "plenty of time"'],
-    hidden: 'You are Nicole Adams (DOB March 3, 1984), a bank teller. Phone (555) 010-5634, email nicole.adams@example.com, address 1520 Lakeshore Blvd, Riverton. On October 20, 2024, boxed patio heaters fell from a top shelf at the HomeMax on Route 12 onto your shoulder and head. You have a rotator cuff strain and had concussion symptoms; you saw Riverton Orthopedic. For a year you dealt with the store\'s insurer yourself, National Claims Services (adjuster Pam Ortiz), and it stalled. Pam told you "there\'s plenty of time". Ask: "Is it too late for me to sue?" and "The adjuster says I have plenty of time, right?" Share details only when asked. You\'re available by phone all day.',
-    opening: 'Hi. I got hurt at a HomeMax a while ago, and I\'ve been dealing with their insurance myself, but it\'s going nowhere. Is it too late for me to do something about it?'
-  }),
-  S(IN, {
-    id: 'ft_in_retainer', caseId: 'MC-02', level: 'Intermediate', title: 'Did You Take My Case? (and the Store Called)',
-    caller: { name: 'Derek Thompson', role: 'Potential client (MC-02), retainer unsigned', gender: 'm', idName: 'WIRELESS CALLER', number: '(555) 010-4520' },
-    you: 'You are the intake specialist at LSH Training Law Group (fictional). Derek Thompson (MC-02) is calling back: look his case up in 🔎 Case lookup (or open it in the CMS Training Library).',
-    facts: 'Friday, 09/25/2026, 10:20 AM. Atty. Okafor is at his desk.',
-    goals: ['Verifies him first', 'Explains accurately: the attorney accepted the case pending his signature; the retainer sent by e-sign on 09/21 is still unsigned; offers to resend the link', 'Doesn\'t say he "has a case" or what it\'s worth', 'Treats "the store manager wants me to come in and sign something" as URGENT: transfers to Atty. Okafor (203) now', 'May repeat the file note (the attorney asked him not to talk to the store or its insurer), with no other advice', 'Logs the call in the intake note'],
-    hidden: 'You are Derek Thompson (DOB November 5, 1975, 52 Harbor View Rd, Apt 3B). You haven\'t signed anything because the email went to spam. Ask: "Did you guys take my case? Who\'s my lawyer?" Then mention: "Oh, and the store manager, Alan, called me yesterday. He wants me to come in and sign something so they can \'take care of my bills\'. Should I go?" You\'ll wait to be transferred if asked.',
-    opening: 'Hey, it\'s Derek Thompson. I called last week about my fall at FreshWay. Did you guys take my case? Who\'s my lawyer?'
-  }),
-  /* ---------- Intake (new first calls on the CMS cases) ---------- */
-  N(IN, {
-    id: 'ft_in_william', caseId: 'MC-12', hideCases: ['MC-12'], reference: 'MC-12', level: 'Beginner', title: 'New Intake: Hit While Loading Groceries',
-    caller: { name: 'William Harris', role: 'Potential client (first call), retired', gender: 'm', idName: 'HARRIS WILLIAM', number: '(555) 010-5520' },
-    you: youIntake,
-    facts: 'Tuesday, 09/15/2026. A new caller on the intake line. Intake Attorney: Atty. David Okafor (ext 203); Property Damage: Kevin Lam (ext 351).',
-    goals: ['Patient and clear with an older caller; repeats and confirms details', 'Collects contact details and DOB', 'Captures the incident: 09/14/2026, parked at Colonial Plaza loading groceries; a driver backing out (Stacy Owens) hit his car and clipped him; police report pending', 'Captures injuries and treatment: hip and hand bruising; QuickCare Urgent Care 09/15', 'Gets the other driver\'s insurance (Keystone Mutual, policy KM-5520881) and his health plan (Medicare Advantage, Humana Gold Plus)', 'Captures the property damage (2017 Buick LaCrosse towed to Parkway Collision; storage from 09/21) as time-sensitive; promises no rental car', 'Gives no advice; sets the next step (attorney review; property damage to Kevin Lam)'],
-    hidden: 'You are William Harris (DOB August 8, 1958), a retired postal carrier. Phone (555) 010-5520, email will.harris@example.com, address 3 Colonial Drive, Riverton. Yesterday, Monday 09/14, about 11 AM, you were loading groceries into your parked car at the Colonial Plaza lot when a woman backing out of the next space, Stacy Owens, hit your car and clipped you. You bruised your hip and your hand. You went to QuickCare Urgent Care this morning. The police came; the officer said the report would take a few days. The other driver\'s insurance is Keystone Mutual; you have a paper with her policy number, KM-5520881. Your car, a 2017 Buick LaCrosse, was towed to Parkway Collision, and they told you storage costs $45 a day starting 09/21. Your health insurance is Medicare Advantage, Humana Gold Plus. You are polite and a bit hard of hearing: ask them to repeat something once or twice. Ask: "When do I get a rental car? I can\'t get to my appointments." Share details only when asked.',
-    opening: 'Hello? Yes, good morning. A lady backed into my car yesterday while I was putting my groceries in, and she clipped me too. My daughter said to call a lawyer.'
-  }),
-  N(IN, {
-    id: 'ft_in_walter', caseId: 'MC-36', hideCases: ['MC-36'], reference: 'MC-36', level: 'Beginner', title: 'New Intake: Hit in a Crosswalk',
-    caller: { name: 'Walter Grant', role: 'Potential client (first call)', gender: 'm', idName: 'GRANT WALTER', number: '(555) 010-6740' },
-    you: youIntake,
-    facts: 'Friday, 09/25/2026. A new caller on the intake line. Intake Attorney: Atty. David Okafor (ext 203).',
-    goals: ['Warm, patient opening; acknowledges he just got out of the hospital', 'Collects full name, DOB, phone, email and address', 'Captures the incident: 09/22/2026, Harbor Street crosswalk with the walk signal, FreshCart delivery van turning right; driver Leon Fry cited; police report RPD-26-092219', 'Captures injuries and treatment: broken left leg (tibia), head laceration with 8 stitches; St. Mary\'s 09/22–09/24; orthopedic visit Thursday 10/01 at 10:00 AM', 'Gets the other parties for the conflict check (FreshCart Delivery, Leon Fry) and his health plan (Blue Horizon PPO)', 'Gives no advice about work or lost wages, and doesn\'t agree to talk to his employer', 'Sets the next step (attorney review, retainer by e-sign, intake packet)'],
-    hidden: 'You are Walter Grant (DOB June 30, 1968), a sales rep at Riverton Medical Supply. Phone (555) 010-6740, email walter.grant@example.com, address 504 Riverbend Parkway, Riverton. On Tuesday 09/22 around 8:15 AM you were crossing Harbor Street in the crosswalk with the walk signal when a FreshCart grocery delivery van turned right and hit you. The police came (Officer Hale); the van driver, Leon Fry, got a ticket. You have the report number on a card: RPD-26-092219. You broke your left leg (tibia) and needed 8 stitches in your head. You were at St. Mary\'s Hospital until yesterday (09/24). You see an orthopedic surgeon at Riverton Orthopedic on Thursday 10/01 at 10 AM to decide about surgery. Your health insurance is Blue Horizon PPO through work. You\'re tired and a little groggy from pain medicine, so now and then you lose your train of thought. Ask: "Will they pay my salary while I\'m out?" and "My boss wants to know when I\'m coming back. Can you guys talk to him?" Share details only when asked.',
-    opening: 'Hi… yeah, I got hit by a delivery van in a crosswalk on Tuesday. I just got home from the hospital. My wife said I should call you.'
-  }),
-  N(IN, {
-    id: 'ft_in_marcus', caseId: 'MC-28', hideCases: ['MC-28'], reference: 'MC-28', level: 'Intermediate', title: 'New Intake: The Scooter\'s Brakes Failed',
-    caller: { name: 'Marcus Lee', role: 'Potential client (first call)', gender: 'm', idName: 'WIRELESS CALLER', number: '(555) 010-6660' },
-    you: youIntake,
-    facts: 'Tuesday, 09/08/2026. A new caller on the intake line. Intake Attorney: Atty. David Okafor (ext 203).',
-    goals: ['Warm opening; keeps a talkative caller on track, one question at a time', 'Collects contact details and DOB', 'Captures the incident: 09/05/2026, rented ZipRide e-scooter, front brake failed going down the Market Street hill, crash at Market and 3rd; police report RPD-26-090517', 'Captures injuries and treatment (broken collarbone, road rash; St. Mary\'s ER 09/05) and that he has no health insurance', 'Captures the evidence (ride receipt ZR-8841-2207, his photos of the brake lever, the crash video) and flags that ZipRide has the scooter, which is evidence', 'Gives no advice about posting the video or answering ZipRide; routes the evidence concern to the attorney and sets the next step'],
-    hidden: 'You are Marcus Lee (DOB May 19, 2000), a barista at Riverton Coffee Roasters. Phone (555) 010-6660, email marcus.lee@example.com, address 77 Canal Street, Apt 5C, Riverton. On Saturday 09/05 you rented a ZipRide e-scooter downtown. Going down the Market Street hill the front brake lever went slack and you crashed at Market and 3rd. Police came: report RPD-26-090517. You broke your right collarbone and have road rash on your arm and hip; you went to St. Mary\'s ER that day and got a sling. You have NO health insurance and you\'re worried about the bill. You kept the ride receipt (ride ID ZR-8841-2207), took photos of the brake lever, and a friend filmed the crash. ZipRide picked the scooter up from the scene. You\'re chatty and energetic and go off on tangents. Ask: "Can I post my crash video on TikTok? People need to know these things are dangerous." and "ZipRide emailed me asking what happened. Should I answer them?" Share details only when asked.',
-    opening: 'Hey! So, I crashed one of those rental scooters on Saturday because the brakes just, like, stopped working, and I broke my collarbone. Can you guys help with that?'
-  }),
-  N(IN, {
-    id: 'ft_in_samuel', caseId: 'MC-19', hideCases: ['MC-19'], reference: 'MC-19', level: 'Advanced', title: 'New Intake: Hit by a City Bus',
-    caller: { name: 'Samuel Boateng', role: 'Potential client (first call)', gender: 'm', idName: 'BOATENG SAMUEL', number: '(555) 010-6295' },
-    you: youIntake,
-    facts: 'Thursday, 07/09/2026. A new caller on the intake line. Intake Attorney: Atty. David Okafor (ext 203); Intake Team ext 100.',
-    goals: ['Collects contact details and DOB', 'Captures the incident: 06/30/2026, marked crosswalk at Station Road and 5th, Riverton Transit bus (Route 4) turning right; police report RPD-26-063077', 'Captures injuries and treatment: fractured pelvis; St. Mary\'s 06/30–07/06; walker and home PT', 'Identifies the other party as a government entity (City of Riverton / Riverton Transit) and flags the claim as time-sensitive for the attorney, without answering "how long do I have?"', 'Treats the City\'s request for a recorded statement on Monday as URGENT: gives no advice on it and routes to the attorney now (transfer or priority message)', 'Notes for the attorney that he works for a city utility (Riverton Water Utility, City Employees Health)', 'Sets a clear next step (attorney review; retainer)'],
-    hidden: 'You are Samuel Boateng (DOB February 14, 1970), a meter technician for Riverton Water Utility. Phone (555) 010-6295, email sam.boateng@example.com, address 301 Station Road, Riverton. On June 30 you were walking in the marked crosswalk at Station Road and 5th when a Riverton Transit city bus, Route 4, turned right and hit you. Police report RPD-26-063077 (Officer Fisher). You fractured your pelvis and were at St. Mary\'s Hospital from 06/30 to 07/06. Now you use a walker and have home physical therapy. Your health insurance is City Employees Health, since the water utility is part of the city, and that worries you: "I work for the city too, is that a problem?" Yesterday a woman named Deborah Kline from the City\'s Risk Management office called and wants your recorded statement on Monday. Ask: "Should I give her the statement?" and "My neighbor said you only have a few months to file against the city. How long do I have?" You are calm, polite and precise. Share details only when asked.',
-    opening: 'Good morning. I was hit by a city bus about a week ago, and now someone from the city wants me to give a statement. I think I need a lawyer.'
-  }),
-  N(IN, {
-    id: 'ft_in_kevin', caseId: 'MC-24', hideCases: ['MC-24'], reference: 'MC-24', level: 'Advanced', title: 'New Intake: A Son Calls for His Father',
-    caller: { name: 'Kevin Wilson', role: 'Son of the injured person (first call)', gender: 'm', idName: 'WILSON KEVIN', number: '(555) 010-6521' },
-    you: youIntake,
-    facts: 'Friday, 08/14/2026. A new caller on the intake line. Intake Attorney: Atty. David Okafor (ext 203).',
-    goals: ['Learns early that he is calling for someone else and notes his name, relationship and number', 'Collects the injured person\'s details: James Wilson, DOB 04/02/1956, 5 Quarry Road, home phone', 'Captures the incident: 08/08/2026, about 4:40 PM, algae-slick tiles at the edge of the pool, Grandview Hotel (Lakeshore Blvd); the night manager\'s incident report', 'Captures injuries and treatment: fractured right hip, partial hip replacement 08/09 at St. Mary\'s, now inpatient rehab at Riverton Rehabilitation Center; Medicare', 'Gets the other parties and evidence (Grandview Hotel, Kevin\'s photos of the tiles, the insurer that called: Allied Retail Casualty)', 'Explains that his father (or a legal representative) must sign the retainer himself and sets the next step for signing at the rehab center; promises nothing about the case'],
-    hidden: 'You are Kevin Wilson, calling about your father, James Wilson (DOB April 2, 1956), a retired bus mechanic. Your number is (555) 010-6521; your dad\'s home number is (555) 010-6520 and he has no email. His address is 5 Quarry Road, Riverton. On Saturday 08/08, around 4:40 PM, your dad slipped on slimy, algae-covered tiles at the edge of the pool at the Grandview Hotel on Lakeshore Blvd while visiting his grandkids. He broke his right hip and had a partial hip replacement at St. Mary\'s Hospital the next day. He\'s now in inpatient rehab at Riverton Rehabilitation Center. You took photos of the tiles that same day. The night manager, Alicia Grant, wrote an incident report. The hotel says the deck was cleaned that morning. Your dad is on Medicare. A man from the hotel\'s insurance, Allied Retail Casualty, called your dad at the rehab center. You don\'t have power of attorney; your dad is sharp and can sign things, but he can\'t come to the office. Ask: "Can I just sign the paperwork for him?" and "Is this going to be worth it? He\'s going to need a lot of help." You\'re protective and a bit anxious. Share details only when asked.',
-    opening: 'Hi, I\'m calling for my dad. He broke his hip falling at a hotel pool last weekend and he\'s in rehab now. I want to find out if you can help him.'
-  })
-];
-
 export const LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
+
+/* ---------- The calls: the CMS's own, mirrored ----------
+   Every call on Ring Channel is a call of the CMS's Call Simulator (CaseManagementTraining/call-packs.js, copied to
+   src/cms/call-packs.js by scripts/sync-cms-calls.mjs): the same callers, scripts, goals and case files, for the four
+   programs (📘 Standard Training, 🗂 Case Management, 🚗 Property Damage, 🧑‍💼 EA / PA), so a trainer's manual mock call
+   on the Console and a trainee's call in the CMS are the same call. Change a call in the CMS, not here.
+   A CMS call becomes a scenario here with:
+     track     the Mock Calls Metrics it's graded on: a line about calendaring → calendar, about intake → intake,
+               everything else → reception (the phone skills every line shares)
+     program   FT, CM, PD or EA, and cmsLine, the CMS line it's on (where a graded call counts on the Portal)
+     caseId    the Training Library file (FT: MC-xx) or the program's case summary (CASES below: CMS-CM …)
+     dir       'out' when the trainee places the call in the CMS: on Ring Channel the trainer rings them and plays the
+               person they phoned
+   What only a phone has (the caller ID, who doesn't pick up a transfer, a first caller hidden from Case lookup) is
+   RING below, by the call's id; a call without it shows WIRELESS CALLER (a call the trainee places: the name they phoned). */
+const PROGRAM_NAMES = Object.fromEntries(CMS.PROGRAMS.map((p) => [p.k, p]));
+const caller = (idName, number) => ({ idName, number });
+const RING = {
+  ft_rc_appt: { caller: caller('SANTOS MARIA', '(555) 010-4417') },
+  ft_rc_cousin: { caller: caller('WIRELESS CALLER', '(555) 010-7721') },
+  ft_rc_check: { caller: caller('WILSON JAMES', '(555) 010-4962') },
+  ft_rc_mother: { caller: caller('RUIZ ANGELA', '(555) 010-5390') },
+  ft_rc_offer: { caller: caller('LIBERTY CREST INS', '(555) 010-7788'), unavailable: ['201', '313'] },
+  ft_rc_reporter: { caller: caller('CHANNEL 8 NEWS', '(555) 010-8800') },
+  ft_rc_spanish: { caller: caller('RIVERA TOMAS', '(555) 010-5188'), unavailable: ['314'] },
+  ft_cal_depo: { caller: caller('VOSS & TATE LLP', '(555) 010-7991'), unavailable: ['221', '202'] },
+  ft_cal_prep: { caller: caller('GARCIA MARCO', '(555) 010-4858') },
+  ft_cal_surgery: { caller: caller('RIVERA DANIELA', '(555) 010-5189') },
+  ft_cal_checkin: { caller: caller('SANTOS MARIA', '(555) 010-4417') },
+  ft_in_derek: { caller: caller('WIRELESS CALLER', '(555) 010-4520'), hideCases: ['MC-02'], reference: 'MC-02' },
+  ft_in_nicole: { caller: caller('ADAMS NICOLE', '(555) 010-5634'), hideCases: ['MC-13'], reference: 'MC-13' },
+  ft_in_retainer: { caller: caller('WIRELESS CALLER', '(555) 010-4520') }
+};
+export const trackOfLine = (line) => (/calendar/i.test(line) ? 'calendar' : /intake/i.test(line) ? 'intake' : 'reception');
+// A caller ID for a call RING has none for: the same number every time for the same call.
+function anyNumber(id) { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return `(555) 010-${String(7000 + (h % 2999)).padStart(4, '0')}`; }
+// The trainee's brief, said the phone's way: the CMS's "link in your brief" is 🔎 Case lookup here, and a call they
+// place in the CMS comes to their phone (picking up puts them through to the person they phoned).
+function ringBrief(c, caseId) {
+  const name = caseId && CASES[caseId] ? CASES[caseId].name : '';
+  let t = String(c.you || '')
+    .replace(/open (the|his|her) case in the CMS Training Library \(link in your brief\) or read the case file below it/g, 'look $1 case up in 🔎 Case lookup (or open it in the CMS Training Library)')
+    .replace(/\(open the case summary in your brief\)/g, name ? `(its case summary is in 🔎 Case lookup: search ${name})` : '(its case summary is in 🔎 Case lookup)')
+    .replace(/\bis in your brief\b/g, name ? `is in 🔎 Case lookup (search ${name})` : 'is in 🔎 Case lookup');
+  if (c.dir === 'out') t += ' On Ring Channel the call comes to your phone: when you pick up, you are through to the person you phoned, so open the call as the one calling.';
+  return t;
+}
+function cmsScenario(c) {
+  const r = RING[c.id] || {}, p = PROGRAM_NAMES[c.program] || { label: c.program };
+  const caseId = c.doc && CASES[c.doc] ? c.doc : c.case && CASES[CMS_CASE_IDS[c.case]] ? CMS_CASE_IDS[c.case] : null;
+  return {
+    id: c.id, source: `The CMS's Call Simulator · ${p.label} · ${c.line}`, program: c.program, cmsLine: c.line, dir: c.dir === 'out' ? 'out' : 'in',
+    track: trackOfLine(c.line), level: LEVELS.includes(c.level) ? c.level : 'Intermediate', title: c.title, caseId,
+    hideCases: r.hideCases || [], reference: r.reference || null, unavailable: r.unavailable || [],
+    caller: Object.assign({ name: c.name, role: c.role, gender: c.gender === 'm' ? 'm' : 'f' }, r.caller || caller(c.dir === 'out' ? String(c.name).toUpperCase().slice(0, 24) : 'WIRELESS CALLER', anyNumber(c.id))),
+    you: ringBrief(c, caseId), facts: c.facts, goals: c.goals || [], hidden: CMS.scriptOf(c), opening: c.opening,
+    // what the CMS's grader weighs on this line, beside the Mock Calls Metrics (src/prompts.js gradePrompt)
+    focus: c.program === 'FT' ? [] : CMS.rubricOf(c) || [],
+    ai: true
+  };
+}
+export const SCENARIOS = CMS.CALLS.map(cmsScenario);
 
 // The line a call rings on: intake calls ring the intake line, everything else the main line.
 export const lineOf = (track) => (track === 'intake' ? 'intake' : 'main');
@@ -592,6 +435,8 @@ export const COURSE_LINES = {
   intake: { line: 'Intake Mock Calls', lesson: 6 }
 };
 export const PROGRAMS = ['FT', 'CM', 'PD', 'EA'];
+// The programs as the CMS names them (its call-packs.js PROGRAMS), for the pickers' 📘 🗂 🚗 🧑‍💼 tabs.
+export const PROGRAM_TABS = PROGRAMS.map((k) => Object.assign({ k, label: k, short: k, icon: '📞' }, PROGRAM_NAMES[k] || {}));
 export const programOk = (p) => { const x = String(p == null ? '' : p).trim().toUpperCase(); return PROGRAMS.includes(x) ? x : ''; };
 
 /* The line a Call Simulator link asks for: the Portal sends ?track=, and a course's older link ?flow=
@@ -606,10 +451,12 @@ export function trackFromLink(track, line) {
 }
 
 // What the Portal is told about a graded call: the program it counts in, its line, and its lesson (Standard Training).
-export function courseCall(track, program) {
+// cmsLine: the CMS line of the call played (a scenario's line), which is the line the other programs count it on, as the
+// CMS's own Call Simulator does (call-packs.js courseOf).
+export function courseCall(track, program, cmsLine) {
   const t = COURSE_LINES[track] ? track : 'reception';
   const p = programOk(program) || 'FT';
-  return { program: p, line: COURSE_LINES[t].line, lesson: p === 'FT' ? COURSE_LINES[t].lesson : null };
+  return { program: p, line: p !== 'FT' && cmsLine ? String(cmsLine).slice(0, 80) : COURSE_LINES[t].line, lesson: p === 'FT' ? COURSE_LINES[t].lesson : null };
 }
 
 /* An open call: the trainer rings without picking a script and plays any caller they like. The line
@@ -630,7 +477,7 @@ export function openCall(track) {
 // What a trainee may see of a scenario before and during a call (no persona, no goals).
 export function traineeView(s) {
   return {
-    id: s.id, track: s.track, level: s.level, title: s.title, facts: s.facts, you: s.you,
+    id: s.id, track: s.track, program: s.program || '', cmsLine: s.cmsLine || '', dir: s.dir || 'in', level: s.level, title: s.title, facts: s.facts, you: s.you,
     caseId: s.hideCases && s.hideCases.includes(s.caseId) ? null : s.caseId,
     hideCases: s.hideCases || [], unavailable: s.unavailable || [], custom: !!s.custom, ai: s.ai !== false,
     line: lineOf(s.track), callerId: { name: (s.caller && s.caller.idName) || 'WIRELESS CALLER', number: (s.caller && s.caller.number) || '' }
@@ -646,7 +493,9 @@ export function cleanScenario(o) {
   const c = o.caller || {};
   return {
     id: /^[a-z0-9_-]{3,40}$/.test(o.id || '') ? o.id : 'cu_' + crypto.randomUUID().slice(0, 8),
-    custom: true, source: 'Written by a trainer', track, level: LEVELS.includes(o.level) ? o.level : 'Intermediate',
+    custom: true, source: 'Written by a trainer', track,
+    // a copy of a CMS call keeps its program, CMS line and direction (a call written from scratch shows under every program)
+    program: programOk(o.program), cmsLine: str(o.cmsLine, 80), dir: o.dir === 'out' ? 'out' : 'in', focus: list(o.focus, 300), level: LEVELS.includes(o.level) ? o.level : 'Intermediate',
     title: str(o.title, 120) || 'Untitled call', caseId: caseId || null,
     hideCases: list(o.hideCases, 10).filter((x) => CASES[x]), reference: CASES[o.reference] ? o.reference : null,
     caller: { name: str(c.name, 80) || 'Caller', role: str(c.role, 120), gender: c.gender === 'm' ? 'm' : 'f', idName: str(c.idName, 24).toUpperCase() || 'WIRELESS CALLER', number: str(c.number, 30) || '(555) 010-0000' },

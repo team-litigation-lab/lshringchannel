@@ -24,7 +24,7 @@
 import { Switchboard } from './switchboard.js';
 import { Grader, GRADE_AUDIO } from './grader.js';
 import { makeToken, readToken, readTokenString, safeEqual, traineeId, secretOf } from './auth.js';
-import { FIRM, CASES, TRACKS, NOTE_FORMS, LINES, LEVELS, CMS_URL, AI_VOICES, traineeView, openCall } from './scenarios.js';
+import { FIRM, CASES, TRACKS, NOTE_FORMS, LINES, LEVELS, CMS_URL, AI_VOICES, PROGRAM_TABS, traineeView, openCall } from './scenarios.js';
 import { hasAI, keyNames, generate, parseJson, liveToken } from './gemini.js';
 import { callerPrompt, liveSetup } from './prompts.js';
 import { traineeThreads, threadById, contactPrompt, msgGradePrompt, cleanMsgGrade, MSG_RUBRIC, MSG_SHEET, MSG_RULES, MESSAGE_LINE, CLIENT_LINE, MESSAGE_PROGRAMS, MESSAGE_ROLES, ROLE_LABELS } from './messaging.js';
@@ -184,7 +184,7 @@ export default {
         const all = await sb.listScenarios();
         const st = await sb.getSettings();
         return json({
-          me, firm: FIRM, cases: CASES, tracks: TRACKS, forms: NOTE_FORMS, lines: LINES, levels: LEVELS, cms: CMS_URL, portal: portalHome(env), openCaller: openCall('reception').caller, voices: AI_VOICES,
+          me, firm: FIRM, cases: CASES, tracks: TRACKS, programs: PROGRAM_TABS, forms: NOTE_FORMS, lines: LINES, levels: LEVELS, cms: CMS_URL, portal: portalHome(env), openCaller: openCall('reception').caller, voices: AI_VOICES,
           scenarios: admin ? all : all.map(traineeView),
           // 💬 The Automated Messaging simulator: its threads, its metrics and the firm's texting policy.
           messaging: { threads: traineeThreads(), rubric: MSG_RUBRIC, sheet: MSG_SHEET, rules: MSG_RULES, line: MESSAGE_LINE, clientLine: CLIENT_LINE, programs: MESSAGE_PROGRAMS, roles: MESSAGE_ROLES, roleLabels: ROLE_LABELS },
