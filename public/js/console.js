@@ -373,15 +373,16 @@
     const online = (App.presence.trainees || []).filter((x) => !x.call);
     const chosen = new Set(pick.aiPool);
     const who = new Set(pick.traineeId ? [pick.traineeId] : []);
-    let track = pick.track;
+    let track = pick.track, prog = '';
     const body = () => {
-      const list = App.cfg.scenarios.filter((x) => x.track === track && x.ai !== false);
+      const list = App.cfg.scenarios.filter((x) => x.track === track && x.ai !== false && (!prog || !x.program || x.program === prog));
       return `<div class="ai-setup">
         <h4>🎚 The caller's voice</h4>
         <select class="input" id="asVoice">${App.voiceOptions(pick.voice)}</select>
         <h4>🎭 The calls the AI may play</h4>
+        <div class="pill-tabs" id="asProg" style="margin-bottom:6px">${[{ k: '', icon: '🗂', short: 'Every program' }].concat(App.cfg.programs || []).map((p) => `<button data-asprog="${p.k}" class="${p.k === prog ? 'on' : ''}">${p.icon} ${esc(p.short)}</button>`).join('')}</div>
         <div class="pill-tabs" id="asTrack">${Object.entries(App.cfg.tracks).map(([k, x]) => `<button data-astrack="${k}" class="${k === track ? 'on' : ''}">${x.icon} ${esc(x.label)}</button>`).join('')}</div>
-        <p class="small muted">Tick the calls to draw from. With none ticked, the AI plays any call on the ${esc(lineOf(track).label)}. Each trainee gets one call drawn from what you tick.</p>
+        <p class="small muted">Tick the calls to draw from. With none ticked, the AI plays any call on the ${esc(lineOf(track).label)}${prog ? ' for the program picked' : ''}. Each trainee gets one call drawn from what you tick.</p>
         <div class="pick-list" id="asScens">${list.map((x) => `<label class="pick ${chosen.has(x.id) ? 'on' : ''}"><input type="checkbox" data-asid="${esc(x.id)}" ${chosen.has(x.id) ? 'checked' : ''}>
           <span><b>${esc(x.title)}</b><br><span class="small muted">${esc(x.caller.name)} · ${esc(x.level)}${x.caseId ? ' · ' + esc(x.caseId) : ''}</span></span></label>`).join('') || '<div class="empty small">No call on this line can be played by the AI.</div>'}</div>
         <div class="row" style="margin:8px 0"><button class="btn btn-sm" data-asall="1">Tick all ${list.length}</button><button class="btn btn-sm" data-asnone="1">Clear</button></div>
@@ -404,7 +405,9 @@
     m.el.addEventListener('click', (e) => {
       const tb = e.target.closest('[data-astrack]');
       if (tb) { track = tb.dataset.astrack; redraw(); return; }
-      if (e.target.closest('[data-asall]')) { App.cfg.scenarios.filter((x) => x.track === track && x.ai !== false).forEach((x) => chosen.add(x.id)); redraw(); return; }
+      const pb = e.target.closest('[data-asprog]');
+      if (pb) { prog = pb.dataset.asprog; redraw(); return; }
+      if (e.target.closest('[data-asall]')) { App.cfg.scenarios.filter((x) => x.track === track && x.ai !== false && (!prog || !x.program || x.program === prog)).forEach((x) => chosen.add(x.id)); redraw(); return; }
       if (e.target.closest('[data-asnone]')) { chosen.clear(); redraw(); return; }
       if (e.target.closest('[data-aswhoall]')) { online.forEach((x) => who.add(x.id)); redraw(); return; }
       if (!e.target.closest('[data-assend]')) return;
@@ -412,7 +415,8 @@
       const graded = !!U.$('#asGraded', m.el).checked;
       pick.graded = graded; try { localStorage.setItem('mcv_graded', graded ? '1' : '0'); } catch (err) {}
       pick.aiPool = [...chosen]; pick.voice = U.$('#asVoice', m.el).value;
-      const ids = [...chosen];
+      // none ticked: any call on the line, or with a program picked, any of that program's calls on it
+      const ids = chosen.size || !prog ? [...chosen] : App.cfg.scenarios.filter((x) => x.track === track && x.ai !== false && (!x.program || x.program === prog)).map((x) => x.id);
       [...who].forEach((traineeId) => App.board.send({ t: 'ai-ring', traineeId, scenarioIds: ids, track, graded, voice: pick.voice }));
       U.toast(`🤖 Ringing ${who.size} trainee${who.size > 1 ? 's' : ''} with an AI caller${ids.length === 1 ? ': ' + App.scen[ids[0]].title : ids.length ? ' from ' + ids.length + ' calls' : ' (any ' + App.cfg.tracks[track].label + ' call)'}.`, 'ok');
       m.close();
@@ -698,6 +702,7 @@
         <div class="muted small">${esc(s.caller.role)} · caller ID the trainee sees: <b class="mono">${esc(t.callerId.name)} ${esc(t.callerId.number)}</b> on the ${esc(t.lineLabel)}</div>
         <div class="small muted" style="margin-top:10px">Open with:</div>
         <div class="opening">${esc(s.opening)}</div>
+        ${s.dir === 'out' ? '<p class="note-box small">📤 In the CMS the trainee places this call: you are the person they phoned. When they pick up, answer with the line above and let them say why they called.</p>' : ''}
         <h4>What you know and how you act</h4>
         <div class="persona">${esc(s.hidden)}</div>
         <h4 style="margin-top:12px">The situation</h4>

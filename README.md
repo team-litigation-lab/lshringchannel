@@ -41,7 +41,7 @@ There's **no sign-in form**: everyone comes in from the Portal, signed in there.
   These leave the address bar with the ticket, like a Call Simulator link (`App.msgLink` in `public/js/app.js`). A thread is scored when it is closed, on the **Client Messaging Metrics** (seven metrics: verification, policy and confidentiality, accuracy, responsiveness to the automation, tone, resolution and next step, escalation and logging — `MSG_RUBRIC`), with its own checklist, and the client's replies come from the same Gemini key pool as the AI callers. The threads are kept apart from the calls (their own `msgs` table), so a thread is never a call in the Call Logs, in 📋 Graded calls or in Trainee Monitoring.
   **On the Portal side** it has its own landing and card (Training-Portal): **🤖 Automated Messaging** on 🛠 Simulators opens `/api/launch?tool=ringchannel&to=automessages`, which reads `?thread=`, `?program=` and `?mode=graded` and passes on only those (`autoMessagesQuery` in `functions/api/launch.js`; `to=messages` is 💬 Client Messaging, above). A course or program link can name a thread the same way.
 - **📊 Graded threads count in the trainee's course as messaging conversations.** A graded thread goes to the Portal the way a graded call does: the same `POST <PORTAL_URL>/api/call-results` with **`kind: 'message'`**, which the Portal files as its Client Messaging simulator on the thread's own course line — **Client Messaging** for a thread a client started, **Automated Messaging** for the automation's (`lineOfThread` in `src/messaging.js`, `reportMsgThread` in `src/switchboard.js`). It needs the same `AI_GATEWAY_SECRET`; without it the score stays on Ring Channel, as a call's does. Practice threads are the trainee's own and are never sent.
-- **📊 Graded calls count in the trainee's course.** When the trainee has a score they can see — the AI graded their practice call, or the trainer sent the review — Ring Channel sends the call to the Portal, server to server: `POST <PORTAL_URL>/api/call-results`, header `X-Gateway-Key` = **`AI_GATEWAY_SECRET`** (the Portal's shared gateway secret; `src/portal.js` `reportGradedCall`, `src/switchboard.js` `reportCall`). The Portal keeps it on the trainee's Portal account and in the course's own store, so the course shows it on their progress: Standard Training counts a call by its lesson (Reception 4, Calendar Management 5, Intake 6), the other programs by their line (`COURSE_LINES` in `src/scenarios.js`). Each call is sent once per score, never for a trainer's own practice, and if the secret isn't set here (or the Portal can't be reached) the call simply stays on Ring Channel — why is kept on the call record. **⚙️ Setup** shows whether it's configured.
+- **📊 Graded calls count in the trainee's course.** When the trainee has a score they can see — the AI graded their practice call, or the trainer sent the review — Ring Channel sends the call to the Portal, server to server: `POST <PORTAL_URL>/api/call-results`, header `X-Gateway-Key` = **`AI_GATEWAY_SECRET`** (the Portal's shared gateway secret; `src/portal.js` `reportGradedCall`, `src/switchboard.js` `reportCall`). The Portal keeps it on the trainee's Portal account and in the course's own store, so the course shows it on their progress: Standard Training counts a call by its lesson (Reception 4, Calendar Management 5, Intake 6), the other programs by the CMS line of the call played (`courseCall` in `src/scenarios.js`). Each call is sent once per score, never for a trainer's own practice, and if the secret isn't set here (or the Portal can't be reached) the call simply stays on Ring Channel — why is kept on the call record. **⚙️ Setup** shows whether it's configured.
 - **Opening Ring Channel's own link**, or signing out, shows **🏠 Open Ring Channel from the LSH Training Portal** with a button there. Trainers get **🏠 Main Portal**, the last button on the top bar, back to the Portal's Training Directory.
 - **If the Portal is down**, *Trainer: is the Portal down?* (folded away on that page) opens the console with the trainer passphrase (`ADMIN_PASSPHRASE`). Trainees wait for the Portal.
 
@@ -267,22 +267,28 @@ The grade is the **weighted average** of the scored metrics (n/a doesn't count),
 
 ## The calls
 
-24 calls. Case files are the training CMS's Training Library (`CaseManagementTraining/mock-cases.js`, MC-01 … MC-36). **Case lookup** shows the same facts, with a link to open the case in the CMS.
+**The calls are the CMS's.** Every call on Ring Channel is a call of the CMS's 📞 Call Simulator (`CaseManagementTraining/call-packs.js`): the same caller, opening line, script, goals and case file, so a trainer's manual mock call on the Console and a trainee's call in the CMS are the same call, on the same case. All four programs' calls are here (87 today):
 
-- **Reception** (the Main Line; note: message slip)
-  - From the Training Portal's Foundational call pack: a client lost her appointment card (MC-01) · a "cousin" asks about the settlement (MC-01) · is my settlement check ready? (MC-06) · a parent who isn't on the file (MC-10) · an offer with a deadline (MC-04) · a reporter wants confirmation (MC-14) · a caller who speaks Spanish (MC-08)
-  - New here: three James Wilson files (MC-24, with MC-06 and MC-23 in lookup) · another firm wants the file (MC-16) · the body shop wants its storage paid (MC-12) · the client's employer calls (MC-36) · the City wants a recorded statement (MC-19)
-- **Calendar** (the Main Line; note: calendar entry)
-  - From the call pack: defense counsel wants to move a deposition (MC-05) · what time is my mom's prep meeting? (MC-05) · surgery day and a call with the case manager (MC-08) · reschedule my check-in call (MC-01)
-- **Intake** (the Intake Line; note: intake note)
-  - From the call pack: a grocery-store fall (MC-02) · a deadline close (MC-13) · did you take my case? (MC-02)
-  - New here, all first calls: hit while loading groceries (MC-12) · hit in a crosswalk (MC-36) · the scooter's brakes failed (MC-28) · hit by a city bus (MC-19) · a son calls for his father (MC-24)
+- **📘 Standard Training**: Reception, Calendar Management and Intake Mock Calls, on the CMS's Training Library files (MC-01 …, `CaseManagementTraining/mock-cases.js`; the text of each file a call is about is the CMS's own);
+- **🗂 Case Management** (John Doe v. Apex Delivery Services, and the Nguyen case calls), **🚗 Property Damage** (Angela Carter's claim) and **🧑‍💼 EA / PA** (Elias Thorne): each on the case summary the CMS plays it on, which is in **🔎 Case lookup** as `CMS-CM`, `CMS-PD` and `CMS-EA`.
+
+How a CMS call plays on the phone:
+
+- **The metrics:** a call on a calendaring line is graded on the Calendar Management Mock Calls Metrics, a call on an intake line on the Intake metrics, every other line on the Reception metrics (the phone skills every line shares). For the other programs the grader also gets what the CMS weighs on that line.
+- **📤 Calls the trainee places** (in the CMS, the trainee phones an adjuster, a provider, Elias…): the trainer rings the trainee's phone and plays the person they phoned; when the trainee picks up they are through, and open the call as the one calling. The AI caller answers the phone the same way.
+- **Where a graded call counts:** Standard Training by its lesson; the other programs by the call's CMS line, as the CMS counts them.
+- **What only a phone has** (the caller ID, who doesn't pick up a transfer, a first caller hidden from Case lookup) is `RING` in `src/scenarios.js`, by the call's id. A call without it rings as WIRELESS CALLER.
 
 On a first intake call nothing is on file, so the case is hidden from **Case lookup**. After the call, the review shows the finished case file to compare with the note.
 
-**🎭 The Scenario Picker** (🗂 Call Logs & Scenario Picker → 🎭 Scenario Picker) lists every call, and **☎ Play on the Console** puts one on the dialer for the trainer's next call. **⧉ Copy** a built-in call to change it, or **＋ Write a new call**: the caller and caller ID, the case, the opening line, the caller's script, the situation, the goals, who is out of the office, and whether trainees can practice it with the AI. Written calls are saved in the Switchboard and appear on the Console and in Practice.
+**🔁 Keeping them the same:** `src/cms/call-packs.js` is the CMS's file, copied unchanged by `scripts/sync-cms-calls.mjs`. The **Sync CMS calls** workflow (`.github/workflows/sync-cms-calls.yml`) runs it every hour (and on Run workflow), checks Ring Channel still builds its calls from it (`tests/cms-unit.mjs`, a Worker dry run), and commits the change to main, so a call changed or added in the CMS reaches the Console on its own. **Change a call in the CMS, never here.** To sync by hand:
 
-The built-in calls live in `src/scenarios.js`. If a case changes in the CMS, update its `CASES` entry and its calls there.
+```bash
+node scripts/sync-cms-calls.mjs
+```
+
+**🎭 The Scenario Picker** (🗂 Call Logs & Scenario Picker → 🎭 Scenario Picker) lists every call, by program (📘 🗂 🚗 🧑‍💼, opening on the program the Portal link named) and line, and **☎ Play on the Console** puts one on the dialer for the trainer's next call. **⧉ Copy** a built-in call to change it, or **＋ Write a new call**: the caller and caller ID, the case, the opening line, the caller's script, the situation, the goals, who is out of the office, and whether trainees can practice it with the AI. Written calls are saved in the Switchboard and appear on the Console and in Practice.
+
 
 ## AI practice callers and AI scoring (optional)
 
@@ -400,7 +406,8 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `src/worker.js` | The Worker: sign-in, the API, recordings (KV), TURN credentials, AI practice and scoring. |
 | `src/switchboard.js` | The Switchboard Durable Object: every phone's WebSocket (presence, ringing, WebRTC signaling, hold, transfer, notes, coaching), the reconnect grace period and ring timeout (alarms), the call records, trainees, written scenarios, 💬 messaging threads and grading settings (SQLite), and when a call is ready to grade. |
 | `src/grader.js` | The Grader Durable Object: the queue of calls to autograde, one at a time, with retries. |
-| `src/scenarios.js` | The firm (directory, rules), the case files, the note forms, the Mock Calls Metrics, and the 24 calls. |
+| `src/scenarios.js` | The firm (directory, rules), the case files, the note forms, the Mock Calls Metrics, and the calls, built from the CMS's (`src/cms/call-packs.js`). |
+| `src/cms/call-packs.js` | The CMS's Call Simulator calls, mirrored unchanged (`scripts/sync-cms-calls.mjs`, the Sync CMS calls workflow). Don't edit it here. |
 | `src/prompts.js` | The AI caller's instructions and the grader's (the metrics, the facilitator's voice). |
 | `src/gemini.js` | The Gemini key pool, text and audio scoring, and Gemini Live tokens. |
 | `src/messaging.js` | 💬 The Client Messaging and Automated Messaging simulators: their threads (the automation's own sequence, who texts back), the firm's texting policy, the Client Messaging Metrics, and the AI's instructions for the client and the scorer. |

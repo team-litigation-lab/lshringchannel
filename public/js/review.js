@@ -418,19 +418,25 @@
       const app = App.host();
       const picked = Console.pickedCall();   // reads the call the Console's tab last put on the dialer
       const track = App.scenTrack || Console.pick.track || 'reception';
-      const list = App.cfg.scenarios.filter((s) => s.track === track);
+      // 📘 🗂 🚗 🧑‍💼 the program: the calls are the CMS's, for every program; the tab opens on the program the Portal
+      // link named (App.callLink.program), or every program. A call written here with no program shows under each.
+      const prog = App.scenProgram != null ? App.scenProgram : (App.cfg.programs || []).some((p) => p.k === App.callLink.program) ? App.callLink.program : '';
+      const inProg = (s) => !prog || !s.program || s.program === prog;
+      const list = App.cfg.scenarios.filter((s) => s.track === track && inProg(s));
+      const progOf = (k) => (App.cfg.programs || []).find((p) => p.k === k);
       const line = (k) => App.cfg.lines[k === 'intake' ? 'intake' : 'main'];
       // Opened from the dialer's 🎭 Call to play, this is a tab of its own: it closes when it's done.
       let own = false; try { own = !!window.opener; } catch (e) {}
       app.innerHTML = `<div class="card"><div class="card-head"><h2>🎭 Scenario Picker</h2><span class="spacer"></span><button class="btn btn-orange" data-act="new">＋ Write a new call</button></div>
-        <p class="muted small">The calls you play live (and the AI plays in practice). <b>☎ Play on the Console</b> puts one on the dialer for your next call; the built-in calls come from the Foundational call pack on the CMS Training Library cases, so copy one to change it, or write your own.</p>
+        <p class="muted small">The calls you play live (and the AI plays in practice). <b>☎ Play on the Console</b> puts one on the dialer for your next call; the built-in calls are the CMS's own Call Simulator calls, the same callers, scripts, goals and case files, for every program, so a mock call here is the call the trainee has in the CMS. Change a built-in call in the CMS (it reaches here on its own), copy one to change it for your session, or write your own.</p>
         <div class="${picked ? 'ok-box' : 'note-box'}" style="margin:0 0 14px">☎ The Console will play <b>${picked ? esc(picked.title) : '🎙 an open call: no script'}</b>${picked ? ` · ${esc(picked.caller.name)} on the ${esc(line(picked.track).label)}` : ' — any caller you like'}.
           ${picked ? '<button class="btn btn-sm" data-pick="" style="margin-left:8px">Clear it</button>' : ''}
           ${own ? '<button class="btn btn-sm btn-orange" data-act="done" style="margin-left:6px" title="Close this tab and go back to the Console">✓ Done — close this tab</button>'
                 : '<a class="btn btn-sm" href="#/console" style="margin-left:6px">☎ Go to the Console →</a>'}</div>
-        <div class="pill-tabs" id="stk" style="margin:10px 0 14px">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === track ? 'on' : ''}" title="${esc(t.label)} calls, on the ${esc(line(k).label)}">${t.icon} ${esc(t.label)} (${App.cfg.scenarios.filter((s) => s.track === k).length})</button>`).join('')}</div>
+        <div class="pill-tabs" id="spg" style="margin:10px 0 0">${[{ k: '', icon: '🗂', short: 'Every program' }].concat(App.cfg.programs || []).map((p) => `<button data-prog="${p.k}" class="${p.k === prog ? 'on' : ''}" title="${esc(p.label || p.short)}: the CMS's calls for it">${p.icon} ${esc(p.short)} (${App.cfg.scenarios.filter((s) => !p.k || !s.program || s.program === p.k).length})</button>`).join('')}</div>
+        <div class="pill-tabs" id="stk" style="margin:10px 0 14px">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === track ? 'on' : ''}" title="${esc(t.label)} calls, on the ${esc(line(k).label)}">${t.icon} ${esc(t.label)} (${App.cfg.scenarios.filter((s) => s.track === k && inProg(s)).length})</button>`).join('')}</div>
         <div class="scen-grid">${list.map((s) => `<div class="scen ${picked && picked.id === s.id ? 'sel' : ''}" style="cursor:default">
-          <div class="meta">${App.levelBadge(s.level)}${s.caseId ? `<span class="badge">${esc(s.caseId)}</span>` : ''}${s.custom ? '<span class="badge blue">Yours</span>' : '<span class="badge">Built in</span>'}${s.ai === false ? '<span class="badge">Live only</span>' : ''}${picked && picked.id === s.id ? '<span class="badge green">On the Console</span>' : ''}</div>
+          <div class="meta">${App.levelBadge(s.level)}${s.program && progOf(s.program) ? `<span class="badge" title="${esc(progOf(s.program).label)}${s.cmsLine ? ' · ' + esc(s.cmsLine) : ''}">${progOf(s.program).icon} ${esc(s.cmsLine || progOf(s.program).short)}</span>` : ''}${s.caseId ? `<span class="badge">${esc(s.caseId)}</span>` : ''}${s.dir === 'out' ? '<span class="badge" title="In the CMS the trainee places this call: ring them and play the person they phoned">📤 Trainee calls out</span>' : ''}${s.custom ? '<span class="badge blue">Yours</span>' : '<span class="badge">From the CMS</span>'}${s.ai === false ? '<span class="badge">Live only</span>' : ''}${picked && picked.id === s.id ? '<span class="badge green">On the Console</span>' : ''}</div>
           <h4>${esc(s.title)}</h4><p><b>${esc(s.caller.name)}</b>: ${esc(s.caller.role)}</p><p>${esc(s.facts)}</p>
           <div class="row"><button class="btn btn-sm btn-green" data-pick="${esc(s.id)}" title="Play this call on your next Console call">☎ Play on the Console</button><button class="btn btn-sm" data-view="${esc(s.id)}">👁 View</button><button class="btn btn-sm" data-copy="${esc(s.id)}">⧉ Copy</button>${s.custom ? `<button class="btn btn-sm" data-edit="${esc(s.id)}">✏️ Edit</button><button class="btn btn-sm" data-del="${esc(s.id)}">🗑</button>` : ''}</div></div>`).join('') || '<div class="empty">No calls here yet.</div>'}</div></div>`;
       app.onclick = async (e) => {
@@ -444,9 +450,11 @@
           App.views.scenarios.render();
           return;
         }
+        const pg = e.target.closest('[data-prog]');
+        if (pg) { App.scenProgram = pg.dataset.prog; App.views.scenarios.render(); return; }
         const tk = e.target.closest('[data-track]');
         if (tk) { App.scenTrack = tk.dataset.track; App.views.scenarios.render(); return; }
-        if (e.target.closest('[data-act="new"]')) return editor({ track, level: 'Intermediate', caller: { gender: 'f' } });
+        if (e.target.closest('[data-act="new"]')) return editor({ track, program: prog, level: 'Intermediate', caller: { gender: 'f' } });
         if (g('view')) return viewScenario(App.scen[g('view')]);
         if (g('copy')) { const s = JSON.parse(JSON.stringify(App.scen[g('copy')])); delete s.id; s.title += ' (copy)'; return editor(s); }
         if (g('edit')) return editor(JSON.parse(JSON.stringify(App.scen[g('edit')])));
@@ -459,7 +467,7 @@
   });
 
   function viewScenario(s) {
-    App.modal({ title: esc(s.title), wide: true, body: `<div class="row">${App.trackBadge(s.track)}${App.levelBadge(s.level)}${s.caseId ? `<span class="badge">${esc(s.caseId)}</span>` : ''}<span class="small muted">${esc(s.source || '')}</span></div>
+    App.modal({ title: esc(s.title), wide: true, body: `<div class="row">${App.trackBadge(s.track)}${App.levelBadge(s.level)}${s.caseId ? `<span class="badge">${esc(s.caseId)}</span>` : ''}<span class="small muted">${esc(s.source || '')}</span></div>${s.dir === 'out' ? '<p class="note-box small" style="margin-top:10px">📤 In the CMS the trainee places this call. On Ring Channel you ring their phone and play the person they phoned: when they pick up, answer with the opening below and let them say why they called.</p>' : ''}
       <p style="margin-top:10px"><b>${esc(s.caller.name)}</b>, ${esc(s.caller.role)} · caller ID <span class="mono">${esc(s.caller.idName)} ${esc(s.caller.number)}</span></p>
       <div class="opening">${esc(s.opening)}</div>
       <div class="grid2"><div><h4>The caller's script</h4><div class="persona">${esc(s.hidden)}</div></div><div><h4>Goals</h4><ul class="small">${(s.goals || []).map((g) => `<li>${esc(g)}</li>`).join('')}</ul><h4>The situation</h4><p class="small">${esc(s.facts)}</p><h4>The trainee's brief (practice)</h4><p class="small">${esc(s.you)}</p></div></div>` });
@@ -498,7 +506,8 @@
         caller: { name: v('caller.name'), role: v('caller.role'), idName: v('caller.idName'), number: v('caller.number'), gender: v('caller.gender') },
         hideCases: f.elements.newcaller.checked && caseId ? [caseId] : [], reference: f.elements.newcaller.checked && caseId ? caseId : null,
         opening: v('opening'), hidden: v('hidden'), facts: v('facts'), goals: v('goals'), you: v('you'),
-        unavailable: [...f.querySelectorAll('[name=un]:checked')].map((x) => x.value), ai: f.elements.ai.checked };
+        unavailable: [...f.querySelectorAll('[name=un]:checked')].map((x) => x.value), ai: f.elements.ai.checked,
+        program: s.program || '', cmsLine: s.cmsLine || '', dir: s.dir || 'in', focus: s.focus || [] };
       try { await API.post('/api/scenarios/save', { scenario: out }); await App.reloadConfig(); m.close(); U.toast('Call saved.', 'ok'); App.scenTrack = out.track; App.views.scenarios.render(); }
       catch (err) { U.toast(err.message, 'error'); }
     };

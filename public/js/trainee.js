@@ -865,7 +865,10 @@
       const link = App.callLink;
       if (link.track || link.line) { const t = linkTrack(link); if (t) { T.track = t; } link.track = link.line = ''; }
       const track = T.track || 'reception';
-      const list = App.cfg.scenarios.filter((s) => s.track === track && s.ai !== false);
+      // the program: the one the Portal link named (the course they came from), or every program; the calls are the CMS's
+      const progs = App.cfg.programs || [];
+      const prog = T.program != null ? T.program : progs.some((p) => p.k === App.callLink.program) ? App.callLink.program : '';
+      const list = App.cfg.scenarios.filter((s) => s.track === track && s.ai !== false && (!prog || !s.program || s.program === prog));
       if (link.graded) {
         link.graded = false;
         if (list.length && App.cfg.features.ai) { const s = list[Math.floor(Math.random() * list.length)]; startAi(s.id, { surprise: true, graded: true, voice: T.voice }); return; }
@@ -874,6 +877,7 @@
         <div class="card-head"><h2>🎭 ${App.trainer() ? 'Try a practice call' : 'Practice with an AI caller'}</h2>${App.trainer() ? '<span class="spacer"></span><a class="btn btn-sm" href="#/admin/aicalls">← 🤖 AI calls</a>' : ''}</div>
         <p class="muted">An AI caller rings your practice phone and talks with you out loud, like a real caller (use a headset). Handle the call, take the note, and the AI scores it with the same rubric your trainer uses. Calls last up to ${App.cfg.features.aiMinutes} minutes.</p>
         <div class="row" style="margin:12px 0 16px">
+          <div class="pill-tabs" id="tpg">${[{ k: '', icon: '🗂', short: 'Every program' }].concat(progs).map((p) => `<button data-prog="${p.k}" class="${p.k === prog ? 'on' : ''}">${p.icon} ${esc(p.short)}</button>`).join('')}</div>
           <div class="pill-tabs" id="trk">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === track ? 'on' : ''}">${t.icon} ${esc(t.label)}</button>`).join('')}</div>
           <span class="spacer"></span>
           <label class="check small"><input type="checkbox" id="optTr"> Show the live transcript</label>
@@ -882,11 +886,12 @@
           <button class="btn btn-orange" id="surprise">🎲 Surprise me</button>
         </div>
         <div class="scen-grid">${list.map((s) => `<div class="scen" data-id="${esc(s.id)}">
-            <div class="meta">${App.levelBadge(s.level)}${s.caseId ? `<span class="badge">${esc(s.caseId)}</span>` : '<span class="badge">New caller</span>'}${s.custom ? '<span class="badge blue">Trainer-written</span>' : ''}</div>
+            <div class="meta">${App.levelBadge(s.level)}${s.program && !prog ? `<span class="badge">${esc(((progs.find((p) => p.k === s.program)) || {}).icon || '')} ${esc(s.program)}</span>` : ''}${s.dir === 'out' ? '<span class="badge" title="You place this call: when you pick up, you are through to them">📤 You call out</span>' : ''}${s.caseId ? `<span class="badge">${esc(s.caseId)}</span>` : '<span class="badge">New caller</span>'}${s.custom ? '<span class="badge blue">Trainer-written</span>' : ''}</div>
             <h4>${esc(s.title)}</h4><p>${esc(s.facts || '')}</p>
             <div><button class="btn btn-primary btn-sm">📞 Take this call</button></div></div>`).join('') || '<div class="empty">No practice calls on this line yet.</div>'}</div>
       </div>`;
       const opts = () => { T.voice = U.$('#optVoice').value; return { transcript: U.$('#optTr').checked, typed: U.$('#optTyped').checked, voice: T.voice }; };
+      U.$('#tpg').onclick = (e) => { const b = e.target.closest('[data-prog]'); if (b) { T.program = b.dataset.prog; App.views.practice.render(); } };
       U.$('#trk').onclick = (e) => { const b = e.target.closest('[data-track]'); if (b) { T.track = b.dataset.track; App.views.practice.render(); } };
       app.querySelector('.scen-grid').onclick = (e) => { const c = e.target.closest('[data-id]'); if (c) startAi(c.dataset.id, opts()); };
       U.$('#surprise').onclick = () => { if (!list.length) return; const s = list[Math.floor(Math.random() * list.length)]; startAi(s.id, Object.assign(opts(), { surprise: true })); };

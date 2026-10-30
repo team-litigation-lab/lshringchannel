@@ -31,6 +31,7 @@ export BASE="http://127.0.0.1:$PORT" OUT="${SHOTS:-$STATE}" PERSIST="$STATE/data
 if [ -n "${ONLY:-}" ]; then node "$ONLY"; exit 0; fi
 node --no-warnings portal-unit.mjs
 node --no-warnings msg-unit.mjs
+node --no-warnings cms-unit.mjs
 node e2e-live.js
 node e2e-portal.js
 if [ -z "${LIVE_ONLY:-}" ]; then

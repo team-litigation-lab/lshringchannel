@@ -899,7 +899,7 @@ export class Switchboard extends DurableObject {
         id: r.id, title: r.title, score: Math.round(r.score), verdict: String(grade.verdict || grade.summary || '').slice(0, 400),
         secs: Math.round(Math.max(0, (r.ended_at || now()) - (r.answered_at || r.created_at)) / 1000),
         voice: (d.metrics && d.metrics.voice) || '', at: new Date(now()).toISOString()
-      }, courseCall(r.track, d.program))
+      }, courseCall(r.track, (d.scenario && d.scenario.program) || d.program, d.scenario && d.scenario.cmsLine))
     });
     const row = this.row(id);
     if (row) { row.data.reported = { at: now(), score: r.score, ok: !!res.ok, error: res.ok ? '' : res.code || '' }; this.save(row); }
