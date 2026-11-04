@@ -251,7 +251,7 @@
   App.onCallBar = function () {
     const bar = document.getElementById('oncall');
     const c = App.trainer() ? App.t : App.p;
-    const active = c && ['ringing', 'connecting', 'live'].includes(c.status);
+    const active = c && ['ringing', 'calling', 'connecting', 'live'].includes(c.status);
     const home = App.trainer() ? 'console' : 'phone';
     if (!active || App.at(home) || (App.trainer() && App.at('practice'))) { bar.classList.add('hidden'); return; }
     const who = App.trainer() ? (c.trainee && c.trainee.name) : (c.callerId && c.callerId.name);
@@ -376,10 +376,14 @@
     if (status === 'connecting' || status === 'live') {
       const dis = status !== 'live' ? 'disabled' : '';
       const xfer = p.transfer && p.transfer.state === 'ringing' && p.mode === 'ai';
-      return `<div class="dev-keys three">
+      // 👥 Merge (another trainee into the call) on a live call with the trainer; an AI practice call has nobody to bridge it.
+      const merge = p.mode === 'live';
+      const txOn = p.transfer && ['ringing', 'consult'].includes(p.transfer.state);
+      return `<div class="dev-keys ${merge ? 'four' : 'three'}">
         <button class="key mute ${p.muted ? 'on' : ''}" data-act="mute" ${dis}><span class="ic">${p.muted ? '🔇' : '🎙'}</span>${p.muted ? 'Unmute' : 'Mute'}</button>
         <button class="key ${p.held ? 'on' : ''}" data-act="hold" ${dis || (xfer ? 'disabled' : '')}><span class="ic">⏸</span>${p.held ? 'Resume' : 'Hold'}</button>
-        <button class="key" data-act="transfer" ${dis || (xfer || (p.transfer && p.transfer.state === 'ringing') ? 'disabled' : '')}><span class="ic">↪</span>Transfer</button>
+        ${merge ? `<button class="key conf" data-act="merge" ${dis || (txOn || p.merged || p.peer ? 'disabled' : '')} title="${p.peer ? 'A practice call between trainees has no bridge for a third phone' : p.merged ? 'You were merged into this call' : 'Ring another trainee into the call: once they answer, everyone hears everyone'}"><span class="ic">👥</span>Merge</button>` : ''}
+        <button class="key" data-act="transfer" ${dis || (xfer || txOn ? 'disabled' : '')}><span class="ic">↪</span>Transfer</button>
         <button class="key hang wide" data-act="hangup"><span class="ic">☎</span>Hang up</button></div>`;
     }
     return idleKeys || '';

@@ -232,8 +232,9 @@
     wire() {
       try { this.mic.disconnect(); } catch (e) {}
       for (const [, leg] of this.legs) if (leg.src) { try { leg.src.disconnect(); } catch (e) {} leg.src.connect(this.all); }
+      // private: a warm transfer's word between two trainees, with the caller (this microphone) left out
       for (const [id, leg] of this.legs) {
-        this.mic.connect(leg.dest);
+        if (!this.private) this.mic.connect(leg.dest);
         for (const [other, x] of this.legs) if (other !== id && x.src) x.src.connect(leg.dest);
       }
     }

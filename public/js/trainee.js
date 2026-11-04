@@ -21,7 +21,7 @@
   const { esc } = U;
   const T = window.Trainee = {};
   const remote = () => document.getElementById('remoteAudio');
-  const active = (p) => p && ['ringing', 'connecting', 'live'].includes(p.status);
+  const active = (p) => p && ['ringing', 'calling', 'connecting', 'live'].includes(p.status);
   /* A trainee's ☎ Console draws every call they take — live, an AI caller a trainer sent, and their own
      practice calls. A trainer's own practice call is drawn on 🎧 Try practice, where they start it. */
   const onPage = () => (App.trainer() ? App.at('practice') : App.at('phone'));
@@ -37,6 +37,7 @@
     App.board.send({ t: 'status', status: App.status });
     if (App.hand) App.board.send({ t: 'hand', up: true });
     const a = m.active, p = App.p;
+    if (p && p.out && active(p)) { outEnd({ by: 'system', reason: 'disconnected' }); return; }   // 🤝 a practice call you placed ends with the connection
     if (p && p.mode === 'live' && active(p)) {
       if (a && a.callId === p.callId && a.status === 'live') App.board.send({ t: 'resume', callId: p.callId });
       else if (!a || a.callId !== p.callId) endLive({ by: 'system', reason: 'disconnected' });
@@ -62,8 +63,16 @@
 
   T.onBoard = function (m) {
     const p = App.p;
+    if (m.t === 'dialing' && T.cancelNext && !(p && p.out && !p.callId)) { T.cancelNext = false; App.board.send({ t: 'cancel', callId: m.callId }); return; }   // hung up before the call was placed
+    if (p && p.out && (m.t === 'dialing' || m.t === 'dial-failed' || (m.callId && m.callId === p.callId))) return onOut(m);
     const mine = p && p.mode === 'live' && p.callId === m.callId;
     switch (m.t) {
+      // ↪ 👥 the trainee's own transfers to another trainee (and merges)
+      case 'tx-ringing': if (mine && p.transfer && p.transfer.trainee) { p.transfer.legId = m.legId; renderDevice(); } else if (mine && p.merging) { p.merging.legId = m.legId; renderDevice(); } return;
+      case 'tx-failed': if (mine) { U.toast(m.reason, 'error'); if (p.transfer && p.transfer.trainee && !p.transfer.legId) p.transfer = null; p.merging = null; renderDevice(); } return;
+      case 'tx-answered': if (mine && p.transfer && p.transfer.trainee) { p.transfer.state = 'consult'; speakThrough(p); Sounds.beep(); renderDevice(); } return;
+      // You were rung for a warm transfer, and the caller is yours now.
+      case 'handed': if (mine) { p.handedFrom = m.from || p.consultFrom || ''; p.consultFrom = ''; p.merged = false; p.conf = null; U.toast(`↪ ${p.handedFrom || 'Your colleague'} handed the caller to you: you're on the line with them now.`, 'ok'); renderDevice(); } return;
       case 'incoming': return incoming(m);
       case 'ai-incoming': return aiIncoming(m);
       case 'ai-stop': if (p && p.mode === 'ai' && p.callId === m.callId && active(p)) { endAi('caller', 'stopped', 'Your trainer ended the call'); U.toast('Your trainer ended the AI call.'); } return;
@@ -84,8 +93,10 @@
       case 'signal': return onSignal(m.data);
       case 'transfer-result':
         if (!mine || !p.transfer) return;
+        if (m.result === 'merged') { p.transfer = null; if (p.held) toggleHold(); else renderDevice(); return; }   // 👥 all three on one call now
         p.transfer.state = m.result;
-        if (m.result !== 'connected') Sounds.beep();
+        if (m.result === 'consult') speakThrough(p);          // the extension answered first: speak to them
+        else if (m.result !== 'connected') { Sounds.beep(); backOnHold(p); }   // no answer, declined, or they hung up: the caller is still on hold
         renderDevice();
         return;
       case 'timeout': if (mine) { p.coaching = !!m.on; p.coachMsg = m.msg || ''; renderDevice(); } return;
@@ -98,7 +109,7 @@
         if (p.needRejoin) return;   // waits for the trainee's click (browsers need one to play audio)
         return;
       // 👥 Merged into a conference: who else is on the call with you.
-      case 'conf-parties': if (mine) { p.conf = m.on ? { names: m.names || [], others: m.others || [], trainer: m.trainer || '' } : null; renderDevice(); } return;
+      case 'conf-parties': if (mine) { p.conf = m.on ? { names: m.names || [], others: m.others || [], trainer: m.trainer || '' } : null; if (m.on) { p.merging = null; p.consultFrom = ''; } renderDevice(); } return;
       case 'ended': if (mine) endLive(m); return;
     }
   };
@@ -106,8 +117,10 @@
   const fromBrief = (m) => ({ mode: 'live', callId: m.callId, line: m.line, lineLabel: m.lineLabel, lineNumber: m.lineNumber, callerId: m.callerId, track: m.track,
     hideCases: m.hideCases || [], rec: !!m.recording, trainer: m.trainer, note: {}, muted: false, held: false, caseId: m.caseId || '',
     // merged: rung into a call the trainer already had on the line. handedFrom: the caller was transferred here.
-    merged: !!(m.conf && !m.conf.handover),
-    handedFrom: (m.conf && m.conf.handover ? m.conf.from : '') || m.handoverFrom || '' });
+    merged: !!(m.conf && !m.conf.handover && !m.conf.consult),
+    handedFrom: (m.conf && m.conf.handover ? m.conf.from : '') || m.handoverFrom || '',
+    // consultFrom: a colleague is warm-transferring a caller to you (you speak to them first). peer: a 🤝 practice call from another trainee.
+    consultFrom: m.conf && m.conf.consult ? m.conf.from : '', peer: m.peer || null });
 
   function incoming(m) {
     T.dial = '';
@@ -229,8 +242,9 @@
     } else {
       if (on) { p.music = Sounds.holdStream(); await p.rtc.setOutgoing(p.music.track); remote().muted = true; }
       else { await p.rtc.setOutgoing(VoIP.Mic.track()); if (p.music) p.music.stop(); p.music = null; remote().muted = false; }
+      p.merging = null;
       // Taking the caller back while the extension still rings cancels the transfer.
-      if (!on && p.transfer && p.transfer.state === 'ringing') App.board.send({ t: 'transfer-cancel', callId: p.callId });
+      if (!on && p.transfer && ['ringing', 'consult'].includes(p.transfer.state)) App.board.send({ t: p.transfer.trainee ? 'tx-cancel' : 'transfer-cancel', callId: p.callId });
       App.board.send({ t: 'hold', callId: p.callId, on });
       if (!on && p.transfer) p.transfer = null;
     }
@@ -248,9 +262,10 @@
     const d = App.dirEntry(ext); if (!d) return;
     U.toast(`↪ On a call this rings ${d.name} (ext ${ext}): tell the caller, Hold, then Transfer. The caller hears hold music while it rings.`);
   }
-  async function doTransfer(ext) {
+  async function doTransfer(ext, kind) {
     const p = App.p; if (!p || p.status !== 'live') return;
     const d = App.dirEntry(ext); if (!d) return;
+    if (p.transfer && ['ringing', 'consult'].includes(p.transfer.state)) return U.toast('A transfer is already on: finish it or press Resume to take the caller back.', 'error');
     if (p.mode === 'ai') {
       if (!p.held) await toggleHold();
       p.transfer = { to: d.name, ext, state: 'ringing' };
@@ -266,12 +281,134 @@
       return;
     }
     if (!p.held) await toggleHold();
-    p.transfer = { to: d.name, ext, state: 'ringing' };
-    App.board.send({ t: 'transfer', callId: p.callId, ext });
+    p.transfer = { to: d.name, ext, state: 'ringing', kind: kind === 'warm' ? 'warm' : 'cold' };
+    App.board.send({ t: 'transfer', callId: p.callId, ext, kind: p.transfer.kind });
     renderDevice();
+  }
+  /* ↪ 👥 To another trainee's line (their trainer's console is the bridge, so the trainer stays the caller):
+     cold sends the caller straight through, warm lets you speak to them first while the caller holds,
+     merge rings them into the call so everyone hears everyone. */
+  async function txTrainee(peer, kind) {
+    const p = App.p; if (!p || p.status !== 'live') return;
+    if (p.mode !== 'live') return U.toast('On a practice call with the AI, transfer to a firm extension.', 'error');
+    if (p.peer) return U.toast('On a practice call between trainees there is no bridge for a third phone: transfer to a firm extension instead.', 'error');
+    if (p.merged) return U.toast('You were merged into this call: the trainee who took it transfers it on.', 'error');
+    if (p.transfer && ['ringing', 'consult'].includes(p.transfer.state)) return U.toast('A transfer is already on: finish it or press Resume to take the caller back.', 'error');
+    if (kind === 'merge') { p.merging = { to: peer.name, ext: peer.ext }; App.board.send({ t: 'tx-ring', callId: p.callId, traineeId: peer.id, kind }); renderDevice(); return; }
+    if (!p.held) await toggleHold();
+    p.transfer = { to: peer.name, ext: peer.ext || '', state: 'ringing', kind, trainee: true };
+    App.board.send({ t: 'tx-ring', callId: p.callId, traineeId: peer.id, kind });
+    renderDevice();
+  }
+  // A warm transfer was answered: the caller stays on hold (their music keeps playing) while you speak to the other end.
+  function speakThrough(p) {
+    if (!p.rtc) return;
+    p.rtc.setOutgoing(VoIP.Mic.track());
+    if (p.music) { p.music.stop(); p.music = null; }
+    remote().muted = false;
+  }
+  // …and when that ends without the hand-over, the caller is back to hold music until you press Resume.
+  function backOnHold(p) {
+    if (!p.held || p.music || !p.rtc) return;
+    p.music = Sounds.holdStream(); p.rtc.setOutgoing(p.music.track); remote().muted = true;
+  }
+  function txComplete() {
+    const p = App.p; if (!p || !p.transfer || p.transfer.state !== 'consult') return;
+    App.board.send({ t: p.transfer.trainee ? 'tx-complete' : 'transfer-complete', callId: p.callId });
+  }
+  function txMerge() {
+    const p = App.p; if (!p || !p.transfer || p.transfer.state !== 'consult' || !p.transfer.trainee) return;
+    App.board.send({ t: 'tx-merge', callId: p.callId });
+  }
+
+  /* ↪ The transfer picker: the other trainees on your switchboard (warm, cold or 👥 merge) and the firm's extensions
+     (warm or cold). `only` = 'merge' for the 👥 Merge key. With no call on, it's a look at who's where. */
+  function pickTransfer(only) {
+    const p = App.p, live = !!(p && p.status === 'live');
+    const mates = (App.peers || []).filter((x) => !x.me);
+    const peerOk = live && p.mode === 'live' && !p.peer && !p.merged;
+    const why = !live ? '' : p.mode !== 'live' ? 'On a practice call with the AI, transfer to a firm extension.' : p.peer ? 'A practice call between trainees can go to a firm extension, not another trainee.' : p.merged ? 'You were merged into this call: the trainee who took it transfers it on.' : '';
+    const tBtns = (x) => {
+      if (!live) return '';
+      const off = !peerOk || x.call ? 'disabled' : '';
+      return only === 'merge' ? `<button class="btn btn-sm btn-green" data-tx="merge" data-tid="${esc(x.id)}" ${off}>👥 Merge in</button>`
+        : `<button class="btn btn-sm" data-tx="warm" data-tid="${esc(x.id)}" ${off} title="Talk to ${esc(x.name)} first while the caller holds">🗣 Warm</button><button class="btn btn-sm" data-tx="cold" data-tid="${esc(x.id)}" ${off} title="Send the caller straight through to ${esc(x.name)}">↪ Cold</button><button class="btn btn-sm" data-tx="merge" data-tid="${esc(x.id)}" ${off} title="Ring ${esc(x.name)} into the call: everyone hears everyone">👥 Merge</button>`;
+    };
+    const f = App.cfg.firm;
+    const firm = only === 'merge' ? '' : `<h4 style="margin:14px 0 6px">📇 Firm extensions</h4>${f.directory.map((d) => `<div class="dir-row"><span class="ext">${esc(d.ext)}</span><div style="flex:1"><b>${esc(d.name)}</b><div class="small muted">${esc(d.role)}</div></div>${live ? `${p.mode === 'ai' ? '' : `<button class="btn btn-sm" data-tx="warm" data-ext="${esc(d.ext)}" title="Announce the caller to ${esc(d.name)} before you hand them over">🗣 Warm</button>`}<button class="btn btn-sm" data-tx="cold" data-ext="${esc(d.ext)}" title="Send the caller straight through">↪ ${p.mode === 'ai' ? 'Transfer' : 'Cold'}</button>` : `<button class="btn btn-sm" data-tx="look" data-ext="${esc(d.ext)}">↪ Transfer</button>`}</div>`).join('')}`;
+    const m = App.modal({ title: only === 'merge' ? '👥 Merge another trainee into the call' : '↪ Transfer the call',
+      body: `<p class="small muted">${only === 'merge' ? 'Their phone rings like any call. Once they answer, everyone hears everyone: the caller, you and them.' : '<b>🗣 Warm</b>: the caller holds while you tell the other person who is calling and why, then you hand them over (or 👥 merge all three). <b>↪ Cold</b>: the caller holds while it rings and goes straight through. Tell the caller before you transfer them.'}</p>
+        ${why ? `<div class="note-box small">${esc(why)}</div>` : ''}
+        <h4 style="margin:10px 0 6px">👥 Trainee lines</h4>${mates.map((x) => `<div class="dir-row"><span class="ext mono">${esc(x.ext || '')}</span><div style="flex:1"><b>${esc(x.name)}</b><div class="small muted">${esc(x.batch || '')} · ${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}</div></div>${tBtns(x)}</div>`).join('') || '<div class="empty small">No other trainee is online right now.</div>'}
+        ${firm}` });
+    m.el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-tx]'); if (!b || b.disabled) return;
+      m.close();
+      if (b.dataset.tx === 'look') return previewTransfer(b.dataset.ext);
+      if (b.dataset.tid) { const x = mates.find((y) => y.id === b.dataset.tid); if (x) txTrainee(x, b.dataset.tx); }
+      else doTransfer(b.dataset.ext, b.dataset.tx);
+    });
+  }
+
+  /* =========================================================
+     🤝 A practice call you place: dial another trainee's extension and play the caller
+     ========================================================= */
+  function placeCall(ext) {
+    if (App.p && active(App.p)) return U.toast('Finish the call you are on first.', 'error');
+    const who = (App.peers || []).find((x) => x.ext === ext && !x.me);
+    App.p = { mode: 'peer', out: true, status: 'calling', ext, callId: null, to: who ? who.name : 'Ext ' + ext, callerId: { name: who ? who.name : 'Ext ' + ext, number: 'Ext ' + ext },
+      lineLabel: 'Trainee line', lineNumber: 'ext ' + ext, note: {}, muted: false, held: false, ringAt: Date.now() };
+    T.dial = '';
+    Sounds.ringback();
+    App.board.send({ t: 'dial', ext, track: T.outTrack || 'reception' });
+    renderAll(); App.onCallBar();
+  }
+  async function onOut(m) {
+    const p = App.p;
+    switch (m.t) {
+      case 'dialing': if (!p.callId) { p.callId = m.callId; if (m.peer) p.to = m.peer.to; p.callerId = { name: p.to, number: 'Ext ' + p.ext }; renderDevice(); } return;
+      case 'dial-failed': Sounds.stop(); App.p = null; U.toast(m.reason, 'error'); renderAll(); App.onCallBar(); return;
+      case 'accepted': {
+        Sounds.stop();
+        p.status = 'connecting'; p.answeredAt = Date.now();
+        renderAll();
+        let stream;
+        try { stream = await VoIP.Mic.open(); } catch (e) { U.toast(e.message, 'error'); App.board.send({ t: 'hangup', callId: p.callId }); return outEnd({ by: 'trainer', reason: 'hangup' }); }
+        const servers = await VoIP.ice();
+        if (App.p !== p || p.status === 'ended') return;
+        p.rtc = new VoIP.RtcCall({ board: App.board, callId: p.callId, offerer: true, iceServers: servers, stream, gen: Date.now(),
+          onRemote: (st) => { const a = remote(); a.srcObject = st; a.volume = App.volume == null ? 1 : App.volume; a.play().catch(() => {}); },
+          onState: (st) => { if (App.p !== p) return; if (st === 'connected' && p.status === 'connecting') { p.status = 'live'; renderAll(); } p.netState = st; },
+          onQuality: (q) => { if (App.p === p) { p.quality = q; } } });
+        p.rtc.start();
+        return;
+      }
+      case 'signal': if (p.rtc && m.data && !(m.data.gen != null && m.data.gen !== p.rtc.gen)) p.rtc.handle(m.data); return;
+      case 'hold': p.held = !!m.on; p.holdAt = m.on ? Date.now() : 0; renderDevice(); return;   // they put you (the caller) on hold: you hear the music
+      case 'mute': p.peerMuted = !!m.on; renderDevice(); return;
+      case 'note': p.theirNote = m.note || {}; renderWork(); return;
+      case 'ended': return outEnd(m);
+    }
+  }
+  function outEnd(m) {
+    const p = App.p; if (!p || !p.out || p.status === 'ended') return;
+    Sounds.stop();
+    if (p.rtc) { p.rtc.close(); p.rtc = null; }
+    const a = remote(); a.srcObject = null;
+    VoIP.Mic.close();
+    if (!p.answeredAt) {
+      App.p = null;
+      U.toast(m.status === 'declined' || m.reason === 'declined' ? `${p.to} declined the call.` : m.reason === 'no-answer' ? `${p.to} didn't answer.` : m.reason === 'disconnected' ? 'The call dropped.' : 'Call cancelled.');
+      renderAll(); App.onCallBar(); return;
+    }
+    p.status = 'ended'; p.endedAt = Date.now();
+    p.endNote = m.reason === 'transferred' ? `${p.to} transferred you to an extension` : m.reason === 'disconnected' ? 'The line dropped' : m.by === 'trainee' ? `${p.to} hung up` : 'You hung up';
+    Sounds.endTone();
+    renderAll(); App.onCallBar();
   }
   function hangup() {
     const p = App.p; if (!p || !active(p)) return;
+    if (p.out) { if (p.callId) App.board.send({ t: p.status === 'calling' ? 'cancel' : 'hangup', callId: p.callId }); else T.cancelNext = true; return outEnd({ by: 'trainer', reason: 'hangup' }); }
     if (p.mode === 'ai') return endAi('trainee', 'hangup');
     App.board.send({ t: 'hangup', callId: p.callId });
     endLive({ by: 'trainee', reason: 'hangup' });
@@ -482,7 +619,7 @@
       ${peers.map((x) => `<div class="tr ${x.me ? 'sel' : ''}" style="cursor:default"><span class="led ${x.call ? 'ringing' : x.status}"></span>
         <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)}${x.me ? ' <span class="badge">you</span>' : ''} ${x.hand ? '<span class="hand-wave" title="Asked for a mock call">✋</span>' : ''}</div>
         <div class="bt">${x.ext ? `ext <span class="mono">${esc(x.ext)}</span> · ` : ''}${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}</div></div></div>`).join('') || '<div class="empty small">Nobody else is online.</div>'}
-      <p class="small muted" style="margin:10px 0 0">Your trainer dials your extension to ring this phone.</p></div>`;
+      <p class="small muted" style="margin:10px 0 0">Your trainer dials your extension to ring this phone. Dial a classmate's extension to practice together.</p></div>`;
     fitBoard();
   }
 
@@ -492,9 +629,9 @@
      go stale the moment anything reflowed either of them, so it follows them. */
   let deckWatch = null, fitting = false;
   /* ---------- ⌨ the keypad: the trainer's dialer, on the trainee's phone ----------
-     Built band for band as the trainer's dialer is. A trainee takes calls rather than places them,
-     so the number on screen is looked up in the firm's directory: idle it only says whose extension
-     it is, and on a call the ↪ key hands the caller to it. */
+     Built band for band as the trainer's dialer is. Idle, 📞 rings another trainee's extension for a 🤝 practice
+     call (you play the caller), and a trainer's extension asks them for a call. On a call, the key hands the
+     caller to the number on screen: a firm extension, or a trainee's (warm, cold or 👥 merge). */
   const PAD = [['1', ''], ['2', 'ABC'], ['3', 'DEF'], ['4', 'GHI'], ['5', 'JKL'], ['6', 'MNO'], ['7', 'PQRS'], ['8', 'TUV'], ['9', 'WXYZ'], ['*', ''], ['0', '+'], ['#', '']];
   T.dial = '';
   // Who the number on screen is: a firm extension (transferable), a trainer's desk, this phone, or nobody.
@@ -503,6 +640,7 @@
     const dir = App.dirEntry(d); if (dir) return { kind: 'dir', dir };
     const desk = (App.desks || []).find((x) => x.ext === d); if (desk) return { kind: 'trainer', desk };
     if (App.myExt && App.myExt === d) return { kind: 'me' };
+    const peer = (App.peers || []).find((x) => x.ext === d && !x.me); if (peer) return { kind: 'peer', peer };
     return { kind: 'none' };
   }
   function dialLcd(p) {
@@ -511,47 +649,66 @@
     const d = dialEnt();
     let state = 'Dialing…', cls = '', name = '', sub = '';
     if (d.kind === 'dir') { state = 'Firm extension'; cls = live ? 'ok' : ''; name = d.dir.name; sub = live ? '↪ hands the caller to this extension' : `${d.dir.role} · dial it on a call to transfer`; }
-    else if (d.kind === 'trainer') { state = 'Trainer line'; name = d.desk.name; sub = 'Your trainer rings you: this phone takes calls'; }
+    else if (d.kind === 'trainer') { state = 'Trainer line'; name = d.desk.name; sub = live ? 'Your trainer is the caller on your calls' : '📞 asks them for a mock call (✋ on their switchboard)'; }
     else if (d.kind === 'me') { state = 'Your own phone'; name = App.me ? App.me.name : ''; sub = 'The extension your trainer dials to ring you'; }
-    else { const far = T.dial.length >= 4; state = far ? 'No such extension' : 'Dialing…'; cls = far ? 'bad' : ''; sub = far ? 'The firm\'s extensions are on 📇 Directory' : ''; }
+    else if (d.kind === 'peer') { state = 'Trainee line'; cls = d.peer.call ? 'bad' : 'ok'; name = d.peer.name; sub = d.peer.call ? 'On a call right now' : live ? '↪ hands the caller to them: warm, cold or 👥 merge' : '📞 rings them for a practice call: you play the caller'; }
+    else { const far = T.dial.length >= 4; state = far ? (live ? 'No such extension' : 'Extension') : 'Dialing…'; cls = far && live ? 'bad' : ''; sub = far ? (live ? 'The firm\'s extensions are on 📇 Directory' : '📞 rings it if a trainee has it') : ''; }
     return { num: T.dial, state, cls, name, sub };
   }
   function setDial(v) { T.dial = v; renderDevice(); }
   function press(k) {
     const p = shown(); const st = p ? p.status : 'idle';
-    if (['ringing', 'connecting', 'ended'].includes(st)) return;
+    if (['ringing', 'calling', 'connecting', 'ended'].includes(st) || (p && p.out)) return;
     Sounds.dtmf(k);
     if (T.dial.length < 6) setDial(T.dial + k);
     const b = U.$(`#device [data-dk="${k}"]`);
     if (b) { b.classList.add('press'); setTimeout(() => b.classList.remove('press'), 130); }
   }
-  // The green key: on a call it transfers to the extension on screen; idle there is nothing to place.
+  // The green key. Idle: 📞 places a practice call to a trainee (or asks a trainer for one). On a call: ↪ hands the caller on.
   function dialCall() {
     const p = shown();
-    if (!p || p.status !== 'live') { U.toast('Your trainer rings this phone: you take calls here rather than place them.'); return; }
     const d = dialEnt();
-    if (!d || d.kind !== 'dir') { U.toast(T.dial ? 'No such extension: the firm\'s extensions are on 📇 Directory.' : 'Key in the extension to transfer the caller to.'); return; }
-    const ext = T.dial; T.dial = '';
-    doTransfer(ext);
+    if (!p || p.status !== 'live') {
+      if (p && active(p)) return;
+      if (modeOf() !== 'live') return;
+      if (!d) return U.toast('Key in a trainee\'s extension to ring them for a practice call.');
+      if (d.kind === 'trainer') { T.dial = ''; if (!App.hand) { App.hand = true; App.board.send({ t: 'hand', up: true }); } U.toast(`✋ ${d.desk.name} can see you asked for a mock call: they ring this phone.`, 'ok'); renderDevice(); return; }
+      if (d.kind === 'dir') return U.toast(`${d.dir.name} is a firm extension: callers are transferred there. Dial a trainee's extension (7…) to practice.`);
+      if (d.kind === 'me') return U.toast('That\'s your own phone.');
+      if (d.kind === 'peer' && d.peer.call) return U.toast(`${d.peer.name} is on a call right now.`, 'error');
+      if (T.dial.length < 4) return U.toast('Key in the whole extension.');
+      return placeCall(T.dial);
+    }
+    if (!d || !['dir', 'peer'].includes(d.kind)) { U.toast(T.dial ? 'No such extension: the firm\'s extensions are on 📇 Directory, the trainees on the switchboard.' : 'Key in the extension to transfer the caller to.'); return; }
+    T.dial = '';
+    if (d.kind === 'peer') { txChoose(d.peer); return; }
+    doTransfer(d.dir.ext);
+  }
+  // A trainee's extension dialed on a call: how to hand the caller to them.
+  function txChoose(peer) {
+    const m = App.modal({ title: `↪ ${esc(peer.name)} · ext ${esc(peer.ext || '')}`, body: `<p class="small muted">How should the caller reach ${esc(peer.name)}?</p>
+      <div class="row"><button class="btn btn-green" data-tx="warm">🗣 Warm: talk to them first</button><button class="btn" data-tx="cold">↪ Cold: send the caller through</button><button class="btn" data-tx="merge">👥 Merge them into the call</button></div>` });
+    m.el.addEventListener('click', (e) => { const b = e.target.closest('[data-tx]'); if (!b) return; m.close(); txTrainee(peer, b.dataset.tx); });
   }
   const spkKey = () => `<button type="button" class="key spk ${VoIP.Speaker.on ? 'on' : ''}" data-act="speaker" aria-pressed="${VoIP.Speaker.on}" title="🔊 Speaker: ${VoIP.Speaker.on ? 'on: the call plays on the speakers. Press to go back to the headset' : 'off: the call plays in the headset. Press to put it on the speakers'} (choose them in 🎧 Audio check)"><span class="ic">${VoIP.Speaker.on ? '🔊' : '🔈'}</span>Speaker</button>`;
   // The keypad band: the pad, then 🔈 Speaker · the big key · ⌫ Delete, exactly as the dialer has it.
   function padHTML(p) {
     const st = p ? p.status : 'idle';
-    if (['ringing', 'connecting', 'ended'].includes(st)) return '';
+    if (['ringing', 'calling', 'connecting', 'ended'].includes(st) || (p && p.out)) return '';
     const live = st === 'live';
     const d = dialEnt();
-    const can = live && d && d.kind === 'dir' && !(p.transfer && p.transfer.state === 'ringing');
+    const busy = p && p.transfer && ['ringing', 'consult'].includes(p.transfer.state);
+    const can = live ? !!(d && ['dir', 'peer'].includes(d.kind) && !busy) : !!(d && modeOf() === 'live' && (['peer', 'trainer'].includes(d.kind) || (d.kind === 'none' && T.dial.length >= 4)));
     return `<div class="dialpad">${PAD.map(([k, l]) => `<button type="button" class="dk" data-dk="${k}" aria-label="${k}"><b>${k}</b><small>${l || '&nbsp;'}</small></button>`).join('')}</div>
       <div class="dial-row">${spkKey()}
-        <button type="button" class="dial-call" data-act="dialcall" ${can ? '' : 'disabled'} title="${live ? 'Transfer the caller to the extension on screen (Enter)' : 'Your trainer rings this phone: you take calls here rather than place them'}" aria-label="${live ? 'Transfer' : 'Call'}">${live ? '↪' : '📞'}</button>
+        <button type="button" class="dial-call" data-act="dialcall" ${can ? '' : 'disabled'} title="${live ? 'Transfer the caller to the extension on screen (Enter)' : 'Ring the trainee on screen for a practice call (Enter): you play the caller'}" aria-label="${live ? 'Transfer' : 'Call'}">${live ? '↪' : '📞'}</button>
         <button type="button" class="key" data-act="backspace" title="Delete a digit (Esc clears)" ${T.dial ? '' : 'disabled'}><span class="ic">⌫</span>Delete</button></div>`;
   }
   // Typing dials too: digits, * and #; Backspace deletes, Esc clears, Enter transfers.
   document.addEventListener('keydown', (e) => {
     if (!onPage() || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('.modal-back')) return;
     const p = shown(); const st = p ? p.status : 'idle';
-    if (['ringing', 'connecting', 'ended'].includes(st)) return;
+    if (['ringing', 'calling', 'connecting', 'ended'].includes(st) || (p && p.out)) return;
     const tg = e.target;
     if (tg && tg.closest && tg.closest('textarea, select, [contenteditable], input:not([type=checkbox]):not([type=range])')) return;
     if (/^[0-9*#]$/.test(e.key)) { e.preventDefault(); press(e.key); }
@@ -634,21 +791,34 @@
          <div class="dev-keys three idle-keys" role="group" aria-label="On the call">
            <button class="key mute" disabled title="Turn your microphone off while you check something; the caller still hears the line (once a call is connected)"><span class="ic">🎙</span>Mute</button>
            <button class="key" disabled title="Ask the caller first, then put them on hold: they hear hold music until you resume (once a call is connected)"><span class="ic">⏸</span>Hold</button>
-           <button class="key" data-act="transfer" title="The firm's extensions a call can be handed to: open the list now, transfer once a call is connected"><span class="ic">↪</span>Transfer</button>
+           <button class="key" data-act="transfer" title="Where a call can be handed: the other trainees' lines and the firm's extensions. Open the list now, transfer once a call is connected"><span class="ic">↪</span>Transfer</button>
          </div>
-         <p class="dev-hint">Mute and Hold come alive once the call is connected: ask to hold, Hold, then Transfer — as at the real front desk.</p>`
+         <p class="dev-hint">📞 Dial a trainee's extension to ring them for a practice call. On a call: ask to hold, Hold, then Transfer (🗣 warm or ↪ cold) or 👥 Merge — as at the real front desk.</p>`
       : '';
     let msg = '';
     if (p && p.needRejoin) msg = p.elsewhere ? `<div class="dev-msg lost">You're on this call in another tab or window. <button class="btn btn-sm btn-green" data-act="rejoin" style="margin-top:6px">📞 Move the call here</button></div>`
       : `<div class="dev-msg lost">This page reloaded during your call. <button class="btn btn-sm btn-green" data-act="rejoin" style="margin-top:6px">🔊 Reconnect the call</button></div>`;
+    else if (p && p.out) {
+      msg = p.status === 'calling' ? `<div class="dev-msg">🤝 Ringing <b>${esc(p.to)}</b> for a practice call… When they answer, you're the caller: they take the call as at the front desk.</div>`
+        : p.status === 'ended' ? '' : p.held ? `<div class="dev-msg transfer">⏸ <b>${esc(p.to)}</b> put you on hold: you hear the hold music, as a caller would.</div>`
+        : `<div class="dev-msg coach">🎭 <b>You're the caller</b> on a practice call with ${esc(p.to)}. Stay in character; ${esc(p.to)} takes the note. Not graded.</div>`;
+    }
     else if (p && p.coaching) msg = `<div class="dev-msg coach">⏸ <b>Coaching time-out.</b> Your trainer paused the role-play to talk with you as your trainer.${p.coachMsg ? ' ' + esc(p.coachMsg) : ''}</div>`;
     else if (p && p.transfer && p.status === 'live') {
       const tx = p.transfer;
-      msg = tx.state === 'ringing' ? `<div class="dev-msg transfer">↪ Transferring to <b>${esc(tx.to)}</b> (ext ${esc(tx.ext)})… The caller hears hold music.${p.mode === 'live' ? ' <b>Resume</b> takes the caller back.' : ''}</div>`
+      const where = `<b>${esc(tx.to)}</b>${tx.ext ? ` (ext ${esc(tx.ext)})` : ''}`;
+      msg = tx.state === 'ringing' ? `<div class="dev-msg transfer">${tx.kind === 'warm' ? '🗣 Warm transfer: ringing' : '↪ Transferring to'} ${where}… The caller hears hold music.${p.mode === 'live' ? ' <b>Resume</b> takes the caller back.' : ''}</div>`
+        : tx.state === 'consult' ? `<div class="dev-msg transfer">🗣 <b>${esc(tx.to)} picked up.</b> The caller is on hold and can't hear you: tell ${esc(tx.to)} who is calling and why.
+            <div class="row" style="margin-top:8px"><button class="btn btn-sm btn-green" data-act="tx-complete">↪ Complete the transfer</button>${tx.trainee ? '<button class="btn btn-sm" data-act="tx-merge">👥 Merge all three</button>' : ''}<button class="btn btn-sm" data-act="hold">⏸ Back to the caller</button></div></div>`
+        : tx.state === 'hung-up' ? `<div class="dev-msg transfer">📵 ${where} hung up before taking the caller. Press <b>Resume</b> to go back to the caller.</div>`
+        : tx.state === 'declined' ? `<div class="dev-msg transfer">📵 ${where} declined. Press <b>Resume</b> to go back to the caller: offer to take a message.</div>`
         : tx.state === 'voicemail' ? `<div class="dev-msg transfer">📨 Ext ${esc(tx.ext)} (${esc(tx.to)}) went to voicemail. Press <b>Resume</b> to go back to the caller: offer voicemail or take a message.</div>`
         : `<div class="dev-msg transfer">📵 No answer at ext ${esc(tx.ext)} (${esc(tx.to)}). ${p.mode === 'ai' ? 'You are back with the caller.' : 'Press <b>Resume</b> to go back to the caller.'}</div>`;
     } else if (p && p.peerLost) msg = `<div class="dev-msg lost">The caller's connection dropped. Waiting for them to come back…</div>`;
     else if (p && p.slow && p.status === 'connecting') msg = `<div class="dev-msg lost">Still connecting the audio… If it doesn't connect, your network may be blocking calls: tell your trainer (the TURN relay fixes this).</div>`;
+    else if (p && p.merging && p.status === 'live') msg = `<div class="dev-msg coach">👥 Ringing <b>${esc(p.merging.to)}</b> into the call… Once they answer, everyone hears everyone.</div>`;
+    else if (p && p.consultFrom && ['ringing', 'live'].includes(p.status)) msg = `<div class="dev-msg transfer">🗣 <b>${esc(p.consultFrom)}</b> ${p.status === 'ringing' ? 'wants' : 'is about'} to transfer a caller to you (a warm transfer). ${p.status === 'ringing' ? 'Pick up: ' : ''}the caller is on hold and can't hear you two — find out who is calling and why, then ${esc(p.consultFrom)} hands them over.</div>`;
+    else if (p && p.peer && ['ringing', 'live'].includes(p.status) && !p.held) msg = `<div class="dev-msg">🤝 <b>A practice call from ${esc(p.peer.name)}</b>${p.peer.ext ? ` (ext ${esc(p.peer.ext)})` : ''}: they play the caller. Take it as at the front desk. It isn't graded.</div>`;
     else if (p && p.handedFrom && ['ringing', 'live'].includes(p.status)) msg = `<div class="dev-msg transfer">↪ <b>A call transferred to you</b> from ${esc(p.handedFrom)}. The caller has already spoken to them: pick the call up, find out where they got to, and take it from there.</div>`;
     else if (p && p.conf && p.status === 'live') msg = `<div class="dev-msg coach">👥 <b>Conference call.</b> On the line with you: ${esc(p.conf.others.join(', ') || 'your trainer')}${p.conf.trainer ? ' and ' + esc(p.conf.trainer) + ' (the caller)' : ''}. Everyone hears everyone.</div>`;
     else if (p && p.notice && p.status === 'live') msg = `<div class="dev-msg">${esc(p.notice)}</div>`;
@@ -661,16 +831,36 @@
     const pad = padHTML(shownCall);
     el.classList.toggle('pad', !!pad);
     el.innerHTML = `<div class="dev-head">${head}</div>
-      ${App.lcdHTML(shownCall, idleInfo(mode), dialLcd(shownCall), lineCid(shownCall, mode))}
+      ${p && p.out ? outLcd(p) : App.lcdHTML(shownCall, idleInfo(mode), dialLcd(shownCall), lineCid(shownCall, mode))}
       ${msg}
       ${shownCall ? '' : lineKeys}
       ${pad}
-      ${App.keysHTML(shownCall, idleKeys)}
+      ${p && p.out ? outKeysHTML(p) : App.keysHTML(shownCall, idleKeys)}
       <div class="dev-foot"><span title="Call volume">🔉</span><input type="range" min="0" max="1" step="0.05" value="${App.volume == null ? 1 : App.volume}" data-act="volume" aria-label="Call volume">${!App.connected && mode === 'live' ? '<span>Offline</span>' : `<button type="button" class="dev-link" data-act="miccheck">🎧 Audio check</button>`}</div>`;
   }
+  // 🤝 The screen and keys of a practice call you placed (you are the caller).
+  function outLcd(p) {
+    const st = p.status;
+    const main = st === 'calling' ? `<div class="lcd-state">Calling…</div><div class="lcd-name">${esc(p.to)}</div><div class="lcd-num">Ext ${esc(p.ext)}</div><div class="lcd-sub">Practice call · you play the caller</div>`
+      : st === 'connecting' ? `<div class="lcd-state">Connecting…</div><div class="lcd-name">${esc(p.to)}</div><div class="lcd-num">Ext ${esc(p.ext)}</div>`
+      : st === 'live' ? `<div class="lcd-state ok">${p.held ? 'On hold' : 'Connected'} · you're the caller</div><div class="lcd-name">${esc(p.to)}</div><div class="lcd-num">Ext ${esc(p.ext)}</div><div class="lcd-timer" data-since="${p.answeredAt}">${U.since(p.answeredAt)}</div>`
+      : `<div class="lcd-state">Call ended</div><div class="lcd-name" style="font-size:18px">${esc(p.to)}</div><div class="lcd-timer" style="color:#94a3b8">${U.dur((p.endedAt || Date.now()) - (p.answeredAt || p.endedAt || Date.now()))}</div><div class="lcd-sub">${esc(p.endNote || '')}</div>`;
+    const b = [];
+    if (st === 'live' && p.held) b.push(`<span class="lb hold">HOLD <span data-since="${p.holdAt}">${U.since(p.holdAt)}</span></span>`);
+    if (st === 'live' && p.muted) b.push('<span class="lb mute">MUTED</span>');
+    if (['calling', 'connecting', 'live'].includes(st)) b.push('<span class="lb">🤝 PRACTICE</span>');
+    if (['calling', 'connecting', 'live'].includes(st) && VoIP.Speaker.on) b.push('<span class="lb spk">🔊 SPEAKER</span>');
+    return `<div class="lcd ${st === 'calling' ? 'ringing' : st}"><div class="lcd-top"><span>Trainee line ext ${esc(p.ext)}</span><span data-clock></span></div><div class="lcd-main">${main}</div><div class="lcd-badges">${b.join('')}</div><div class="lcd-cid">Calling from <b>your line${App.myExt ? ' ext ' + esc(App.myExt) : ''}</b></div></div>`;
+  }
+  function outKeysHTML(p) {
+    if (p.status === 'ended') return `<div class="dev-keys"><button class="key wide" data-act="next"><span class="ic">✓</span>Done</button></div>`;
+    return `<div class="dev-keys three"><button class="key mute ${p.muted ? 'on' : ''}" data-act="mute" ${p.status === 'live' ? '' : 'disabled'}><span class="ic">${p.muted ? '🔇' : '🎙'}</span>${p.muted ? 'Unmute' : 'Mute'}</button>${spkKey()}<span></span>
+      <button class="key hang wide" data-act="hangup"><span class="ic">☎</span>${p.status === 'calling' ? 'Cancel' : 'Hang up'}</button></div>`;
+  }
+
   function renderBadges() {
     const p = App.p, box = U.$('#device .lcd-badges');
-    if (!p || !box) return;
+    if (!p || !box || p.out) return;
     const tmp = document.createElement('div'); tmp.innerHTML = App.lcdHTML(p, {});
     box.innerHTML = tmp.querySelector('.lcd-badges').innerHTML;
   }
@@ -686,6 +876,7 @@
     const solo = !p && grid && grid.classList.contains('with-side');
     if (grid) grid.classList.toggle('solo', !!solo);
     if (solo) { el.innerHTML = ''; fitBoard(); return; }
+    if (p && p.out) { el.innerHTML = outWorkHTML(p); bindOutWork(el, p); return; }
     if (!p || p.status === 'waiting') {
       if (mode === 'ai' && p) { el.innerHTML = briefHTML(p); return; }
       el.innerHTML = welcomeHTML();
@@ -725,6 +916,21 @@
     const box = U.$('#trLines', el); if (box) box.scrollTop = box.scrollHeight;
   }
 
+  // 🎭 Beside the phone while you're the caller: who you could be (a client on a case file), and what they've noted.
+  function outWorkHTML(p) {
+    const cases = Object.values(App.cfg.cases || {});
+    const c = p.playCase && App.cfg.cases[p.playCase];
+    const n = p.theirNote || {}, form = App.formFor('reception');
+    const noted = form.fields.filter((f) => n[f.k]);
+    return `<h2>🎭 You're the caller</h2>
+      <p class="muted">A practice call between trainees: ${esc(p.to)} answers as the front desk, and you play someone calling the firm. Pick a client from the case files, or be a new caller (an adjuster, a family member, someone with a new injury). Stay in character, and give ${esc(p.to)} the chance to verify you, put you on hold and transfer you.</p>
+      <div class="field"><label class="f">Play a client from a case file</label><select class="input" id="outCase"><option value="">A caller of my own</option>${cases.map((x) => `<option value="${esc(x.id)}" ${x.id === p.playCase ? 'selected' : ''}>${esc(x.id)} · ${esc(x.name)}</option>`).join('')}</select></div>
+      ${c ? `<pre class="case">${esc(c.text)}</pre>` : ''}
+      ${p.status === 'ended' ? `<div class="ok-box" style="margin-top:12px">Call ended${p.endNote ? ': ' + esc(p.endNote) : ''}. ${esc(p.to)} submits their note; trade places and call each other back to practice the other side.</div>` : ''}
+      <h3 style="margin-top:14px">📝 ${esc(p.to)}'s note</h3><div class="small">${noted.length ? noted.map((f) => `<div><b>${esc(f.label)}:</b> ${esc(n[f.k])}</div>`).join('') : '<span class="muted">Nothing typed yet.</span>'}</div>`;
+  }
+  function bindOutWork(el, p) { const sel = U.$('#outCase', el); if (sel) sel.onchange = () => { p.playCase = sel.value; renderWork(); }; }
+
   function welcomeHTML() {
     return `<h2>Live mock calls</h2>
       <p class="muted">Keep this page open with your headset on. When your trainer rings, your phone rings here: answer it and handle the call like a real one.</p>
@@ -732,6 +938,7 @@
         <li><b>Answer within 3 rings</b> and greet with the firm name and your name.</li>
         <li>Look the caller up in <b>🔎 Case lookup</b>, verify before you share anything, and use <b>Hold</b> and <b>Transfer</b> like on a real phone.</li>
         <li>Fill in the <b>📝 Note</b> while you talk (your trainer sees it live), then submit it when the call ends.</li>
+        <li><b>🤝 Practice with a classmate:</b> dial their extension on the keypad and press 📞 — you play the caller, they take the call.</li>
       </ol>
       <div class="row" style="margin:6px 0 18px"><button class="btn" data-act="miccheck">🎙 Check my microphone</button><button class="btn" data-act="notify">🔔 Alert me when a call rings</button><a class="btn" href="#/logs/scenarios">🎧 Practice with an AI caller</a></div>
       <h3>Recent calls</h3><div id="recent" class="small muted">Loading…</div>`;
@@ -740,7 +947,7 @@
     try {
       const r = await API.post('/api/calls', { limit: 5 });
       const el = U.$('#recent'); if (!el) return;
-      el.innerHTML = r.calls.length ? `<table class="list">${r.calls.map((c) => `<tr class="click" onclick="location.hash='#/call/${esc(c.id)}'"><td>${U.when(c.createdAt)}</td><td><b>${esc(c.title)}</b></td><td>${c.mode === 'ai' ? '<span class="badge">🎧 AI</span>' : '<span class="badge orange">📞 Live</span>'}</td><td>${c.score != null ? `<b>${c.score}%</b>` : c.conf && c.status === 'ended' ? '<span class="badge">👥 Conference</span>' : c.status === 'ended' ? '<span class="badge amber">Awaiting review</span>' : `<span class="badge">${esc(c.status)}</span>`}</td></tr>`).join('')}</table>` : 'No calls yet.';
+      el.innerHTML = r.calls.length ? `<table class="list">${r.calls.map((c) => `<tr class="click" onclick="location.hash='#/call/${esc(c.id)}'"><td>${U.when(c.createdAt)}</td><td><b>${esc(c.title)}</b></td><td>${c.mode === 'ai' ? '<span class="badge">🎧 AI</span>' : c.mode === 'peer' ? '<span class="badge">🤝 Practice</span>' : '<span class="badge orange">📞 Live</span>'}</td><td>${c.score != null ? `<b>${c.score}%</b>` : c.conf && c.status === 'ended' ? '<span class="badge">👥 Conference</span>' : c.status === 'ended' ? '<span class="badge amber">Awaiting review</span>' : `<span class="badge">${esc(c.status)}</span>`}</td></tr>`).join('')}</table>` : 'No calls yet.';
     } catch (e) { const el = U.$('#recent'); if (el) el.textContent = ''; }
   }
 
@@ -788,8 +995,11 @@
       else if (act === 'mute') toggleMute();
       else if (act === 'speaker') App.toggleSpeaker(renderDevice);
       else if (act === 'hold') toggleHold();
-      else if (act === 'transfer') App.pickTransfer(App.p && App.p.status === 'live' ? doTransfer : previewTransfer);
-      else if (act === 'transfer-to') doTransfer(b.dataset.ext);
+      else if (act === 'transfer') pickTransfer();
+      else if (act === 'merge') pickTransfer('merge');
+      else if (act === 'tx-complete') txComplete();
+      else if (act === 'tx-merge') txMerge();
+      else if (act === 'transfer-to') doTransfer(b.dataset.ext, b.dataset.kind);
       else if (act === 'miccheck') App.micCheck();
       else if (act === 'rejoin') rejoin();
       else if (act === 'submit') submitNote();

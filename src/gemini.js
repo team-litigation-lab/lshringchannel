@@ -3,7 +3,13 @@
    then GEMINI_API_KEY, GEMINI_API_KEY1, GEMINI_API_KEY2. Limits are per Google Cloud project,
    so each key should come from its own project. Each request starts on the next key in turn;
    a key that hits its limit rests and the next one takes over.
-   GEMINI_BASE (tests only) points the Worker at a stand-in for Google. */
+   GEMINI_BASE (tests only) points the Worker at a stand-in for Google.
+
+   🔑 The Portal's keys as the fallback: with AI_GATEWAY_SECRET set (the same secret graded calls already go to the
+   Portal with), a request that every key here has failed (out of credits, at their limit, rejected) — or every
+   request, when this Worker has no key of its own — goes to the LSH Training Portal's shared AI gateway
+   (<PORTAL_URL>/api/ai-gateway), which answers from the Portal's own Gemini key pool. Text requests and Gemini Live
+   tokens go there; scoring a recording (audio) needs a key here, as the gateway takes text only. */
 const POOL = ['GEMINI_API_KEY5', 'GEMINI_API_KEY6', 'GEMINI_API_KEY7', 'GEMINI_API_KEY8', 'GEMINI_API_KEY9'];
 const SPARE = ['GEMINI_API_KEY', 'GEMINI_API_KEY1', 'GEMINI_API_KEY2'];
 export const TEXT_MODELS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
@@ -17,7 +23,32 @@ export function keyNames(env) {
   const seen = new Set();
   return [...POOL, ...SPARE].filter((n) => { const v = String(env[n] || '').trim(); if (!v || seen.has(v)) return false; seen.add(v); return true; });
 }
-export const hasAI = (env) => keyNames(env).length > 0;
+const GATEWAY_URL = 'https://cm-training-activity.pages.dev';
+const gatewayKey = (env) => String((env && env.AI_GATEWAY_SECRET) || '').trim();
+const gatewayUrl = (env) => String((env && env.PORTAL_URL) || GATEWAY_URL).replace(/\/+$/, '') + '/api/ai-gateway';
+export const hasGateway = (env) => !!gatewayKey(env);
+export const hasAI = (env) => keyNames(env).length > 0 || hasGateway(env);
+
+// One request to the Portal's AI gateway → its JSON answer (or { success: false, error }).
+async function viaGateway(env, body) {
+  let r, data;
+  try {
+    r = await fetch(gatewayUrl(env), { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Gateway-Key': gatewayKey(env) }, body: JSON.stringify(Object.assign({ module: 'ringchannel' }, body)) });
+    data = await r.json().catch(() => ({}));
+  } catch (e) { return { success: false, status: 502, error: 'The Portal\'s AI gateway couldn\'t be reached: ' + (e.message || e) }; }
+  if (!r.ok || !data.success) return { success: false, status: r.status, error: data.error || `The Portal's AI gateway answered ${r.status}` };
+  return data;
+}
+// The conversation as the gateway takes it ({ role, text }), or null when a part isn't text (a recording).
+function asMessages(contents) {
+  const out = [];
+  for (const c of contents || []) {
+    const parts = c.parts || [];
+    if (parts.some((x) => x.text == null)) return null;
+    out.push({ role: c.role === 'model' ? 'model' : 'user', text: parts.map((x) => x.text).join('\n') });
+  }
+  return out.length ? out : null;
+}
 
 let turn = Math.floor(Math.random() * 1000);
 const rest = new Map();   // "<key>|<model>" → rest until
@@ -31,9 +62,19 @@ function keyOrder(env) {
 
 /* One generateContent request, tried model by model and key by key.
    parts: the user turn's parts ([{text}] or [{inlineData}, {text}]). Returns { text, model } or throws. */
-export async function generate(env, { system, parts, json, maxTokens, temperature, contents }) {
+export async function generate(env, opts) {
+  let own = null;
+  if (keyNames(env).length) { try { return await generateHere(env, opts); } catch (e) { own = e; } }
+  const messages = hasGateway(env) ? asMessages(opts.contents || [{ role: 'user', parts: opts.parts }]) : null;
+  if (!messages) throw own || new Error('No AI key is set on this Worker (add GEMINI_API_KEY5 as a secret, or AI_GATEWAY_SECRET to use the Portal\'s keys).');
+  const g = await viaGateway(env, { user: opts.user || 'ringchannel', system: opts.system || '', messages, json: !!opts.json, maxTokens: Math.min(opts.maxTokens || 1024, 4096) });
+  if (g.success && g.text) return { text: g.text, model: g.model || 'portal', via: 'portal' };
+  console.error('gemini: the Portal\'s AI gateway failed too:', g.error);
+  throw own || new Error(g.error || 'The AI couldn\'t answer.');
+}
+
+async function generateHere(env, { system, parts, json, maxTokens, temperature, contents }) {
   const keys = keyOrder(env);
-  if (!keys.length) throw new Error('No AI key is set on this Worker (add GEMINI_API_KEY5 as a secret).');
   const models = [env.GEMINI_MODEL, ...TEXT_MODELS].filter((v, i, a) => v && a.indexOf(v) === i);
   const payload = {
     contents: contents || [{ role: 'user', parts }],
@@ -84,9 +125,26 @@ export function parseJson(text) {
 /* A single-use Gemini Live token with the caller's script locked in (the browser talks straight
    to Google with it; the key never leaves the Worker). Tries keys, then models. `skip` lists
    "<key>|<model>" pairs an earlier try couldn't open. */
-export async function liveToken(env, setupFor, maxMinutes, skip) {
+export async function liveToken(env, setupFor, maxMinutes, skip, user) {
+  const here = keyNames(env).length ? await liveTokenHere(env, setupFor, maxMinutes, skip) : null;
+  if (here && (here.ok || here.code === 'REGION' || !hasGateway(env))) return here;
+  if (!hasGateway(env)) return { ok: false, code: 'NOT_CONFIGURED', error: 'AI callers aren\'t set up on this site yet (no GEMINI_API_KEY secrets).' };
+  // The Portal mints the token with its own keys (and counts the call against its shared budget).
+  const models = [env.LIVE_MODEL, ...LIVE_MODELS].filter((v, i, a) => v && a.indexOf(v) === i);
+  let last = null;
+  for (const model of models) {
+    const pair = 'portal|' + model;
+    if ((skip || []).includes(pair)) continue;
+    const g = await viaGateway(env, { action: 'live-token', user: user || 'ringchannel', setup: setupFor(model), model, maxMinutes });
+    if (g.success && g.token) return { ok: true, token: g.token, model, pair, url: liveWsUrl(env), via: 'portal' };
+    last = g;
+    if (g.status === 429) break;   // the shared budget says wait: another model won't help
+  }
+  return here || { ok: false, code: last && last.status === 429 ? 'BUSY' : 'TOKEN_FAILED', error: last ? 'Live voice couldn\'t start: ' + last.error : 'Live voice couldn\'t start.' };
+}
+
+async function liveTokenHere(env, setupFor, maxMinutes, skip) {
   const keys = keyOrder(env);
-  if (!keys.length) return { ok: false, code: 'NOT_CONFIGURED', error: 'AI callers aren\'t set up on this site yet (no GEMINI_API_KEY secrets).' };
   const models = [env.LIVE_MODEL, ...LIVE_MODELS].filter((v, i, a) => v && a.indexOf(v) === i);
   let last = null;
   for (const model of models) {

@@ -153,7 +153,8 @@ export class Switchboard extends DurableObject {
     const b = { callId: r.id, status: r.status, line, lineLabel: LINES[line].label, lineNumber: LINES[line].number, track: s.track,
       callerId: r.data.withheld ? { name: 'PRIVATE CALLER', number: 'Unknown' } : { name: s.caller.idName, number: s.caller.number },
       createdAt: r.created_at, answeredAt: r.answered_at || null, recording: !!r.data.record, trainer: r.trainer, live: r.data.live || {} };
-    if (r.data.conf) b.conf = { parent: r.data.conf.parent, handover: !!r.data.conf.handover, from: r.data.conf.from || '' };
+    if (r.data.conf) b.conf = { parent: r.data.conf.parent, handover: !!r.data.conf.handover, consult: !!r.data.conf.consult, by: r.data.conf.by || 'trainer', kind: r.data.conf.kind || '', from: r.data.conf.from || '' };
+    if (r.mode === 'peer') b.peer = { name: r.data.callerName || r.trainer, ext: r.data.callerExt || '', to: r.trainee_name, toExt: (this.trainee(r.trainee_id) || {}).ext || '' };
     if (r.data.handoverFrom) b.handoverFrom = r.data.handoverFrom;
     if (role === 'a') Object.assign(b, { scenario: s, graded: !!r.data.graded, trainee: { id: r.trainee_id, name: r.trainee_name, batch: r.batch, ext: (this.trainee(r.trainee_id) || {}).ext || '' }, note: r.data.note || {}, ticks: r.data.ticks || [], metrics: r.data.metrics || {}, traineeCid: r.data.traineeCid || null });
     else Object.assign(b, { trainerCid: r.data.trainerCid || null, note: r.data.note || {}, hideCases: s.hideCases || [], caseId: r.data.caseId || '' });
@@ -225,8 +226,52 @@ export class Switchboard extends DurableObject {
     // A merged leg ends with the call it joined; the rest of the conference carries on without it.
     const legs = (r.data.legs || []).slice();
     if (legs.length) { r.data.legs = []; this.save(r); legs.forEach((id) => { const x = this.row(id); if (x && ['ringing', 'live'].includes(x.status)) this.endCall(x, by, 'conference-ended'); }); }
-    if (r.data.conf) { const p = this.row(r.data.conf.parent); if (p && p.status === 'live') this.confTell(p); }
-    if (r.status === 'ended' && !r.data.conf) this.scheduleGrade(r.id).catch(() => {});
+    if (r.data.conf) { const p = this.row(r.data.conf.parent); if (p && p.status === 'live') { this.txLegEnded(p, r); this.confTell(p); } }
+    if (r.status === 'ended' && !r.data.conf && r.mode !== 'peer') this.scheduleGrade(r.id).catch(() => {});
+  }
+
+  /* ---------------- ↪ the trainee's own transfers to another trainee ----------------
+     A trainee on a call from their trainer can hand the caller to another trainee's line, the way the trainer's
+     ↪ Transfer on does (the trainer's console is the bridge either way, so the trainer stays the caller):
+       cold    the other phone rings; when it's answered this call ends and the caller carries on with them;
+       warm    the caller waits on hold while the trainee speaks to the other trainee first (only the two of them
+               hear each other), then ↪ completes the transfer, 👥 merges all three, or takes the caller back;
+       merge   👥 the other trainee is rung straight into the call: everyone hears everyone. */
+  // The trainee's transfer to another trainee that is ringing or in its warm word, on this call.
+  txLeg(p) { return this.legsOf(p).find((x) => x.data.conf && x.data.conf.by === 'trainee' && x.data.conf.kind !== 'merge') || null; }
+  // That transfer's leg ended (not answered, declined, or the other trainee hung up): the trainee is told, and has the caller back on hold.
+  txLegEnded(p, leg) {
+    if (!leg.data.conf || leg.data.conf.by !== 'trainee') return;
+    const tx = ((p.data.metrics && p.data.metrics.transfers) || []).find((x) => x.legId === leg.id && !x.result);
+    if (!tx) return;
+    tx.result = leg.status === 'ended' ? 'returned' : leg.status === 'declined' ? 'declined' : 'no-answer'; tx.done = now();
+    this.setLive(p, { transfer: null, lastTransfer: { to: tx.to, ext: tx.ext, result: tx.result } });
+    this.save(p);
+    this.send(this.byCid(p.data.traineeCid), { t: 'transfer-result', callId: p.id, legId: leg.id, result: tx.result === 'returned' ? 'hung-up' : tx.result, to: tx.to, ext: tx.ext });
+  }
+
+  /* ↪ The caller is handed over to the trainee on this leg: the first trainee's call ends (and is graded on its own),
+     and this one becomes the call on the trainer's line. The console is told first, so it moves the line over
+     before it hears that the first call ended. */
+  promoteLeg(r, parent) {
+    const from = r.data.conf.from || (parent ? parent.trainee_name : '');
+    const byTrainee = r.data.conf.by === 'trainee';
+    delete r.data.conf;
+    r.data.handoverFrom = from;
+    this.save(r);
+    const trainerWs = this.byCid(r.data.trainerCid);
+    if (trainerWs) this.setAtt(trainerWs, { call: r.id });
+    this.send(trainerWs, { t: 'handover', callId: r.id, from, parent: parent ? parent.id : '', by: byTrainee ? 'trainee' : 'trainer' });
+    this.send(this.byCid(r.data.traineeCid), { t: 'handed', callId: r.id, from });
+    if (!parent) return;
+    parent.data.legs = (parent.data.legs || []).filter((id) => id !== r.id);
+    if (byTrainee) {
+      const tx = ((parent.data.metrics && parent.data.metrics.transfers) || []).find((x) => x.legId === r.id && !x.result);
+      if (tx) { tx.result = 'connected'; tx.done = now(); }
+      this.setLive(parent, { transfer: null });
+    }
+    this.save(parent);
+    if (parent.status === 'live') this.endCall(parent, byTrainee ? 'trainee' : 'trainer', byTrainee ? 'transferred' : 'handover');
   }
 
   /* ---------------- 👥 conference legs ---------------- */
@@ -236,12 +281,14 @@ export class Switchboard extends DurableObject {
   confTell(p) {
     if (!p) return;
     const legs = this.legsOf(p);
-    const names = [p.trainee_name, ...legs.map((x) => x.trainee_name)];
-    for (const r of [p, ...legs]) {
-      this.send(this.peerOf(r, 'a'), { t: 'conf-parties', callId: r.id, on: legs.length > 0, trainer: p.trainer, names, others: names.filter((n) => n !== r.trainee_name) });
+    // A trainee a transfer is ringing (or who is having a warm word with the trainee before taking the caller) isn't on the conference.
+    const merged = legs.filter((x) => !(x.data.conf && (x.data.conf.consult || x.data.conf.handover)));
+    const names = [p.trainee_name, ...merged.map((x) => x.trainee_name)];
+    for (const r of [p, ...merged]) {
+      this.send(this.peerOf(r, 'a'), { t: 'conf-parties', callId: r.id, on: merged.length > 0, trainer: p.trainer, names, others: names.filter((n) => n !== r.trainee_name) });
     }
     this.send(this.byCid(p.data.trainerCid), { t: 'conf-state', callId: p.id,
-      legs: legs.map((x) => ({ callId: x.id, status: x.status, ringAt: x.created_at, answeredAt: x.answered_at || null,
+      legs: legs.map((x) => ({ callId: x.id, status: x.status, ringAt: x.created_at, answeredAt: x.answered_at || null, consult: !!(x.data.conf && x.data.conf.consult), by: (x.data.conf && x.data.conf.by) || 'trainer',
         trainee: { id: x.trainee_id, name: x.trainee_name, batch: x.batch, ext: (this.trainee(x.trainee_id) || {}).ext || '' } })) });
   }
 
@@ -288,7 +335,10 @@ export class Switchboard extends DurableObject {
     const t = now();
     const err = (msg) => this.send(ws, { t: 'error', msg });
     const r = m.callId ? this.row(String(m.callId)) : null;
-    const party = r && ((me.role === 'a' && r.data.trainerCid === me.cid) || (me.role === 't' && r.trainee_id === me.id));
+    // Which end of the call this phone is: 'a' the caller's end (the trainer — or, on a 🤝 practice call between two
+    // trainees, the trainee who dialed it), 't' the trainee who took the call. Everything below goes by the end, not the role.
+    const side = !r ? null : ((me.role === 'a' || r.mode === 'peer') && r.data.trainerCid === me.cid) ? 'a' : (me.role === 't' && r.trainee_id === me.id) ? 't' : null;
+    const party = !!side;
 
     switch (m.t) {
       case 'status':
@@ -370,6 +420,36 @@ export class Switchboard extends DurableObject {
         return;
       }
 
+      /* ----- 🤝 a trainee dials another trainee: a practice call between the two of them -----
+         The one who dials plays the caller; the one who answers takes the call as at the front desk (Hold, Transfer
+         to a firm extension, the note, Case lookup). It isn't graded or recorded, and it ends if either phone closes. */
+      case 'dial': {
+        if (me.role !== 't') return;
+        const fail = (reason) => this.send(ws, { t: 'dial-failed', reason });
+        if (me.call) { const cur = this.row(me.call); if (cur && ['ringing', 'live'].includes(cur.status)) return fail('You are already on a call.'); this.setAtt(ws, { call: null }); }
+        const ext = String(m.ext || '').replace(/\D/g, '').slice(0, 6);
+        const tr = this.sql.exec('SELECT * FROM trainees WHERE ext = ?', ext).toArray()[0];
+        if (!tr || tr.archived) return fail(`No trainee has extension ${ext || '…'}.`);
+        if (tr.id === me.id) return fail('That\'s your own extension.');
+        if (this.countUsage(me.id, 'dial', 3600000) >= 60) return fail('That\'s a lot of calls this hour. Try again in a little while.');
+        const phones = this.open('u:' + tr.id).filter((w) => this.att(w).role === 't');
+        if (!phones.length) return fail(`${tr.name} isn't online.`);
+        if (phones.some((w) => { const a = this.att(w); if (!a.call) return false; const c = this.row(a.call); return c && ['ringing', 'live'].includes(c.status); })) return fail(`${tr.name} is on another call.`);
+        this.logUsage(me.id, 'dial');
+        const base = openCall(String(m.track || 'reception'));
+        const s = Object.assign({}, base, { title: `Practice call from ${me.name}`, facts: `A practice call between trainees: ${me.name} plays the caller.`,
+          caller: Object.assign({}, base.caller, { role: `Played by ${me.name}`, idName: String(me.name || 'CALLER').toUpperCase().slice(0, 40), number: me.ext ? 'Ext ' + me.ext : '' }) });
+        const r2 = { id: newId(), mode: 'peer', track: s.track, scenario_id: s.id, title: s.title, trainee_id: tr.id, trainee_name: tr.name, batch: tr.batch, trainer: me.name,
+          status: 'ringing', created_at: t, data: { scenario: s, trainerCid: me.cid, callerId: me.id, callerName: me.name, callerExt: me.ext || '', graded: false, record: false, metrics: {}, note: {}, ticks: [], events: [{ t: 'ring', at: t }] } };
+        this.save(r2);
+        this.setAtt(ws, { call: r2.id, hand: false, handAt: 0 });
+        phones.forEach((w) => { this.setAtt(w, { call: r2.id, hand: false, handAt: 0 }); this.send(w, Object.assign({ t: 'incoming' }, this.brief(r2, 't'))); });
+        this.send(ws, Object.assign({ t: 'dialing' }, this.brief(r2, 't')));
+        await this.armAlarm(t + RING_MS);
+        this.presence();
+        return;
+      }
+
       /* ----- the trainer rings a trainee ----- */
       case 'ring': {
         if (me.role !== 'a') return;
@@ -394,12 +474,12 @@ export class Switchboard extends DurableObject {
       }
       case 'cancel':
         // A cancel that crosses the trainee's answer still ends the call.
-        if (party && me.role === 'a') this.endCall(r, 'trainer', r.status === 'live' ? 'hangup' : m.reason === 'no-answer' ? 'no-answer' : 'cancelled');
+        if (side === 'a') this.endCall(r, 'trainer', r.status === 'live' ? 'hangup' : m.reason === 'no-answer' ? 'no-answer' : 'cancelled');
         return;
 
       /* ----- the trainee answers or declines ----- */
       case 'accept': {
-        if (!party || me.role !== 't') return;
+        if (side !== 't') return;
         if (r.status !== 'ringing') return this.send(ws, { t: 'gone', callId: r.id, status: r.status });
         r.status = 'live'; r.answered_at = t;
         r.data.traineeCid = me.cid;
@@ -416,36 +496,34 @@ export class Switchboard extends DurableObject {
         this.presence();
         if (r.data.conf) {
           const parent = this.row(r.data.conf.parent);
-          if (!r.data.conf.handover) this.confTell(parent);
-          else {
-            // ↪ The caller is handed over: the first trainee's call ends (and is graded on its own),
-            // and this one becomes the call on the trainer's line.
-            const from = r.data.conf.from || (parent ? parent.trainee_name : '');
-            if (parent) { parent.data.legs = (parent.data.legs || []).filter((id) => id !== r.id); this.save(parent); if (parent.status === 'live') this.endCall(parent, 'trainer', 'handover'); }
-            delete r.data.conf;
-            r.data.handoverFrom = from;
-            this.save(r);
-            const trainerWs = this.byCid(r.data.trainerCid);
-            if (trainerWs) this.setAtt(trainerWs, { call: r.id });
-            this.send(trainerWs, { t: 'handover', callId: r.id, from, parent: parent ? parent.id : '' });
-          }
+          if (r.data.conf.handover) this.promoteLeg(r, parent);
+          else if (r.data.conf.consult) {
+            // ↪ A warm transfer: the two trainees speak first, and the caller stays on hold until it's handed over.
+            if (parent) {
+              const tx = ((parent.data.metrics && parent.data.metrics.transfers) || []).find((x) => x.legId === r.id && !x.result);
+              if (tx) tx.consultAt = t;
+              this.setLive(parent, { transfer: Object.assign({}, (parent.data.live || {}).transfer, { state: 'consult' }) });
+              this.save(parent);
+              this.send(this.byCid(parent.data.traineeCid), { t: 'tx-answered', callId: parent.id, legId: r.id, name: r.trainee_name });
+            }
+          } else this.confTell(parent);
         }
         return;
       }
       case 'decline':   // busy: the trainee is on a practice call
-        if (party && me.role === 't' && r.status === 'ringing') this.endCall(r, 'trainee', m.busy ? 'busy' : 'declined');
+        if (side === 't' && r.status === 'ringing') this.endCall(r, 'trainee', m.busy ? 'busy' : 'declined');
         return;
 
       /* ----- WebRTC signaling: passed straight to the other phone ----- */
       case 'signal': {
         if (!party || r.status !== 'live') return;
-        this.send(this.peerOf(r, me.role), { t: 'signal', callId: r.id, data: m.data });
+        this.send(this.peerOf(r, side), { t: 'signal', callId: r.id, data: m.data });
         return;
       }
 
       /* ----- what happens on the call ----- */
       case 'hold': {
-        if (!party || r.status !== 'live' || me.role !== 't') return;
+        if (side !== 't' || r.status !== 'live') return;
         const holds = r.data.metrics.holds = r.data.metrics.holds || [];
         const last = holds[holds.length - 1];
         if (m.on && !(last && !last.end)) holds.push({ start: t });
@@ -458,38 +536,72 @@ export class Switchboard extends DurableObject {
       }
       case 'mute':
         if (!party || r.status !== 'live') return;
-        this.setLive(r, me.role === 't' ? { traineeMuted: !!m.on } : { trainerMuted: !!m.on }); this.save(r);
-        this.send(this.peerOf(r, me.role), { t: 'mute', callId: r.id, on: !!m.on });
+        this.setLive(r, side === 't' ? { traineeMuted: !!m.on } : { trainerMuted: !!m.on }); this.save(r);
+        this.send(this.peerOf(r, side), { t: 'mute', callId: r.id, on: !!m.on });
         return;
+      /* ----- ↪ the trainee transfers the caller to a firm extension -----
+         Cold: the extension rings and the trainer (the caller) says what happens: picks up, no answer or voicemail.
+         Warm (kind 'warm'): the trainer can answer as the person at the extension (result 'consult'): the trainee
+         announces the caller to them first, then completes the transfer (transfer-complete) or takes the caller back. */
       case 'transfer': {
-        if (!party || r.status !== 'live' || me.role !== 't') return;
+        if (side !== 't' || r.status !== 'live') return;
         const d = FIRM.directory.find((x) => x.ext === String(m.ext));
         if (!d) return;
+        if (this.txLeg(r)) return this.send(ws, { t: 'tx-failed', callId: r.id, reason: 'A transfer to another trainee is still on: finish it or take the caller back first.' });
+        const kind = m.kind === 'warm' ? 'warm' : 'cold';
         const txs = r.data.metrics.transfers = r.data.metrics.transfers || [];
         const pending = txs[txs.length - 1];
         if (pending && !pending.result) pending.result = 'cancelled';
-        const x = { to: d.name, ext: d.ext, role: d.role, unavailable: (r.data.scenario.unavailable || []).includes(d.ext) };
-        txs.push({ to: d.name, ext: d.ext, at: t, result: null });
+        const x = { to: d.name, ext: d.ext, role: d.role, kind, unavailable: (r.data.scenario.unavailable || []).includes(d.ext) };
+        const tx = { to: d.name, ext: d.ext, at: t, result: null, kind };
+        txs.push(tx);
+        // 🤝 A practice call between trainees has nobody to play the extension: it answers as the call says it would.
+        if (r.mode === 'peer') {
+          tx.result = x.unavailable ? 'no-answer' : 'connected'; tx.done = t;
+          this.setLive(r, { transfer: null, lastTransfer: { to: tx.to, ext: tx.ext, result: tx.result } });
+          this.save(r);
+          this.send(ws, { t: 'transfer-result', callId: r.id, result: tx.result, to: tx.to, ext: tx.ext });
+          if (tx.result === 'connected') this.endCall(r, 'trainee', 'transferred');
+          return;
+        }
         this.setLive(r, { transfer: x });
         this.save(r);
         this.send(this.peerOf(r, 't'), Object.assign({ t: 'transfer', callId: r.id }, x));
         return;
       }
-      case 'transfer-cancel': {   // the trainee took the caller back before the extension answered
-        if (!party || r.status !== 'live' || me.role !== 't') return;
+      case 'transfer-complete': {   // warm: the trainee announced the caller, and hands them over
+        if (side !== 't' || r.status !== 'live') return;
         const tx = (r.data.metrics.transfers || []).slice(-1)[0];
-        if (!tx || tx.result) return;
-        tx.result = 'cancelled'; tx.done = t;
+        if (!tx || tx.result || !tx.consultAt) return;
+        tx.result = 'connected'; tx.done = t;
+        this.setLive(r, { transfer: null, lastTransfer: { to: tx.to, ext: tx.ext, result: 'connected' } });
+        this.save(r);
+        this.endCall(r, 'trainee', 'transferred');
+        return;
+      }
+      case 'transfer-cancel': {   // the trainee took the caller back before the extension answered (or after a warm word with it)
+        if (side !== 't' || r.status !== 'live') return;
+        const tx = (r.data.metrics.transfers || []).slice(-1)[0];
+        if (!tx || tx.result || tx.legId) return;
+        tx.result = tx.consultAt ? 'returned' : 'cancelled'; tx.done = t;
         this.setLive(r, { transfer: null });
         this.save(r);
         this.send(this.peerOf(r, 't'), { t: 'transfer-cancel', callId: r.id });
         return;
       }
       case 'transfer-result': {
-        if (!party || r.status !== 'live' || me.role !== 'a') return;
+        if (side !== 'a' || r.status !== 'live') return;
         const tx = (r.data.metrics.transfers || []).slice(-1)[0];
-        if (!tx || tx.result) return;
-        const result = ['connected', 'no-answer', 'voicemail'].includes(m.result) ? m.result : 'no-answer';
+        if (!tx || tx.result || tx.legId) return;
+        const result = ['connected', 'no-answer', 'voicemail', 'consult'].includes(m.result) ? m.result : 'no-answer';
+        if (result === 'consult') {   // warm: the trainer answers as the person at the extension, and the trainee speaks to them first
+          if (tx.kind !== 'warm' || tx.consultAt) return;
+          tx.consultAt = t;
+          this.setLive(r, { transfer: Object.assign({}, (r.data.live || {}).transfer, { state: 'consult' }) });
+          this.save(r);
+          this.send(this.peerOf(r, 'a'), { t: 'transfer-result', callId: r.id, result, to: tx.to, ext: tx.ext });
+          return;
+        }
         tx.result = result; tx.done = t;
         this.setLive(r, { transfer: null, lastTransfer: { to: tx.to, ext: tx.ext, result } });
         this.save(r);
@@ -510,7 +622,7 @@ export class Switchboard extends DurableObject {
         this.send(this.peerOf(r, 'a'), { t: 'class', callId: r.id, on: !!m.on });
         return;
       case 'note': {
-        if (!party || me.role !== 't' || !['live', 'ended'].includes(r.status)) return;
+        if (side !== 't' || !['live', 'ended'].includes(r.status)) return;
         if (r.data.noteSubmittedAt) return;
         r.data.note = cleanNote(r.track, m.note);
         this.save(r);
@@ -521,7 +633,7 @@ export class Switchboard extends DurableObject {
          The trainee opens a file during the call and marks it as the one the call is about; the
          trainer sees it live (right file or wrong one), and the grade says which they worked from. */
       case 'case': {
-        if (!party || me.role !== 't' || !['live', 'ended'].includes(r.status)) return;
+        if (side !== 't' || !['live', 'ended'].includes(r.status)) return;
         if (r.data.noteSubmittedAt) return;
         const id = String(m.caseId || '').slice(0, 20);
         if (id && !CASES[id]) return;
@@ -578,13 +690,93 @@ export class Switchboard extends DurableObject {
         return;
       }
 
+      /* ----- ↪ 👥 the trainee transfers the caller to another trainee, or merges one in (see txLeg) ----- */
+      case 'tx-ring': {
+        if (side !== 't' || r.status !== 'live') return;
+        const fail = (reason) => this.send(ws, { t: 'tx-failed', callId: r.id, reason });
+        const kind = ['cold', 'warm', 'merge'].includes(m.kind) ? m.kind : 'cold';
+        if (r.mode !== 'live') return fail(r.mode === 'peer' ? 'On a practice call between trainees there is no bridge for another trainee: transfer to a firm extension instead.' : 'Transfers to another trainee work on live calls.');
+        if (r.data.conf) return fail('You were merged into this call: the trainee who took it transfers it on.');
+        const trainerWs = this.byCid(r.data.trainerCid);
+        if (!trainerWs || (r.data.lost && r.data.lost.a)) return fail('The caller\'s line is reconnecting: try again in a moment.');
+        const tr = m.traineeId ? this.trainee(String(m.traineeId)) : this.sql.exec('SELECT * FROM trainees WHERE ext = ?', String(m.ext || '')).toArray()[0];
+        if (!tr || tr.archived) return fail('No trainee has that extension.');
+        if (tr.id === me.id) return fail('That\'s your own line.');
+        const legs = this.legsOf(r);
+        if (this.txLeg(r)) return fail('A transfer is already on: finish it, or take the caller back first.');
+        if (kind !== 'merge' && legs.length) return fail('Drop the trainees merged into the call before you transfer it.');
+        if (legs.length >= MAX_CONF) return fail(`A conference holds the caller and ${MAX_CONF + 1} trainees.`);
+        if (legs.some((x) => x.trainee_id === tr.id)) return fail(`${tr.name} is already on this call.`);
+        const pend = (r.data.metrics.transfers || []).slice(-1)[0];
+        if (pend && !pend.result) return fail('A transfer is still ringing: take the caller back first.');
+        const phones = this.open('u:' + tr.id).filter((w) => this.att(w).role === 't');
+        if (!phones.length) return fail(`${tr.name}'s phone isn't open.`);
+        if (phones.some((w) => { const a = this.att(w); if (!a.call) return false; const c = this.row(a.call); return c && ['ringing', 'live'].includes(c.status); })) return fail(`${tr.name} is on another call.`);
+        const s = r.data.scenario;
+        // A transfer may become this caller's call with the other trainee: graded and recorded like the first. A merged trainee joins this call.
+        const own = kind !== 'merge';
+        const r2 = { id: newId(), mode: 'live', track: s.track, scenario_id: s.id, title: s.title + (kind === 'merge' ? ' (conference)' : ' (transferred)'), trainee_id: tr.id, trainee_name: tr.name, batch: tr.batch, trainer: r.trainer,
+          status: 'ringing', created_at: t, data: { scenario: s, trainerCid: r.data.trainerCid, graded: own && !!r.data.graded, record: own && !!r.data.record, withheld: !!r.data.withheld,
+            conf: { parent: r.id, handover: kind === 'cold', consult: kind === 'warm', by: 'trainee', kind, from: r.trainee_name }, metrics: {}, note: {}, ticks: [], events: [{ t: 'ring', at: t }] } };
+        this.save(r2);
+        r.data.legs = [...legs.map((x) => x.id), r2.id];
+        if (own) {
+          (r.data.metrics.transfers = r.data.metrics.transfers || []).push({ to: tr.name, ext: tr.ext || '', at: t, result: null, kind, trainee: true, legId: r2.id });
+          this.setLive(r, { transfer: { to: tr.name, ext: tr.ext || '', kind, trainee: true, legId: r2.id, state: 'ringing' } });
+        } else (r.data.metrics.merges = r.data.metrics.merges || []).push({ to: tr.name, ext: tr.ext || '', at: t });
+        r.data.events.push({ t: 'tx-' + kind, to: tr.name, at: t });
+        this.save(r);
+        phones.forEach((w) => { this.setAtt(w, { call: r2.id, hand: false, handAt: 0 }); this.send(w, Object.assign({ t: 'incoming' }, this.brief(r2, 't'))); });
+        this.send(trainerWs, Object.assign({ t: 'conf-ringing', parent: r.id, handover: kind === 'cold', consult: kind === 'warm', by: 'trainee', kind, byName: r.trainee_name }, this.brief(r2, 'a')));
+        this.send(ws, { t: 'tx-ringing', callId: r.id, legId: r2.id, to: tr.name, ext: tr.ext || '', kind });
+        await this.armAlarm(t + RING_MS);
+        this.presence();
+        if (kind === 'merge') this.confTell(r);
+        return;
+      }
+      case 'tx-cancel': {   // the trainee takes the caller back: the other trainee's phone stops ringing, or the warm word ends
+        if (side !== 't' || r.status !== 'live') return;
+        const leg = this.txLeg(r); if (!leg) return;
+        const tx = (r.data.metrics.transfers || []).find((x) => x.legId === leg.id && !x.result);
+        if (tx) { tx.result = tx.consultAt ? 'returned' : 'cancelled'; tx.done = t; }
+        this.setLive(r, { transfer: null });
+        this.save(r);
+        this.endCall(leg, 'trainee', 'cancelled');
+        return;
+      }
+      case 'tx-complete': {   // warm: the other trainee knows who's calling: hand the caller to them
+        if (side !== 't' || r.status !== 'live') return;
+        const leg = this.txLeg(r);
+        if (!leg || leg.status !== 'live' || !leg.data.conf.consult) return;
+        this.promoteLeg(leg, r);
+        return;
+      }
+      case 'tx-merge': {   // warm: bring the caller in too, all three on one call
+        if (side !== 't' || r.status !== 'live') return;
+        const leg = this.txLeg(r);
+        if (!leg || leg.status !== 'live' || !leg.data.conf.consult) return;
+        Object.assign(leg.data.conf, { consult: false, kind: 'merge' });
+        leg.data.graded = false; leg.data.record = false;
+        leg.title = r.title + ' (conference)';
+        this.save(leg);
+        const tx = (r.data.metrics.transfers || []).find((x) => x.legId === leg.id && !x.result);
+        if (tx) { tx.result = 'merged'; tx.done = t; }
+        (r.data.metrics.merges = r.data.metrics.merges || []).push({ to: leg.trainee_name, at: t });
+        this.setLive(r, { transfer: null });
+        this.save(r);
+        this.send(this.byCid(r.data.trainerCid), { t: 'conf-merged', callId: leg.id, parent: r.id });
+        this.send(ws, { t: 'transfer-result', callId: r.id, legId: leg.id, result: 'merged', to: leg.trainee_name });
+        this.confTell(r);
+        return;
+      }
+
       case 'ticks':   // the trainer's live checklist
         if (!party || me.role !== 'a') return;
         r.data.ticks = (Array.isArray(m.ticks) ? m.ticks : []).map(Number).filter((x) => x >= 0 && x < 30);
         this.save(r);
         return;
       case 'hangup':
-        if (party) this.endCall(r, me.role === 'a' ? 'trainer' : 'trainee', String(m.reason || 'hangup').slice(0, 40));
+        if (party) this.endCall(r, side === 'a' ? 'trainer' : 'trainee', String(m.reason || 'hangup').slice(0, 40));
         return;
 
       /* ----- a phone that reconnected mid-call picks the call back up ----- */
@@ -621,6 +813,12 @@ export class Switchboard extends DurableObject {
     const me = this.att(ws);
     if (me.call) {
       const r = this.row(me.call);
+      // 🤝 A practice call between trainees has no reconnect: it ends when either phone closes.
+      if (r && r.mode === 'peer' && ['ringing', 'live'].includes(r.status) && (r.data.trainerCid === me.cid || r.data.traineeCid === me.cid || (r.status === 'ringing' && r.trainee_id === me.id && !this.open('u:' + me.id).some((w) => w !== ws)))) {
+        this.endCall(r, r.data.trainerCid === me.cid ? 'trainer' : 'trainee', 'disconnected');
+        this.presence(ws);
+        return;
+      }
       if (r && r.status === 'ringing') {
         if (me.role === 'a' && r.data.trainerCid === me.cid) this.endCall(r, 'trainer', 'cancelled');
       } else if (r && r.status === 'live') {
@@ -814,6 +1012,7 @@ export class Switchboard extends DurableObject {
     opts = opts || {};
     const r = this.row(id);
     if (!r || r.status !== 'ended' || !this.env.GRADER) return null;
+    if (r.mode === 'peer') return null;   // 🤝 a practice call between trainees isn't graded
     const d = r.data, st = this.getSettings();
     if (!opts.force && r.mode === 'live' && !st.autograde) return null;
     const ag = d.autograde || {};

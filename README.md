@@ -116,7 +116,8 @@ A trainee can take a call where the AI plays the caller, two ways:
    - **📝 Note**: the message slip, the calendar entry or the intake note, by line;
    - **📇 Directory**: the firm's extensions, with Transfer buttons;
    - **📘 Rules**: the front-desk rules and the line's reminders.
-5. The phone keys are **Mute**, **🔊 Speaker** (see *The speaker key*), **Hold** (hold music plays to the caller), **Transfer** (pick an extension; the caller is held while it rings) and **Hang up**.
+5. The phone keys are **Mute**, **🔊 Speaker** (see *The speaker key*), **Hold** (hold music plays to the caller), **👥 Merge**, **Transfer** and **Hang up** (see *↪ The trainee's own transfers* below).
+   - **🤝 Practice with a classmate:** with no call on, dial another trainee's extension on the keypad (or type it) and press **📞**. Their phone rings with your name on the caller ID; you play the caller and they take the call as at the front desk (Hold, Transfer to a firm extension, Case lookup, the note). You get a 🎭 caller's card beside the phone (play a client from a case file, or a caller of your own) and see their note as they type it. It isn't graded or recorded, it's kept in the call logs as 🤝 Practice, and it ends if either phone closes. Dialing a trainer's extension asks them for a mock call (✋).
 6. After the call, the trainee finishes the note and **submits** it. The trainer's review appears in **🗂 Call Logs & Scenario Picker → 📞 Call Logs**.
 
 **Trainer** (🎛 Console)
@@ -154,7 +155,17 @@ Two keys on the dialer, both for seeing how a trainee hands a call over:
 **↪ Transfer on** passes the caller to another trainee, the way a switchboard does. Their phone rings like any call; when they answer, **the first trainee's call ends** and the trainer carries on as the same caller with the new one.
 - The first trainee's call is **scored as it stands**, so how they handed the call over counts in their grade; the new trainee's call is a graded, recorded call of their own.
 - The new trainee's phone says who the caller was transferred from, so they know to pick up where the last person left off.
-- The trainee's own **Transfer** (on their phone, to a firm extension) still works as before: the trainer answers it with **Picks up**, **No answer** or **Voicemail**.
+- The trainee's own **Transfer** (on their phone, to a firm extension) still works as before: the trainer answers it with **Picks up**, **No answer** or **Voicemail** (and, on a 🗣 warm transfer, **Picks up: talk to the trainee as …**).
+
+## ↪ The trainee's own transfers: warm, cold and 👥 merge
+
+On a call from the trainer, the trainee's **Transfer** key opens the other trainees on their switchboard and the firm's extensions; **👥 Merge** opens the trainees. On the keypad, keying in an extension and pressing **↪** does the same (a trainee's extension asks how).
+
+- **↪ Cold** (blind): the caller is put on hold and the other phone rings. When it's answered the caller goes straight through and this trainee's call ends ("Transferred to …"). If nobody answers or they decline, the trainee is told, the caller is still on hold, and **Resume** takes them back.
+- **🗣 Warm** (attended): the caller holds while the trainee speaks to the other end first. To another trainee, only the two trainees hear each other (the trainer, as the caller, hears hold music); to a firm extension, the trainer chooses **🗣 Picks up: talk to the trainee as …** and answers as that person. Then the trainee presses **↪ Complete the transfer** (the caller is handed over), **👥 Merge all three** (to another trainee: everyone on one call) or **⏸ Back to the caller**.
+- **👥 Merge**: the other trainee is rung straight into the call; once they answer everyone hears everyone, as with the trainer's **👥 Merge call**.
+- The trainer's console is the bridge for all of them, so the trainer stays the caller throughout; the console says who is transferring whom. A transferred call is graded and recorded as its own call (like the trainer's **↪ Transfer on**); a merged trainee's leg is part of the conference. Each transfer (cold or warm, to whom, how it ended) is kept on the call for the scorecard.
+- On a 🤝 practice call between trainees there's no bridge for a third phone: a transfer goes to a firm extension, which answers as the call says (no answer if the scenario has them out).
 
 ## 👥 Merge calls (a conference)
 
@@ -302,6 +313,7 @@ node scripts/sync-cms-calls.mjs
 - When the trainee submits the note, the AI grades the practice call on the same Mock Calls Metrics and the goals, in the LSH facilitator's voice (the same feedback DNA as the Foundational platform), from the recording of a voice call. Trainers can override it with their own review.
 - Live calls are autograded from their recording (see *Graded mock calls and autograding*).
 - **Keys:** the same Gemini key pool as the Foundational Worker, `GEMINI_API_KEY5` … `GEMINI_API_KEY9`, then `GEMINI_API_KEY`, `_KEY1` and `_KEY2`.
+  - **🔑 The Portal's keys as the fallback:** with `AI_GATEWAY_SECRET` set, a request that every key here has failed (out of credits, at their limit, rejected), or every request when this Worker has no key of its own, goes to the LSH Training Portal's shared AI gateway (`<PORTAL_URL>/api/ai-gateway`, on its own `ringchannel` line of the Portal's budget), which answers from the Portal's Gemini keys. Text (typed calls, the messaging simulators) and Gemini Live voice tokens go there; grading a recording needs a key here, as the gateway takes text only (`src/gemini.js`).
   - Each request starts on the next key; a key at its limit rests while the others take over.
   - Keys from different Google Cloud projects add capacity; keys from the same project share one allowance.
   - The key never reaches the browser: live voice uses a single-use token with the caller's script locked in.
@@ -337,7 +349,7 @@ The **No Blueprint rule:** Ring Channel shows no 🧭 Blueprint button. The blue
    | `PORTAL_SSO_SECRET` | Optional. The LSH Training Portal's sign-in secret: Ring Channel then checks the Portal's tickets itself instead of asking the Portal (see *On the LSH Training Portal*). |
    | `TURN_KEY_ID`, `TURN_KEY_API_TOKEN` | **Recommended.** Cloudflare's TURN relay (step 3). |
    | `GEMINI_API_KEY5` … `GEMINI_API_KEY9` | Optional. AI practice callers and autograding. |
-   | `AI_GATEWAY_SECRET` | **Recommended.** The LSH Training Portal's shared gateway secret (the same value as the Portal's): every graded call here is then sent to the Portal's `/api/call-results` and counts in the trainee's course (see *On the LSH Training Portal*). Without it, graded calls stay on Ring Channel. |
+   | `AI_GATEWAY_SECRET` | **Recommended.** The LSH Training Portal's shared gateway secret (the same value as the Portal's): every graded call here is then sent to the Portal's `/api/call-results` and counts in the trainee's course (see *On the LSH Training Portal*), and when the keys here run out the Portal's own Gemini keys take over (see *AI practice callers*). Without it, graded calls stay on Ring Channel. |
 
 3. **Set up the TURN relay:** in Cloudflare, go to **Realtime → TURN Server → Create**, then copy the **Turn Token ID** into `TURN_KEY_ID` and the **API Token** into `TURN_KEY_API_TOKEN`.
    - Without it, most calls still connect directly. Trainees on strict home routers, mobile data or office networks may get no audio: their phone says "Still connecting the audio…".
@@ -385,6 +397,8 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - the trainee reads the scorecard and the weighted average (the caller's script and unsent drafts never reach the trainee);
   - an open call with no script on the Intake line (WIRELESS CALLER on the Intake Line, the open-call card with the case files, the Intake note);
   - dialing on the keyboard (201 is a firm extension, Esc clears, 7001 + Enter rings) and a declined call.
+- `e2e-trainee.js`: the trainee's own phone (three trainees and a trainer): a 🤝 practice call dialed from the keypad (audio both ways, hold, a transfer to a firm extension, kept as an ungraded practice call); on a call from the trainer, 👥 Merge from the trainee's phone, a 🗣 warm transfer to another trainee (the two speak privately while the trainer hears hold music: the trainer's microphone is left out of the mix), then 👥 Merge all three, a warm transfer completed, one declined (the caller back on hold until Resume), a ↪ cold transfer keyed in on the keypad, and a warm transfer to a firm extension the trainer answers as the attorney.
+- `gemini-unit.mjs`: the Portal's Gemini keys as the fallback (out of credits here → the Portal answers text and live voice; recordings stay here).
 - `blueprint.cjs`: the 🧭 Blueprint. No 🧭 button for anyone; `#/blueprint` opens it for a trainer only, with both decks; every slide fits on a laptop and on a phone; both PDFs have a page per slide; the numbers match everywhere (Cover, then 1 to n, never n + 1).
 - `e2e-portal.js`: opening Ring Channel from the LSH Training Portal (`mock-gemini.js` stands in for the Portal's `/api/verify-ticket`). It checks that:
   - a trainee's ticket lands them on their phone, and the ticket leaves the address;
