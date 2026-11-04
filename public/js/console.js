@@ -67,15 +67,26 @@
       case 'conf-ringing':
         if (!t || m.parent !== t.callId) return;
         t.legs = (t.legs || []).filter((l) => l.callId !== m.callId);
-        t.legs.push({ callId: m.callId, trainee: m.trainee, status: 'ringing', handover: !!m.handover, ringAt: m.createdAt || Date.now() });
+        t.legs.push({ callId: m.callId, trainee: m.trainee, status: 'ringing', handover: !!m.handover, consult: !!m.consult, by: m.by || 'trainer', ringAt: m.createdAt || Date.now() });
         Sounds.beep();
+        // ↪ 👥 The trainee is handing the caller on (or merging someone in) from their own phone: this console is the bridge.
+        if (m.by === 'trainee') U.toast(`${m.kind === 'merge' ? '👥' : '↪'} ${m.byName || t.trainee.name} is ${m.kind === 'merge' ? 'merging' : m.kind === 'warm' ? 'warm-transferring the caller to' : 'transferring the caller to'} ${m.trainee.name}${m.kind === 'merge' ? ' into the call' : ''}${m.kind === 'warm' ? ': they talk first while you hear hold music' : ''}.`);
         renderConf(); renderDialer();
         return;
       case 'conf-failed':
         U.toast(m.reason, 'error');
         return;
       case 'conf-parties': return;   // the trainees' own phones show who else is on the call
-      case 'handover': return;        // the line already moved when the next trainee answered
+      case 'handover': {              // a cold transfer already moved the line when the next trainee answered; a warm one moves now
+        const l = t && (t.legs || []).find((x) => x.callId === m.callId);
+        if (l) { U.toast(`↪ ${t.trainee.name} handed the caller to ${l.trainee.name}.`, 'ok'); handover(l); }
+        return;
+      }
+      case 'conf-merged': {           // a warm transfer became a conference: the caller hears everyone again
+        const l = t && (t.legs || []).find((x) => x.callId === m.callId);
+        if (l) { l.consult = false; U.toast(`👥 ${t.trainee.name} merged ${l.trainee.name} into the call.`); confSync(); renderConf(); renderDialer(); }
+        return;
+      }
       case 'conf-state': {
         if (!t || m.callId !== t.callId) return;
         const keep = new Set((m.legs || []).map((x) => x.callId));
@@ -146,7 +157,7 @@
       case 'mute': if (mine) { t.traineeMuted = !!m.on; renderDialer(); } return;
       case 'transfer':
         if (!mine) return;
-        t.transfer = { to: m.to, ext: m.ext, role: m.role, unavailable: !!m.unavailable, at: Date.now() };
+        t.transfer = { to: m.to, ext: m.ext, role: m.role, kind: m.kind || 'cold', unavailable: !!m.unavailable, at: Date.now() };
         Sounds.beep();
         renderTransfer();
         return;
@@ -206,13 +217,17 @@
   async function handover(l) {
     const old = App.t; if (!old) return;
     old.legs = (old.legs || []).filter((x) => x !== l);
+    // A warm transfer's leg was already connected (the two trainees spoke): the line starts afresh with them.
+    if (l.rtc) { l.rtc.close(); l.rtc = null; }
+    if (l.audio) { VoIP.Speaker.unregister(l.audio); l.audio.srcObject = null; l.audio.remove(); l.audio = null; }
+    if (old.mix) { old.mix.close(); old.mix = null; }
     const base = { scenario: old.scenario, line: old.line, lineLabel: old.lineLabel, callerId: old.callerId, record: old.record, graded: old.graded };
     endCall({ by: 'trainer', reason: 'handover' });
     App.t = Object.assign({}, base, { callId: l.callId, status: 'connecting', trainee: l.trainee, handoverFrom: old.trainee.name,
       ringAt: l.ringAt || Date.now(), answeredAt: Date.now(), note: {}, ticks: [], metrics: {},
       traineeHeld: false, traineeMuted: false, muted: false, transfer: null, coaching: false, legs: [] });
     App.ownCall(App.t.callId);
-    U.toast(`↪ ${old.trainee.name}'s call is scored as it stands; you're on the line with ${l.trainee.name} now.`, 'ok');
+    if (l.by !== 'trainee') U.toast(`↪ ${old.trainee.name}'s call is scored as it stands; you're on the line with ${l.trainee.name} now.`, 'ok');
     connect(App.t, Date.now());
     render(); App.onCallBar();
   }
@@ -274,7 +289,7 @@
       onRemote: (s) => {
         l.remote = s;
         const a = legAudio(l);
-        a.srcObject = s; a.volume = App.volume == null ? 1 : App.volume; a.muted = C.classOn();
+        a.srcObject = s; a.volume = App.volume == null ? 1 : App.volume; a.muted = C.classOn() || !!l.consult;
         a.play().catch(() => {});
         if (t.rec) t.rec.add(s);
         l.status = 'live';
@@ -291,6 +306,7 @@
     const live = (t.legs || []).filter((l) => l.rtc && l.remote);
     if (!live.length) {
       if (t.mix) { if (t.rtc) t.rtc.setOutgoing(VoIP.Mic.track()); t.mix.close(); t.mix = null; }
+      privacy();
       return;
     }
     if (!t.mix) {
@@ -300,7 +316,28 @@
     t.mix.resume();
     const parties = [{ id: t.callId, stream: (t.rtc && t.rtc.remote) || null, rtc: t.rtc }, ...live.map((l) => ({ id: l.callId, stream: l.remote, rtc: l.rtc }))];
     [...t.mix.legs.keys()].forEach((id) => { if (!parties.some((p) => p.id === id)) t.mix.remove(id); });
+    // ↪ A warm transfer's word between the two trainees is theirs: the caller (this console) isn't in it.
+    t.mix.private = live.some((l) => l.consult);
     parties.forEach((p) => { const track = t.mix.set(p.id, p.stream); if (p.rtc && track) p.rtc.setOutgoing(track); });
+    privacy();
+  }
+  /* While the trainee speaks to the trainee they're transferring to, the caller is on hold: this console hears hold
+     music, not the two of them, and they don't hear the caller (the mix leaves this microphone out). */
+  const consulting = () => !!(App.t && (App.t.legs || []).some((l) => l.consult && l.status === 'live'));
+  function privacy() {
+    const t = App.t; if (!t) return;
+    const on = consulting();
+    const quiet = C.classOn() || on;
+    remote().muted = quiet;
+    (t.legs || []).forEach((l) => { if (l.audio) l.audio.muted = quiet; });
+    if (on && !t.holdMusic) {
+      const h = Sounds.holdStream(), a = document.createElement('audio');
+      a.autoplay = true; a.srcObject = h.stream; document.body.appendChild(a); VoIP.Speaker.register(a); a.play().catch(() => {});
+      t.holdMusic = { h, a };
+    } else if (!on && t.holdMusic) {
+      const { h, a } = t.holdMusic; t.holdMusic = null;
+      h.stop(); VoIP.Speaker.unregister(a); a.srcObject = null; a.remove();
+    }
   }
 
   function legEnd(l) {
@@ -321,6 +358,7 @@
       legEnd(l);
     });
     if (t.mix) { t.mix.close(); t.mix = null; }
+    privacy();
   }
   const confCount = () => (App.t && (App.t.legs || []).filter((l) => l.status === 'live').length) || 0;
 
@@ -332,7 +370,7 @@
     el.innerHTML = `<div class="card conf-card"><div class="card-head"><h3>👥 Conference</h3><span class="spacer"></span><span class="badge green">${legs.filter((l) => l.status === 'live').length + 1} trainees on the line</span></div>
       <div class="conf-row"><span class="led live"></span><div style="flex:1"><b>${esc(t.trainee.name)}</b><div class="small muted">${esc(t.trainee.batch || '')}${t.trainee.ext ? ' · ext ' + esc(t.trainee.ext) : ''} · took the call</div></div></div>
       ${legs.map((l) => `<div class="conf-row"><span class="led ${l.status === 'live' ? 'live' : 'ringing'}"></span>
-        <div style="flex:1"><b>${esc(l.trainee.name)}</b><div class="small muted">${esc(l.trainee.batch || '')}${l.trainee.ext ? ' · ext ' + esc(l.trainee.ext) : ''} · ${l.handover ? '↪ transferring the caller to them…' : l.status === 'ringing' ? 'ringing…' : l.status === 'connecting' ? 'connecting…' : 'merged in'}${l.held ? ' · on hold' : ''}${l.muted ? ' · muted' : ''}${l.lost ? ' · reconnecting' : ''}</div></div>
+        <div style="flex:1"><b>${esc(l.trainee.name)}</b><div class="small muted">${esc(l.trainee.batch || '')}${l.trainee.ext ? ' · ext ' + esc(l.trainee.ext) : ''} · ${l.handover ? '↪ transferring the caller to them…' : l.consult ? (l.status === 'live' ? `🗣 ${esc(t.trainee.name)} is telling them about the caller (warm transfer) · you hear hold music` : `↪ ${esc(t.trainee.name)} is warm-transferring the caller to them: ringing…`) : l.status === 'ringing' ? 'ringing…' : l.status === 'connecting' ? 'connecting…' : 'merged in'}${l.held ? ' · on hold' : ''}${l.muted ? ' · muted' : ''}${l.lost ? ' · reconnecting' : ''}</div></div>
         <button class="btn btn-sm" data-drop="${esc(l.callId)}" title="Take them off the call">⏏ Drop</button></div>`).join('')}
       <p class="small muted" style="margin:8px 0 0">Everyone hears everyone: your voice goes to all of them, and their voices to each other. The recording has every voice in it.</p></div>`;
   }
@@ -829,11 +867,16 @@
 
   function renderTransfer() {
     const el = U.$('#xfer'); const t = App.t; if (!el) return;
+    if (t && t.transfer && t.transfer.result === 'consult') {
+      el.innerHTML = `<div class="xfer-panel"><b style="font-size:16px">🗣 You're ${esc(t.transfer.to)} (ext ${esc(t.transfer.ext)}) now</b>
+        <p class="small" style="margin:6px 0 0">A warm transfer: the trainee should tell you who is calling and why before they hand the caller over. Answer as ${esc(t.transfer.to)} would; when the trainee completes the transfer the call ends, or they take the caller back.</p></div>`;
+      return;
+    }
     if (!t || !t.transfer || t.transfer.result) { el.innerHTML = t && t.transfer && t.transfer.result ? `<div class="note-box" style="margin-bottom:16px">↪ You answered the transfer to ${esc(t.transfer.to)}: <b>${t.transfer.result === 'no-answer' ? 'no answer' : t.transfer.result}</b>. The trainee is back with you when they press Resume.</div>` : ''; return; }
     const x = t.transfer;
-    el.innerHTML = `<div class="xfer-panel"><div class="row"><b style="font-size:16px">↪ The trainee is transferring you to ${esc(x.to)} (ext ${esc(x.ext)})</b><span class="spacer"></span><span class="small">${esc(x.role || '')}</span></div>
+    el.innerHTML = `<div class="xfer-panel"><div class="row"><b style="font-size:16px">↪ The trainee is ${x.kind === 'warm' ? 'warm-' : ''}transferring you to ${esc(x.to)} (ext ${esc(x.ext)})</b><span class="spacer"></span><span class="small">${esc(x.role || '')}</span></div>
       <p class="small" style="margin:6px 0 10px">${x.unavailable ? '🚫 The scenario says <b>' + esc(x.to) + ' is not available</b>.' : 'The scenario doesn\'t say this person is out.'} You decide what happens:</p>
-      <div class="row"><button class="btn btn-green" data-xfer="connected">✅ Picks up (the call is handed over and ends)</button><button class="btn" data-xfer="no-answer">📵 No answer</button><button class="btn" data-xfer="voicemail">📨 Voicemail</button></div></div>`;
+      <div class="row">${x.kind === 'warm' ? `<button class="btn btn-green" data-xfer="consult" title="Answer as ${esc(x.to)}: the trainee introduces the caller to you, then hands them over">🗣 Picks up: talk to the trainee as ${esc(x.to)}</button>` : ''}<button class="btn ${x.kind === 'warm' ? '' : 'btn-green'}" data-xfer="connected">✅ Picks up (the call is handed over and ends)</button><button class="btn" data-xfer="no-answer">📵 No answer</button><button class="btn" data-xfer="voicemail">📨 Voicemail</button></div></div>`;
   }
 
   // 🔎 The case file the trainee chose in Case lookup: the right one, or not the one this call is about.
@@ -939,8 +982,9 @@
   C.syncAudio = function () {
     if (!App.trainer() || App.isClassView) return;
     const on = C.classOn();
-    remote().muted = on;
-    ((App.t && App.t.legs) || []).forEach((l) => { if (l.audio) l.audio.muted = on; });
+    const quiet = on || consulting();
+    remote().muted = quiet;
+    ((App.t && App.t.legs) || []).forEach((l) => { if (l.audio) l.audio.muted = quiet; });
     const t = App.t;
     if (t && t.status === 'live' && t.classSent !== on) { t.classSent = on; App.board.send({ t: 'class', callId: t.callId, on }); }
     if (C._shown !== on) { C._shown = on; renderDialer(); renderRoster(); }

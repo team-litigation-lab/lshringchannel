@@ -32,8 +32,10 @@ if [ -n "${ONLY:-}" ]; then node "$ONLY"; exit 0; fi
 node --no-warnings portal-unit.mjs
 node --no-warnings msg-unit.mjs
 node --no-warnings cms-unit.mjs
+node --no-warnings gemini-unit.mjs
 node e2e-live.js
 node e2e-portal.js
+node e2e-trainee.js
 if [ -z "${LIVE_ONLY:-}" ]; then
   node e2e-ai.js
   node e2e-msg.js

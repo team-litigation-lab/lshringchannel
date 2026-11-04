@@ -18,6 +18,7 @@
  *                        optional: AI practice callers and AI scoring (the LSH Gemini key pool)
  *   AI_GATEWAY_SECRET    optional but recommended: the LSH Training Portal's shared gateway secret, so every graded
  *                        call here counts in the trainee's course (POST the Portal's /api/call-results, src/portal.js)
+ *                        and, when the keys here run out, the Portal's Gemini keys answer (its /api/ai-gateway, src/gemini.js)
  * Variables: RECORDING_DAYS (default 90), AI_MAX_MINUTES (default 8), PORTAL_URL (default https://cm-training-activity.pages.dev).
  * Recordings are kept in the shared LSH_KV namespace under "voip:" and expire on their own.
  */
@@ -322,7 +323,7 @@ export default {
           // A call gets a few tries (busy keys, models); every token is one Gemini Live session.
           if ((await sb.countUsage(me.id, 'live:' + r.id, 3600000)) >= 8 || (await sb.countUsage(me.id, 'live', 3600000)) >= 60) return json({ error: 'Too many voice connections; this call runs as text.', code: 'RATE_LIMIT' }, 429);
           await sb.logUsage(me.id, 'live:' + r.id); await sb.logUsage(me.id, 'live');
-          const t = await liveToken(env, (model) => liveSetup(s, model, r.data.voice), aiMinutes(env), Array.isArray(body.skip) ? body.skip.map(String) : []);
+          const t = await liveToken(env, (model) => liveSetup(s, model, r.data.voice), aiMinutes(env), Array.isArray(body.skip) ? body.skip.map(String) : [], me.id);
           return t.ok ? json({ token: t.token, model: t.model, url: t.url, pair: t.pair, maxSeconds: aiMinutes(env) * 60 }) : json({ error: t.error, code: t.code }, t.code === 'BUSY' ? 429 : 502);
         }
         // Text mode: the same caller, one turn at a time (no microphone, or live voice unavailable).
@@ -341,7 +342,7 @@ export default {
         if (!contents.length || contents[0].role !== 'user') contents.unshift({ role: 'user', parts: [{ text: '(The call is answered.)' }] });
         if (contents[contents.length - 1].role !== 'user') contents.push({ role: 'user', parts: [{ text: '(The line is quiet.)' }] });
         try {
-          const g = await generate(env, { system: callerPrompt(s) + '\n\nThis call is typed: reply with only what you say out loud, one or two short sentences.', contents: contents.slice(-60), maxTokens: 200, temperature: 0.8 });
+          const g = await generate(env, { system: callerPrompt(s) + '\n\nThis call is typed: reply with only what you say out loud, one or two short sentences.', contents: contents.slice(-60), maxTokens: 200, temperature: 0.8, user: me.id });
           const text = g.text.replace(/^\s*(caller|[A-Z][a-z]+ [A-Z][a-z]+)\s*:\s*/i, '').trim();
           if (text) await sb.appendTyped(r.id, me, [{ who: 'caller', text }]);
           return json({ text });
