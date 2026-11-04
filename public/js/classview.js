@@ -12,11 +12,22 @@
    It reads everything from the console that opened it (window.opener,
    Console.classState() and Console.remoteStream()): it has no phone
    line of its own.
+   The call plays through this window's own AudioContext, not an <audio>
+   element: Chrome plays a WebRTC stream from every <audio> element of a
+   browser process through the first window that played it (the console),
+   so an element here would sound from the console's tab and Meet's "share
+   tab audio" would send silence. The class would then hear the trainee
+   only through the trainee's own Meet mic, and not at all once they mute
+   it. A muted <audio> element still holds the stream, which Chrome needs
+   before Web Audio gets a remote stream's sound.
    ========================================================= */
 (function () {
   'use strict';
   const { esc } = U;
-  let timer = null, last = '', audioOn = false, ringing = false, stopMeter = null, meterStream = null;
+  let timer = null, last = '', audioOn = false, ringing = false, raf = null;
+  // The class audio: stream → src → out (gain) → this tab's speakers, with an analyser for the level meter.
+  const cvOut = { ctx: null, out: null, an: null, src: null, stream: null, via: '' };
+  window.ClassAudio = cvOut;   // the tests read what this tab plays from it
 
   const opener = () => { try { return window.opener && !window.opener.closed && window.opener.Console ? window.opener : null; } catch (e) { return null; } };
 
@@ -58,6 +69,7 @@
     const op = opener(); if (!op) return;
     audioOn = true;
     try { Sounds.unlock(); } catch (e) {}
+    outCtx();   // made on the click, so the browser lets it play
     const a = U.$('#cvAudio'); a.play().catch(() => {});
     op.Console.classAudio = true; op.Console.syncAudio();
     U.$('#cvStart').textContent = '🔊 Class audio on';
@@ -69,7 +81,50 @@
     audioOn = false;
     if (ringing) { Sounds.stop(); ringing = false; }
     const a = U.$('#cvAudio'); if (a) { a.pause(); a.srcObject = null; }
-    if (stopMeter) { stopMeter(); stopMeter = null; meterStream = null; }
+    playStream(null);
+    if (raf) { cancelAnimationFrame(raf); raf = null; }
+    if (cvOut.ctx) { try { cvOut.ctx.close(); } catch (e) {} cvOut.ctx = cvOut.out = cvOut.an = null; }
+  }
+
+  // This window's AudioContext: what it plays is this tab's sound, the sound Meet shares.
+  function outCtx() {
+    if (!cvOut.ctx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const c = cvOut.ctx = new Ctx();
+      cvOut.out = c.createGain();
+      cvOut.an = c.createAnalyser(); cvOut.an.fftSize = 512;
+      cvOut.out.connect(cvOut.an); cvOut.out.connect(c.destination);
+      const lvl = U.$('#cvLevel'), d = new Uint8Array(cvOut.an.fftSize);
+      const draw = () => {
+        if (!cvOut.an) return;
+        cvOut.an.getByteTimeDomainData(d); let peak = 0; for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i] - 128));
+        if (lvl) lvl.style.width = (cvOut.src ? Math.round(Math.min(1, peak / 64) * 100) : 0) + '%';
+        raf = requestAnimationFrame(draw);
+      };
+      draw();
+    }
+    if (cvOut.ctx.state === 'suspended') cvOut.ctx.resume().catch(() => {});
+    return cvOut.ctx;
+  }
+  // Play the call's stream (or nothing) through this window's AudioContext.
+  function playStream(stream) {
+    const a = U.$('#cvAudio');
+    if (cvOut.stream === stream) return;
+    if (cvOut.src) { try { cvOut.src.disconnect(); } catch (e) {} cvOut.src = null; }
+    cvOut.stream = stream; cvOut.via = '';
+    if (a && a.srcObject !== stream) { a.srcObject = stream; if (stream) a.play().catch(() => {}); }
+    if (!stream) return;
+    try {
+      // The tracks belong to the console's window: wrap them in a stream of this window's own.
+      cvOut.src = outCtx().createMediaStreamSource(new MediaStream(stream.getAudioTracks()));
+      cvOut.src.connect(cvOut.out);
+      cvOut.via = 'webaudio';
+      if (a) a.muted = true;    // holds the stream for Chrome; the sound comes from the AudioContext
+    } catch (e) {
+      console.warn('class audio', e && e.message);
+      cvOut.via = 'element';
+      if (a) a.muted = false;   // the old way, better than nothing
+    }
   }
   window.addEventListener('pagehide', () => {
     const op = opener();
@@ -86,16 +141,9 @@
     let s;
     try { s = op.Console.classState(); } catch (e) { return; }
     // The call's audio: this tab plays it (the class hears what Meet shares from this tab).
-    const a = U.$('#cvAudio');
     const stream = audioOn ? op.Console.remoteStream() : null;
-    if (a && a.srcObject !== stream) { a.srcObject = stream; if (stream) a.play().catch(() => {}); }
-    if (stream !== meterStream) {
-      if (stopMeter) stopMeter();
-      stopMeter = null; meterStream = stream;
-      const lvl = U.$('#cvLevel');
-      if (stream) stopMeter = VoIP.meter(stream, (v) => { if (lvl) lvl.style.width = Math.round(v * 100) + '%'; });
-      else if (lvl) lvl.style.width = '0';
-    }
+    playStream(stream);
+    if (audioOn && cvOut.ctx && cvOut.ctx.state === 'suspended') cvOut.ctx.resume().catch(() => {});
     const want = audioOn && s.status === 'ringing';
     if (want && !ringing) { Sounds.ringback(); ringing = true; } else if (!want && ringing) { Sounds.stop(); ringing = false; }
     const st = U.$('#cvAudioState');
