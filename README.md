@@ -201,6 +201,7 @@ To let the batch listen to a mock call in your Google Meet (and record it with M
 4. Keep your **Meet mic on** and wear a headset.
    - Your voice (the caller) reaches the class through Meet.
    - The trainee's voice, hold music and the ringback reach the class from the Class view tab.
+     The Class view plays them through its own audio (not an `<audio>` element, which Chrome would sound from the console's tab), so the class hears the trainee with their Meet mic muted.
 5. The trainee on the call **mutes their Meet mic and the Meet tab** (right-click the tab → *Mute site*) until the call ends, so they don't hear an echo. Their phone reminds them while the class is listening.
 6. **Record** in Meet captures both voices and the Class view. Meet recording needs a Google Workspace plan that includes it.
 

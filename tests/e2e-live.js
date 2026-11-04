@@ -183,15 +183,16 @@ const playCall = async (pg, sid) => {
   await cv.click('#cvStart');
   await cv.waitForFunction(() => /Playing the call/.test(document.querySelector('#cvAudioState').textContent), null, { timeout: 10000 });
   await sleep(1500);
+  // Listen to what this tab itself plays (its own AudioContext's output), which is what Meet's "share tab audio" sends:
+  // an <audio> element here would sound from the console's tab instead (Chrome plays a WebRTC stream through the first window).
   const cvAudio = await cv.evaluate(async () => {
-    const a = document.querySelector('#cvAudio'), s = a.srcObject;
-    const ctx = new AudioContext(), an = ctx.createAnalyser(); ctx.createMediaStreamSource(s).connect(an);
+    const o = window.ClassAudio, s = o.stream, an = o.an;
     // The fake microphone beeps with silence between, so listen for 2 seconds and keep the loudest moment.
     const d = new Uint8Array(an.fftSize); let peak = 0;
     for (let i = 0; i < 40; i++) { await new Promise((r) => setTimeout(r, 50)); an.getByteTimeDomainData(d); d.forEach((v) => (peak = Math.max(peak, Math.abs(v - 128)))); }
-    return { playing: !a.paused, live: s.getAudioTracks()[0].readyState, peak };
+    return { via: o.via, ctx: o.ctx.state, ownWindow: o.ctx instanceof AudioContext, live: s.getAudioTracks()[0].readyState, peak };
   });
-  if (!(cvAudio.playing && cvAudio.live === 'live' && cvAudio.peak > 0)) throw new Error('Class view audio: ' + JSON.stringify(cvAudio));
+  if (!(cvAudio.via === 'webaudio' && cvAudio.ctx === 'running' && cvAudio.ownWindow && cvAudio.live === 'live' && cvAudio.peak > 0)) throw new Error('Class view audio: ' + JSON.stringify(cvAudio));
   await tr.waitForFunction(() => document.getElementById('remoteAudio').muted === true, null, { timeout: 5000 });
   ok(`Class view plays the call (level ${cvAudio.peak}) and the console goes quiet so the trainer doesn't hear it twice`);
   await te.waitForFunction(() => /class is listening/.test(document.querySelector('#device').textContent), null, { timeout: 5000 });
