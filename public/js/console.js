@@ -51,7 +51,7 @@
   // What was happening on the line (hold, mute, coaching, a transfer waiting for an answer).
   const liveState = (lv) => {
     lv = lv || {};
-    return { traineeHeld: !!lv.held, holdAt: lv.holdAt || 0, traineeMuted: !!lv.traineeMuted, coaching: !!lv.coaching, traineeShare: !!lv.traineeShare, traineeCms: !!lv.traineeCms,
+    return { traineeHeld: !!lv.held, holdAt: lv.holdAt || 0, traineeMuted: !!lv.traineeMuted, coaching: !!lv.coaching, traineeCms: !!lv.traineeCms,
       transfer: lv.transfer ? Object.assign({ at: Date.now() }, lv.transfer) : null };
   };
   C.onPresence = function () { if (App.route.name === 'console') { renderRoster(); if (!App.t) { syncDial(); renderDialer(); } } };
@@ -159,13 +159,8 @@
       case 'cms':
         if (!mine) return;
         if (!t.traineeCms) C.scriptOn = false;
+        C.cmsClosed = '';   // the trainee opened it (again): show it
         t.traineeCms = true; watchCms(t);
-        return;
-      // 📺 The trainee is presenting their phone tab in Meet: the class hears you from it, so you mute your own Meet mic and the Meet tab.
-      case 'share':
-        if (!mine) return;
-        t.traineeShare = !!m.on; renderDialer();
-        if (m.on) U.toast(`📺 ${(t.trainee && t.trainee.name) || 'The trainee'} is presenting their phone in Google Meet: the class hears you through it. Mute your Meet mic and the Meet tab until the call ends, so there's no echo.`);
         return;
       case 'transfer':
         if (!mine) return;
@@ -773,7 +768,7 @@
         </div>
       </div>`;
     renderDialer(); renderTransfer(); renderCase(); renderConf(); renderLiveNote();
-    if (t.traineeCms) watchCms(t);   // after a reload: the trainee already has the CMS open
+    if (t.traineeCms && C.cmsClosed !== t.callId) watchCms(t);   // after a reload: the trainee already has the CMS open (unless closed here)
   }
 
   /* 👁 While the trainee's CMS is up, it takes the column beside the dialer: the caller's script and the
@@ -783,7 +778,7 @@
   function syncWatch() {
     const col = U.$('#dialCol'), box = U.$('#cmsWatch'); if (!col || !box) return;
     const t = App.t;
-    const on = !!(t && t.traineeCms && box.dataset.who && t.status !== 'elsewhere');
+    const on = !!(t && t.traineeCms && box.dataset.who && t.status !== 'elsewhere' && C.cmsClosed !== t.callId);
     col.classList.toggle('watching', on && !C.scriptOn);
     col.classList.toggle('script-on', on && !!C.scriptOn);
     box.classList.toggle('hidden', !on);
@@ -810,7 +805,7 @@
     const ask = () => API.post('/api/cms-link', { watch: who, watchBatch: t.trainee.batch || '' });
     box.onclick = async (e) => {
       const b = e.target.closest('[data-cmsw]'); if (!b) return;
-      if (b.dataset.cmsw === 'close') { box.innerHTML = ''; delete box.dataset.who; if (App.t) App.t.traineeCms = false; C.scriptOn = false; syncWatch(); renderDialBadges(); return; }
+      if (b.dataset.cmsw === 'close') { box.innerHTML = ''; delete box.dataset.who; if (App.t) { App.t.traineeCms = false; C.cmsClosed = App.t.callId; } C.scriptOn = false; syncWatch(); renderDialBadges(); return; }
       if (b.dataset.cmsw === 'script') { C.scriptOn = !C.scriptOn; syncWatch(); return; }
       const tab = window.open('', '_blank');
       try { const r = await ask(); if (tab) tab.location = r.url; } catch (err) { if (tab) tab.close(); U.toast(err.message, 'error'); }
@@ -867,7 +862,6 @@
         if (t.muted) f.push('<span class="lb mute">YOU\'RE MUTED</span>');
         if (t.coaching) f.push('<span class="lb coach">⏸ COACHING</span>');
         if (t.traineeCms) f.push('<span class="lb coach" data-cmsjump="1" style="cursor:pointer" title="The trainee has the CMS open: click to see their screen beside your phone.">👁 THEIR CMS</span>');
-        if (t.traineeShare) f.push('<span class="lb coach" title="The trainee is presenting their phone tab in Google Meet: the class hears you through it. Mute your Meet mic and the Meet tab until the call ends.">📺 IN MEET · MUTE YOUR MEET MIC</span>');
         if (confCount()) f.push(`<span class="lb conf">👥 CONFERENCE · ${confCount() + 1}</span>`);
         if (t.peerLost) f.push('<span class="lb warn">TRAINEE RECONNECTING</span>');
         if (t.quality) f.push(`<span class="lb" title="${t.quality.rtt != null ? t.quality.rtt + ' ms round trip' : ''}${t.quality.loss ? ' · ' + t.quality.loss + '% loss' : ''}${t.quality.relay ? ' · via TURN relay' : ''}"><span class="bars q${t.quality.bars}"><i></i><i></i><i></i><i></i></span>${t.quality.relay ? ' RELAY' : ''}</span>`);
@@ -1076,7 +1070,29 @@
     };
   };
   // On a conference the class hears every trainee on the line (the trainer's own voice goes through Meet).
-  C.remoteStream = () => (App.t && App.t.mix ? App.t.mix.voices() : (App.t && App.t.rtc && App.t.rtc.remote) || null);
+  /* What the Class view plays. Chrome renders a call's own (WebRTC) audio through the first window that played it,
+     this console, so the Class view tab given the call's stream sent Meet silence: the class heard the trainer
+     (Meet mic) but never the trainee. The Class view gets a copy instead, made here with Web Audio: ordinary audio,
+     which plays in whatever tab plays it, so Meet's "share tab audio" carries it. A conference is already such a
+     copy (the mixer's voices). The console's own <audio> keeps the call's stream (muted while the class listens),
+     which Chrome needs to feed Web Audio. */
+  let classCopy = null;
+  C.remoteStream = function () {
+    const t = App.t;
+    if (t && t.mix) return t.mix.voices();
+    const src = (t && t.rtc && t.rtc.remote) || null;
+    if (!src) return null;
+    if (classCopy && classCopy.src === src && classCopy.ctx.state !== 'closed') { if (classCopy.ctx.state === 'suspended') classCopy.ctx.resume().catch(() => {}); return classCopy.out; }
+    if (classCopy) { try { classCopy.ctx.close(); } catch (e) {} classCopy = null; }
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const node = ctx.createMediaStreamSource(src), dest = ctx.createMediaStreamDestination();
+      node.connect(dest);
+      ctx.resume().catch(() => {});
+      classCopy = { src, ctx, out: dest.stream };
+      return dest.stream;
+    } catch (e) { return src; }
+  };
 
   /* ---------- 🤖 AI calls: its own page ----------
      The calls where the AI plays the caller: the ones ringing or on the line, the ones that ended and

@@ -233,24 +233,7 @@ const playCall = async (pg, sid) => {
   if (!(await te.isHidden('#cmsSplit'))) throw new Error('The CMS frame should hide on another tab');
   await te.click('[data-tab="lookup"]');
   if (!(await te.isVisible('#cmsSplit iframe[data-kept="1"]'))) throw new Error('The CMS frame should be kept (not reloaded) across tabs');
-  // ◀ Collapse: the phone and the switchboard fold to a rail with the call's keys; ▶ brings them back.
-  await te.click('#device .dev-collapse');
-  await te.waitForSelector('#device.dev-rail [data-act="hangup"]');
-  if (!(await te.isHidden('#tside'))) throw new Error('◀ Collapse should fold the switchboard away with the phone');
-  await te.screenshot({ path: OUT + '/19-trainee-collapsed-cms.png' });
-  await te.click('#device .rail-open');
-  await te.waitForSelector('#device:not(.dev-rail) .dev-collapse');
-  ok('◀ Collapse folds the phone and the switchboard to a rail (timer, Mute, Hold, Hang up) so the CMS takes the screen; ▶ brings them back');
-
-  // 📺 The trainee presents their own phone in Meet: their phone says how, and the trainer's dialer says to mute their Meet mic.
-  await te.click('#device [data-act="meetshare"]');
-  await te.click('.modal [data-ms="on"]');
-  await te.waitForFunction(() => /presenting this phone in Google Meet/.test(document.querySelector('#device').textContent));
-  await tr.waitForFunction(() => /IN MEET/.test(document.querySelector('#dialer .lcd-badges').textContent));
-  await te.click('#device [data-act="meetshare"]');
-  await te.click('.modal [data-ms="off"]');
-  await tr.waitForFunction(() => !/IN MEET/.test(document.querySelector('#dialer .lcd-badges').textContent));
-  ok('📺 Share in Meet: the trainee says they are presenting their phone, and the trainer\'s dialer tells them to mute their Meet mic (and stops when the trainee does)');
+  if (await te.$('#device .dev-collapse, #device [data-act="meetshare"]')) throw new Error('The phone should have no ◀ Collapse tab and no 📺 Share in Meet');
   ok('🗂 Case lookup has every CMS Training Library file (Schuyler Beauchamp: MC-37 and MC-51), and "Open in the CMS" opens it beside the call, kept while the trainee switches tabs');
 
   // Live note
@@ -431,6 +414,8 @@ const playCall = async (pg, sid) => {
   await sleep(1200);
   await tr.click('[data-act="hangup"]');
   await te.waitForSelector('#submitNote');
+  const ended = await te.evaluate(() => ({ banner: !!document.querySelector('#work .warn-box'), inTabs: !!document.querySelector('#work .work-tabs #submitNote'), heading: !!document.querySelector('#work .note-form h3') }));
+  if (ended.banner || !ended.inTabs || ended.heading) throw new Error('After the call: no call-ended banner, Submit my note in the tab row, no heading over the note: ' + JSON.stringify(ended));
   ok('Trainer ended the call; trainee sees the wrap-up');
   await tr.waitForFunction(() => /Recording saved|couldn't be saved|wasn't recorded/.test(document.querySelector('#stage').textContent), null, { timeout: 20000 });
   const recMsg = await tr.textContent('#endedInfo');
@@ -595,7 +580,7 @@ const playCall = async (pg, sid) => {
   if (!/Open call: no script/.test(ocStage) || !/No checklist on an open call/.test(ocStage)) throw new Error('Open call stage: ' + ocStage.slice(0, 200));
   await tr.selectOption('#ocCase', 'MC-02');
   await tr.waitForFunction(() => !document.querySelector('#ocCaseText').classList.contains('hidden'));
-  if (!/Intake note/i.test(await te.textContent('#work'))) throw new Error('The trainee should get the Intake note on an Intake open call');
+  if (!/Potential client: full name/.test(await te.textContent('#work [data-pane="note"]'))) throw new Error('The trainee should get the Intake note on an Intake open call');
   await tr.screenshot({ path: OUT + '/15-open-call.png', fullPage: true });
   await tr.click('[data-act="hangup"]');
   await tr.waitForSelector('#dialer [data-act="newcall"]');
@@ -622,7 +607,7 @@ const playCall = async (pg, sid) => {
   await te2.click('[data-act="answer"]');
   await te2.waitForSelector('.lcd.live', { timeout: 20000 });
   await tr.waitForFunction((id) => App.t && App.t.callId !== id && App.t.status === 'live', firstCall, { timeout: 25000 });
-  await te.waitForFunction(() => /passed the caller to another desk/.test(document.querySelector('#work').textContent), null, { timeout: 20000 });
+  await te.waitForFunction(() => /passed the caller to another desk/.test(document.querySelector('#device').textContent), null, { timeout: 20000 });
   const moved = await tr.evaluate(() => ({ name: App.t.trainee.name, from: App.t.handoverFrom, legs: (App.t.legs || []).length, mix: !!App.t.mix }));
   if (moved.name !== 'Riley Santos' || moved.from !== 'Jamie Cruz' || moved.legs || moved.mix) throw new Error('The line should carry on with the trainee the caller was transferred to: ' + JSON.stringify(moved));
   await sleep(2500);

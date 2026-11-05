@@ -177,24 +177,6 @@ table.list tr.click:hover td { background: #f8fafc; }
 .phone-layout { --deck: #0e1f42; }
 .phone-layout.with-side.side-folded { column-gap: 18px; }
 .phone-layout.with-side.side-folded { --ts: 52px; }
-/* ◀ Collapse: the phone (and the switchboard with it) folded to a rail */
-.phone-layout.with-side.dev-folded, .phone-layout.with-side.dev-folded.side-folded { grid-template-columns: 78px minmax(0, 1fr); column-gap: 14px; }
-.phone-layout.dev-folded .tside { display: none; }
-.phone-layout.dev-folded .work-col { margin-left: 0; }
-.device.dev-rail { padding: 10px 7px; align-items: center; gap: 10px; border-radius: 18px !important; min-height: 0; }
-.dev-rail .rail-open { width: 100%; border: 0; border-radius: 12px; background: var(--orange); color: #fff; font-weight: 800; cursor: pointer; padding: 10px 0; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 13px; }
-.dev-rail .rail-open .ro-ic { font-size: 18px; line-height: 1; }
-.dev-rail .rail-time { font-family: ui-monospace, Menlo, monospace; color: #4ade80; font-weight: 700; font-size: 14px; }
-.dev-rail .rail-state { font-size: 11px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; text-align: center; }
-.dev-rail .rk { width: 56px; height: 46px; border: 0; border-radius: 12px; background: #1e3a6e; color: #fff; font-size: 20px; cursor: pointer; }
-.dev-rail .rk.on { background: #92400e; }
-.dev-rail .rk.answer { background: #16a34a; }
-.dev-rail .rk.hang { background: #dc2626; }
-/* ◀ Collapse: a tall tab on the phone's right edge, in the gap before the workspace */
-.dev-collapse { position: absolute; right: -17px; top: 50%; transform: translateY(-50%); z-index: 3; width: 30px; height: 96px; border: 0; border-radius: 0 12px 12px 0; background: var(--orange); color: #fff; font-weight: 800; font-size: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; box-shadow: 4px 6px 16px -6px rgba(8, 18, 38, .5); }
-.dev-collapse .dc-lb { writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: .5px; }
-.dev-collapse:hover { background: #ea580c; }
-.dev-foot { flex-wrap: wrap; row-gap: 6px; }
 .tside .roster .fold-btn, .console-side .roster .fold-btn { font-size: 13px; padding: 7px 12px; border-radius: 10px; }
 @media (max-width: 1240px) { .phone-layout.with-side { --ts: 220px; } .phone-layout.with-side .work-col { margin-left: 14px; } }
 .phone-layout > * { min-width: 0; }
@@ -215,9 +197,10 @@ table.list tr.click:hover td { background: #f8fafc; }
 .device > .lcd { flex: 1 1 auto; }
 /* No keypad (ringing, connecting, the call ended): the screen keeps its own size and the keys (📞 Answer,
    Decline) sit right under it, in sight, rather than the screen stretching down to the switchboard's length. */
-.device:not(.pad):not(.dev-rail) > .lcd { flex: 0 0 auto; min-height: 240px; }
+#device:not(.pad) > .lcd { flex: 0 0 auto; min-height: 240px; }
+@media (max-height: 820px) and (min-width: 961px) { #device:not(.pad) > .lcd { min-height: 200px; } }
 .device .lcd .lcd-main { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
-@media (max-width: 960px) { .device { position: relative; top: 0; } .dev-collapse { display: none; } }
+@media (max-width: 960px) { .device { position: relative; top: 0; } }
 .dev-head { display: flex; align-items: center; gap: 8px; padding: 2px 4px 12px; font-size: 13px; color: #94a3b8; white-space: nowrap; }
 .dev-head > span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .dev-head b { color: #e2e8f0; font-weight: 700; }
@@ -663,8 +646,8 @@ table.graded td.gcell.fail b { color: var(--red); }
   main:has(#phoneGrid), main:has(#consoleGrid) { padding: 10px 16px 28px; }
   .phone-layout { --ph: 300px; }
   .phone-layout.with-side:not(.side-folded) { --ts: 200px; }
-  .dial-stage { grid-template-columns: 300px minmax(0, 1fr); }
 }
+@media (max-width: 1300px) and (min-width: 1101px) { .dial-stage { grid-template-columns: 300px minmax(0, 1fr); } }
 @media (max-height: 820px) and (min-width: 961px) {
   .device { padding: 12px; }
   .device .lcd { min-height: 0; padding: 10px 12px; }

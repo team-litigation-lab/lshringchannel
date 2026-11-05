@@ -432,7 +432,7 @@
   /* ---------- the workspace: note, case lookup, directory, rules ---------- */
   App.formFor = (track) => App.cfg.forms[(App.cfg.tracks[track] || App.cfg.tracks.reception).note];
 
-  App.noteFormHTML = function (track, note, locked) {
+  App.noteFormHTML = function (track, note, locked, opts) {
     const form = App.formFor(track);
     note = note || {};
     const f = (x) => {
@@ -444,7 +444,7 @@
       else input = `<input class="input" data-k="${x.k}" value="${esc(v)}" ${dis}>`;
       return `<div class="field" ${x.short ? 'style="max-width:260px"' : ''}><label class="f">${esc(x.label)}</label>${input}</div>`;
     };
-    return `<div class="note-form"><h3 style="margin-bottom:10px">📝 ${esc(form.title)}</h3>${form.fields.map(f).join('')}</div>`;
+    return `<div class="note-form">${opts && opts.bare ? '' : `<h3 style="margin-bottom:10px">📝 ${esc(form.title)}</h3>`}${form.fields.map(f).join('')}</div>`;
   };
   App.readNote = (root) => { const o = {}; U.$$('[data-k]', root).forEach((el) => { if (el.value.trim()) o[el.dataset.k] = el.value; }); return o; };
 

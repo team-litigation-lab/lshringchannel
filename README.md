@@ -215,9 +215,7 @@ They never see the caller's script or the goals, and the call's title only shows
 
 This is separate from the platform's own recording: every live call is still recorded on the console and kept with its scorecard.
 
-**👁 Watching the trainee's CMS.** When the trainee on a live call opens the CMS (🗂 CMS beside the call, or in its own tab), your console opens the CMS's own **👁 Watch live** on them under the call, signed in with your Portal ticket (the CMS's `?watch=` link). Their CMS screen shows there about a second behind. **👁 THEIR CMS ↓** on your phone's screen takes you to it. It stays open until you close it, or until another trainee opens the CMS on a call.
-
-**📺 A trainee presents their own phone (no Class view).** A trainee can share the call in a Meet themselves: **📺 Share in Meet** under their phone gives the steps. They present their Ring Channel tab (*Present now → A tab*, *Also share tab audio* on), keep their Meet mic **on** and their headset on, and press *I'm presenting this tab*. The class hears the caller from the tab and the trainee through Meet. The caller's dialer then shows **📺 IN MEET · MUTE YOUR MEET MIC**: the caller (trainer or classmate) mutes their Meet mic and the Meet tab until the call ends, or the class hears them twice.
+**👁 Watching the trainee's CMS.** When the trainee on a live call opens the CMS (🔎 Case lookup → 🗂 Open the CMS), your console shows the CMS beside your dialer, in the caller script's place, signed in with your Portal ticket. It opens the CMS's **Master Control → Monitoring**, then 👁 Watch live on the trainee as soon as they're online. Until then, pick them from the Monitoring list. **🎭 Script** brings the script, checklist and note back (the CMS stays loaded), and **👁 THEIR CMS** on your phone's screen goes back to it. **✕ Close** puts it away for the rest of the call, unless the trainee opens the CMS again.
 
 **Timings the phone measures for the scorecard:** rings before the answer (the standard is 3), call length, each hold and its length, and each transfer and how it ended.
 
