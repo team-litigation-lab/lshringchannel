@@ -186,7 +186,9 @@ On a call from the trainer, the trainee's **Transfer** key opens the other train
 
 **🔊 Speaker**, on the trainer's dialer and on the trainee's phone, works like a desk phone's speaker key: the call moves from the headset to the computer's speakers (so a training room can listen), and back when pressed again.
 - Everything on the phone follows it: the call, the ringing and ringback, the keypad tones, and the AI practice caller. The screen shows 🔊 SPEAKER while it's on.
-- The phone finds the speakers by their name ("Speakers", "Built-in", "Realtek"…). **🎧 Audio check** lists the outputs: choose the headset and the speaker there, and play a test tone on each.
+- The phone finds the headset and the speakers the same way for any make of headset (Jabra, Poly, Logitech, AirPods, a no-name USB one): the headset is the output on the same device as the microphone in use, else Windows' communications device; the speakers are an output that isn't on that device, preferring the computer's own. Names alone don't work: Windows calls a USB headset's earpiece "Speakers (Jabra Link 380)".
+- **🎙 The microphone** is the headset's own too, whatever its make. When the computer's default microphone is the laptop's built-in one and a headset is connected (USB, a dongle or Bluetooth), the phone uses the headset's microphone. It looks for Windows' communications microphone first, then any microphone with an earpiece on the same device. A webcam's microphone isn't taken for a headset, and a virtual microphone you chose as the default (Krisp, NVIDIA Broadcast…) is kept. **🎧 Audio check** can choose the microphone by hand.
+- **💻 Laptops:** the Console steps down with the screen. Below 1500 px it has less room at the sides and a narrower phone and board; below 1300 px they shrink again. A screen under 820 px tall gets a compact phone. The first time a laptop user opens the CMS, the switchboard folds away. The CMS frame has **− / +** zoom (click the % to fit it again) and fits itself to its space, never under 70 %. **🎧 Audio check** lists the outputs: choose the headset and the speaker there, and play a test tone on each.
 - The setting is kept on that computer.
 - It needs Chrome or Edge (they can choose where sound plays) and the microphone allowed, so the phone can see the outputs' names. If the computer has only one output, the screen says the call already plays there.
 - On speaker, the microphone hears the room: Chrome's echo cancellation removes the call's own sound, but a headset is still best for graded calls.
@@ -213,6 +215,10 @@ To let the batch listen to a mock call in your Google Meet (and record it with M
 They never see the caller's script or the goals, and the call's title only shows once the call is over. The Class view follows your console from call to call, so keep it open for the whole session. Present it from Chrome or Edge, where Meet can share a tab's audio.
 
 This is separate from the platform's own recording: every live call is still recorded on the console and kept with its scorecard.
+
+**👁 Watching the trainee's CMS.** When the trainee on a live call opens the CMS (🗂 CMS beside the call, or in its own tab), your console opens the CMS's own **👁 Watch live** on them under the call, signed in with your Portal ticket (the CMS's `?watch=` link). Their CMS screen shows there about a second behind. **👁 THEIR CMS ↓** on your phone's screen takes you to it. It stays open until you close it, or until another trainee opens the CMS on a call.
+
+**📺 A trainee presents their own phone (no Class view).** A trainee can share the call in a Meet themselves: **📺 Share in Meet** under their phone gives the steps. They present their Ring Channel tab (*Present now → A tab*, *Also share tab audio* on), keep their Meet mic **on** and their headset on, and press *I'm presenting this tab*. The class hears the caller from the tab and the trainee through Meet. The caller's dialer then shows **📺 IN MEET · MUTE YOUR MEET MIC**: the caller (trainer or classmate) mutes their Meet mic and the Meet tab until the call ends, or the class hears them twice.
 
 **Timings the phone measures for the scorecard:** rings before the answer (the standard is 3), call length, each hold and its length, and each transfer and how it ended.
 

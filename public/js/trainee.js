@@ -191,6 +191,8 @@
     if (App.p !== p || p.status !== 'connecting') return;
     makeRtc(p, stream, servers, 0);
     App.board.send({ t: 'accept', callId: p.callId });
+    T.shareSync();
+    VoIP.Speaker.apply().catch(() => {});   // the microphone is open: the headset is the output on its device
   }
 
   // After a reload mid-call: a fresh connection, and the trainer's console sends a new offer.
@@ -770,12 +772,31 @@
     const p = App.p; if (!p) return null;
     return App.trainer() ? (p.mode === 'ai' && !p.assigned ? p : null) : p;
   }
+  const DEVFOLD = 'tdevice';
+  // The phone folded: a rail with the line's light, the timer and the keys a call needs, and ▶ to open it again.
+  function devRailHTML(p, status, led) {
+    const live = status === 'live', ring = status === 'ringing';
+    const state = live ? `<div class="rail-time" data-since="${p.answeredAt}">${U.since(p.answeredAt)}</div>`
+      : `<div class="rail-state">${ring ? 'Ringing' : status === 'connecting' || status === 'calling' ? 'Calling' : status === 'ended' ? 'Ended' : 'Ready'}</div>`;
+    return `<button type="button" class="rail-open" data-fold="${DEVFOLD}" title="Open the phone and the switchboard" aria-expanded="false"><span class="ro-ic">▶</span><span class="ro-lb">Phone</span></button>
+      <span class="led ${led}"></span>${state}
+      ${ring && !(p && p.out) ? '<button type="button" class="rk answer pulse" data-act="answer" title="Answer">📞</button>' : ''}
+      ${live ? `<button type="button" class="rk ${p.muted ? 'on' : ''}" data-act="mute" title="${p.muted ? 'Unmute' : 'Mute'}">${p.muted ? '🔇' : '🎙'}</button>` : ''}
+      ${live && !p.out ? `<button type="button" class="rk ${p.held ? 'on' : ''}" data-act="hold" title="${p.held ? 'Resume' : 'Hold'}">⏸</button>` : ''}
+      ${['live', 'connecting', 'calling'].includes(status) ? '<button type="button" class="rk hang" data-act="hangup" title="Hang up">☎</button>' : ''}`;
+  }
   function renderDevice() {
     const el = U.$('#device'); if (!el) return;
     const mode = modeOf();
     const p = shown();
     const status = p ? (p.status === 'waiting' ? 'idle' : p.status) : 'idle';
     const led = !App.connected && mode === 'live' ? 'offline' : status === 'ringing' ? 'ringing' : ['connecting', 'live'].includes(status) ? 'live' : mode === 'live' ? App.status : 'available';
+    // ◀ Collapse: the phone and the switchboard fold to a slim rail (the timer and the call's keys stay on it).
+    const grid = U.$('#phoneGrid');
+    const devFold = !!(grid && grid.classList.contains('with-side')) && App.folded(DEVFOLD);
+    if (grid) grid.classList.toggle('dev-folded', devFold);
+    el.classList.toggle('dev-rail', devFold);
+    if (devFold) { el.style.minHeight = ''; el.innerHTML = devRailHTML(p, status, led); return; }
     /* The phone is built as the trainer's dialer is, band for band: the segmented line-key row, the
        keypad, the 🔈 Speaker · key · ⌫ Delete row, then the trio that comes alive on a call with the
        same hint under it — the trainee's own, since they answer calls rather than place them. */
@@ -822,10 +843,11 @@
     else if (p && p.handedFrom && ['ringing', 'live'].includes(p.status)) msg = `<div class="dev-msg transfer">↪ <b>A call transferred to you</b> from ${esc(p.handedFrom)}. The caller has already spoken to them: pick the call up, find out where they got to, and take it from there.</div>`;
     else if (p && p.conf && p.status === 'live') msg = `<div class="dev-msg coach">👥 <b>Conference call.</b> On the line with you: ${esc(p.conf.others.join(', ') || 'your trainer')}${p.conf.trainer ? ' and ' + esc(p.conf.trainer) + ' (the caller)' : ''}. Everyone hears everyone.</div>`;
     else if (p && p.notice && p.status === 'live') msg = `<div class="dev-msg">${esc(p.notice)}</div>`;
+    else if (App.meetShare && p && !p.out && ['ringing', 'connecting', 'live'].includes(p.status)) msg = `<div class="dev-msg coach">📺 <b>You're presenting this phone in Google Meet.</b> The class hears the caller from this tab and you through your Meet mic: keep your Meet mic <b>on</b> and your headset on. ${VoIP.Speaker.on ? '<b>Turn 🔊 Speaker off</b>: your Meet mic would pick the call up from the speakers.' : ''}</div>`;
     else if (p && p.classOn && p.status === 'live') msg = `<div class="dev-msg coach">🎧 <b>Your class is listening in Google Meet.</b> If you're in the Meet too, mute your Meet mic and the Meet tab (right-click the tab → Mute site) until the call ends, so there's no echo.</div>`;
     else if (p && p.rec && p.status === 'ringing') msg = `<div class="dev-msg">● This call will be recorded for your review.</div>`;
     const head = mode === 'live'
-      ? `<span class="led ${led}"></span><b>My phone</b>${App.myExt ? ` <span class="mono" title="Your desk extension: your trainer dials it to ring you">ext ${esc(App.myExt)}</span>` : ''}<span class="spacer"></span><span id="trOnline">${trainerLine()}</span>`
+      ? `<span class="led ${led}"></span><b>My phone</b>${App.myExt ? ` <span class="mono" title="Your desk extension: your trainer dials it to ring you">ext ${esc(App.myExt)}</span>` : ''}<span class="spacer"></span><span id="trOnline">${trainerLine()}</span>${grid && grid.classList.contains('with-side') ? `<button type="button" class="dev-collapse" data-fold="${DEVFOLD}" title="Collapse the phone and the switchboard to a slim rail: the workspace and the CMS take the screen. The call keeps going." aria-expanded="true"><span>◀</span><span class="dc-lb">Collapse</span></button>` : ''}`
       : `<span class="led ${led}"></span><b>Practice phone</b><span class="spacer"></span><span>AI caller</span>`;
     const shownCall = p && p.status !== 'waiting' ? p : null;
     const pad = padHTML(shownCall);
@@ -836,7 +858,7 @@
       ${shownCall ? '' : lineKeys}
       ${pad}
       ${p && p.out ? outKeysHTML(p) : App.keysHTML(shownCall, idleKeys)}
-      <div class="dev-foot"><span title="Call volume">🔉</span><input type="range" min="0" max="1" step="0.05" value="${App.volume == null ? 1 : App.volume}" data-act="volume" aria-label="Call volume">${!App.connected && mode === 'live' ? '<span>Offline</span>' : `<button type="button" class="dev-link" data-act="miccheck">🎧 Audio check</button>`}</div>`;
+      <div class="dev-foot"><span title="Call volume">🔉</span><input type="range" min="0" max="1" step="0.05" value="${App.volume == null ? 1 : App.volume}" data-act="volume" aria-label="Call volume">${!App.connected && mode === 'live' ? '<span>Offline</span>' : `<button type="button" class="dev-link" data-act="miccheck">🎧 Audio check</button><button type="button" class="dev-link ${App.meetShare ? 'on' : ''}" data-act="meetshare" title="Present this phone in Google Meet so your class hears the call">📺 ${App.meetShare ? 'In Meet' : 'Share in Meet'}</button>`}</div>`;
   }
   // 🤝 The screen and keys of a practice call you placed (you are the caller).
   function outLcd(p) {
@@ -886,7 +908,7 @@
     }
     const track = p.track;
     const ended = p.status === 'ended';
-    const tabs = [['note', '📝 Note'], ['lookup', '🔎 Case lookup'], ['cms', '🗂 CMS'], ['dir', '📇 Directory'], ['rules', '📘 Rules']];
+    const tabs = [['note', '📝 Note'], ['lookup', p.cmsOpen ? '🔎 Case lookup · 🗂 CMS' : '🔎 Case lookup'], ['dir', '📇 Directory'], ['rules', '📘 Rules']];
     if (p.mode === 'ai' && (p.showTranscript || ended)) tabs.splice(1, 0, ['tr', p.voice === 'text' ? '💬 Conversation' : '💬 Transcript']);
     // On a live mock call the case file comes first, as at the real front desk: look the caller up,
     // open the file (in the CMS if you like), then take the note.
@@ -906,11 +928,12 @@
         <div class="transcript" id="trLines">${p.lines.map((l) => `<div class="tl ${l.who}" data-line="${esc(l.id)}"><b>${l.who === 'caller' ? 'Caller' : 'You'}</b>${esc(l.text)}</div>`).join('')}</div>
         ${p.voice === 'text' && !ended ? `<div class="row" style="margin-top:10px"><input class="input" id="typeIn" placeholder="Type what you say…" style="flex:1" autocomplete="off"><button class="btn btn-primary" data-act="send">Send</button><span id="typeBusy" class="small muted hidden">Caller is typing…</span></div>` : ''}
       </div>` : '';
-    el.innerHTML = `${wrap}<div class="work-tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === first ? 'on' : ''}">${l}</button>`).join('')}</div>
+    el.innerHTML = `${wrap}<div class="work-tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === first ? 'on' : ''}"${k === 'lookup' && p.cmsOpen ? ` title="${p.lkOpen ? 'Click to fold the search away' : 'Click to search the case files'}"` : ''}>${l}${k === 'lookup' && p.cmsOpen ? ` <span class="lk-caret">${p.lkOpen ? '▲' : '▼'}</span>` : ''}</button>`).join('')}</div>
       <div class="pane ${first === 'note' ? 'on' : ''}" data-pane="note">${App.noteFormHTML(track, p.note, p.submitted)}</div>
       ${trPane.replace('class="pane"', `class="pane ${first === 'tr' ? 'on' : ''}"`)}
-      <div class="pane ${first === 'lookup' ? 'on' : ''}" data-pane="lookup">${App.lookupHTML(p)}</div>
-      <div class="pane ${first === 'cms' ? 'on' : ''}" data-pane="cms"><p class="small muted" style="margin:0">🗂 The CMS Training Library is open below, signed in as you, beside the call. It stays where you left it while you switch tabs and take your note.</p></div>
+      <div class="pane ${first === 'lookup' ? 'on' : ''} ${p.cmsOpen && !p.lkOpen ? 'lk-folded' : ''}" data-pane="lookup">${p.cmsOpen && !p.lkOpen
+        ? ''
+        : `${p.cmsOpen ? '' : `<div class="lk-cms"><button type="button" class="btn btn-sm btn-primary" data-act="cmsopen" title="The CMS Training Library beside the call, signed in as you">🗂 Open the CMS</button></div>`}${App.lookupHTML(p)}${p.cmsOpen ? '<div class="row" style="margin-top:8px"><button type="button" class="btn btn-sm" data-act="lkopen">▲ Fold the search</button></div>' : ''}`}</div>
       <div class="pane" data-pane="dir">${App.directoryHTML(p.status === 'live')}</div>
       <div class="pane" data-pane="rules">${App.rulesHTML(track)}</div>`;
     App.bindLookup(el, { hide: p.hideCases, live: !ended && p.status !== 'waiting',
@@ -920,40 +943,86 @@
     syncCms();
   }
 
+  /* 📺 Share in Meet: the trainee presents this tab in Google Meet themselves, with no trainer Class view.
+     Meet's "Also share tab audio" sends what this tab plays: the caller, the ringback and the hold music. The
+     trainee's own voice reaches the class through their Meet mic, as in any Meet. The caller (a trainer or a
+     classmate in the same Meet) is told, through the board, to mute their Meet mic and the Meet tab, or the class
+     would hear them twice. Nothing can tell from inside a tab whether Meet is sharing it, so the trainee says so. */
+  App.meetShare = (() => { try { return sessionStorage.getItem('mcv_meetshare') === '1'; } catch (e) { return false; } })();
+  function setMeetShare(on) {
+    App.meetShare = !!on;
+    try { if (on) sessionStorage.setItem('mcv_meetshare', '1'); else sessionStorage.removeItem('mcv_meetshare'); } catch (e) {}
+    const p = App.p;
+    if (p && p.callId && !p.out && p.mode !== 'ai' && ['ringing', 'connecting', 'live'].includes(p.status)) App.board.send({ t: 'share', callId: p.callId, on: App.meetShare });
+    renderDevice();
+  }
+  T.shareSync = () => { const p = App.p; if (App.meetShare && p && p.callId && !p.out && p.mode !== 'ai') App.board.send({ t: 'share', callId: p.callId, on: true }); };
+  function meetShare() {
+    const m = App.modal({ title: '📺 Share your phone in Google Meet', body: `<p class="small muted">Your class hears the call from this tab, the way it hears a video someone presents. Use Chrome or Edge.</p>
+      <ol class="small">
+        <li>Wear your headset (any make). Turn <b>🔊 Speaker off</b>.</li>
+        <li>In Meet: <b>Present now → A tab</b>, pick <b>this</b> tab (LSH Ring Channel), turn on <b>Also share tab audio</b>, then <b>Share</b>. Choose "A tab", not "Window" or "Entire screen": only a tab carries the sound.</li>
+        <li>Keep your Meet mic <b>on</b>: the class hears you through Meet, and the caller through this tab.</li>
+        <li>Your caller mutes their Meet mic and the Meet tab while you're on the call (their console tells them).</li>
+        <li>When the call is over, stop presenting in Meet and press <b>Stop sharing</b> here.</li>
+      </ol>
+      <div class="row" style="margin-top:12px">${App.meetShare ? '<button class="btn btn-orange" data-ms="off">Stop sharing</button>' : '<button class="btn btn-primary" data-ms="on">I\'m presenting this tab</button>'}<button class="btn" data-x="1">Close</button></div>` });
+    m.el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-ms]'); if (!b) return;
+      setMeetShare(b.dataset.ms === 'on');
+      if (App.meetShare && VoIP.Speaker.on) App.toggleSpeaker(renderDevice);
+      m.close();
+    });
+  }
+
   /* 🗂 The CMS beside the call: the CMS Training Library in a frame under the workspace tabs, signed in as the trainee
      (the same Portal ticket 🔎 Case lookup's "Open in the CMS" uses; the CMS keeps its session in a frame, see its
      functions/_utils.js). The frame is made once and kept: the workspace redraws often during a call, and a frame
      that's redrawn reloads, so it lives beside #work (not in it) and is only shown or hidden. */
-  const cmsTabOn = () => { const p = shown(); return !!(p && !p.out && p.status !== 'waiting' && p.tab === 'cms' && U.$('#work [data-pane="cms"]')); };
+  // The CMS shows under 🔎 Case lookup once it's opened there (on the other tabs it's kept, hidden).
+  const cmsTabOn = () => { const p = shown(); return !!(p && !p.out && p.status !== 'waiting' && p.cmsOpen && U.$('#work [data-pane="lookup"].on')); };
   function syncCms() {
     const box = U.$('#cmsSplit'); if (!box) return;
     const on = cmsTabOn();
     box.classList.toggle('hidden', !on);
-    if (on && !box.dataset.loaded) openCmsSplit((shown() || {}).caseId || '', true);
+    if (on && !box.dataset.loaded) loadCms((shown() || {}).caseId || '', true);
   }
-  async function openCmsSplit(caseId, quiet) {
+  // The trainer's console watches the trainee's CMS screen once they open it on a call (a classmate's practice call: no).
+  function tellCms() {
+    const p = shown();
+    if (p && p.callId && !p.out && !p.peer && (p.mode === 'live' || p.assigned) && ['connecting', 'live', 'ended'].includes(p.status)) App.board.send({ t: 'cms', callId: p.callId });
+  }
+  // Open the CMS under Case lookup (the search folds to one bar), on a case file when one is given.
+  function openCmsSplit(caseId) {
     const p = shown(), box = U.$('#cmsSplit'), w = U.$('#work');
     if (!box || !w || !p) { App.openCase(caseId); return; }
-    p.tab = 'cms';
-    U.$$('[data-tab]', w).forEach((b) => b.classList.toggle('on', b.dataset.tab === 'cms'));
-    U.$$('[data-pane]', w).forEach((x) => x.classList.toggle('on', x.dataset.pane === 'cms'));
-    box.classList.remove('hidden');
+    p.cmsOpen = true; p.lkOpen = false; p.tab = 'lookup';
+    // 💻 A laptop: the switchboard folds away the first time the CMS opens, so the CMS has the room (« brings it back).
+    if (window.innerWidth < 1500 && !T.autoFolded && !App.folded('tside')) { T.autoFolded = true; App.folded('tside', true); renderSide(); }
+    const reload = box.dataset.loaded && caseId && box.dataset.case !== caseId;
+    renderWork();   // syncCms loads the frame the first time
+    if (reload) loadCms(caseId);
     // The workspace tabs stay in sight above the CMS (the lookup's button can sit far down the page).
     if (w.getBoundingClientRect().top < 70) window.scrollBy({ top: w.getBoundingClientRect().top - 84 });
+  }
+  async function loadCms(caseId, quiet) {
+    const box = U.$('#cmsSplit'); if (!box) return;
     box.dataset.loaded = '1'; box.dataset.case = caseId || '';
-    box.innerHTML = `<div class="cms-split-head"><b>🗂 CMS Training Library</b>${caseId ? ` <span class="badge">${esc(caseId)}</span>` : ''}<span class="small muted cms-msg" style="flex:1">Opening, signed in as you…</span>
+    box.innerHTML = `<div class="cms-split-head"><b>🗂 CMS Training Library</b>${caseId ? ` <span class="badge">${esc(caseId)}</span>` : ''}<span class="small muted cms-msg" style="flex:1">Opening, signed in as you…</span>${App.zoomHTML()}
         <button class="btn btn-sm" data-cms="tab" title="Open the CMS in its own browser tab instead">↗ New tab</button><button class="btn btn-sm" data-cms="close" title="Close the CMS beside the call">✕ Close</button></div>
-      <iframe class="cms-frame" title="LSH CMS Training Library" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+      ${App.cmsFrameHTML('LSH CMS Training Library')}`;
+    App.grip(box);
     box.onclick = (e) => {
       const b = e.target.closest('[data-cms]'); if (!b) return;
-      if (b.dataset.cms === 'tab') App.openCase(box.dataset.case || '', b);
-      else { box.innerHTML = ''; delete box.dataset.loaded; box.classList.add('hidden'); const q = shown(); if (q) q.tab = 'lookup'; renderWork(); }
+      if (b.dataset.cms === 'tab') { App.openCase(box.dataset.case || '', b); tellCms(); }
+      else { box.innerHTML = ''; delete box.dataset.loaded; box.classList.add('hidden'); const q = shown(); if (q) { q.tab = 'lookup'; q.cmsOpen = false; } renderWork(); }
     };
     try {
       const r = await API.post('/api/cms-link', { caseId: caseId || '' });
       const f = U.$('.cms-frame', box), msg = U.$('.cms-msg', box);
       if (!f) return;
       f.src = r.url;
+      tellCms();
       if (msg) msg.textContent = r.authed ? 'Signed in as you. Search the client the way you would at the front desk.' : 'The CMS will ask you to come in from the LSH Training Portal (no Portal secret is set on this site).';
     } catch (e) {
       const msg = U.$('.cms-msg', box); if (msg) msg.textContent = 'Couldn\'t open the CMS: ' + e.message;
@@ -1019,6 +1088,8 @@
     root.addEventListener('click', (e) => {
       const tab = e.target.closest('[data-tab]');
       if (tab) {
+        // 🔎 Case lookup clicked again with the CMS open: the search opens (or folds away) above the CMS.
+        if (tab.dataset.tab === 'lookup' && tab.classList.contains('on') && App.p && App.p.cmsOpen) { App.p.lkOpen = !App.p.lkOpen; renderWork(); return; }
         if (App.p) App.p.tab = tab.dataset.tab;
         const w = U.$('#work');
         U.$$('[data-tab]', w).forEach((b) => b.classList.toggle('on', b === tab));
@@ -1028,7 +1099,7 @@
       }
 
       const fold = e.target.closest('[data-fold]');
-      if (fold) { App.folded(fold.dataset.fold, !App.folded(fold.dataset.fold)); renderSide(); return; }
+      if (fold) { App.folded(fold.dataset.fold, !App.folded(fold.dataset.fold)); renderDevice(); renderSide(); fitBoard(); return; }
       const dk = e.target.closest('[data-dk]');
       if (dk) { press(dk.dataset.dk); return; }
       const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1039,7 +1110,10 @@
       else if (act === 'decline') decline();
       else if (act === 'hangup') hangup();
       else if (act === 'mute') toggleMute();
-      else if (act === 'speaker') App.toggleSpeaker(renderDevice);
+      else if (act === 'speaker') { App.toggleSpeaker(renderDevice); if (App.meetShare && VoIP.Speaker.on) U.toast('You\'re presenting in Meet: with 🔊 Speaker on, your Meet mic picks the call up from the speakers and the class hears it twice. Use your headset.'); }
+      else if (act === 'meetshare') meetShare();
+      else if (act === 'cmsopen') openCmsSplit((App.p && App.p.caseId) || '');
+      else if (act === 'lkopen') { const q = shown(); if (q) { q.lkOpen = !q.lkOpen; renderWork(); } }
       else if (act === 'hold') toggleHold();
       else if (act === 'transfer') pickTransfer();
       else if (act === 'merge') pickTransfer('merge');

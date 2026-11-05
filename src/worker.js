@@ -209,6 +209,9 @@ export default {
         const u = new URL(CMS_URL);
         u.searchParams.set('program', 'reception');
         if (caseId) u.searchParams.set('mock', caseId);
+        // 👁 A trainer watching a trainee's CMS screen: the CMS opens Watch live on them (its live-view.js, ?watch=).
+        const watch = admin ? String(body.watch || '').trim().slice(0, 120) : '';
+        if (watch) { u.searchParams.set('watch', watch); const wb = String(body.watchBatch || '').trim().slice(0, 60); if (wb) u.searchParams.set('watchBatch', wb); }
         u.searchParams.set('from', 'ringchannel');
         if (ticket) u.searchParams.set('ticket', ticket);
         return json({ url: u.toString(), authed: !!ticket });

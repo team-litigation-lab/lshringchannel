@@ -273,6 +273,46 @@
   // The thin rail a folded panel leaves behind: click it to bring the panel back.
   App.railHTML = (key, label, icon) => `<button type="button" class="rail" data-fold="${esc(key)}" title="Maximize ${esc(label)}" aria-label="Maximize ${esc(label)}" aria-expanded="false"><span class="rail-ic">${icon}</span><span class="rail-label">${esc(label)}</span><span class="rail-max">» Maximize</span></button>`;
 
+  /* 🗂 A CMS frame (the trainee's CMS beside the call, the trainer's watch of it), sized for any screen:
+     − / + zoom it (the CMS is laid out for a wide screen: on a laptop it fits at 80–90%), and the bar under it
+     sets its height (double-click: back to the window's). Until someone zooms, it fits itself to the room it
+     has. Both kept on this computer. */
+  App.cmsFrameHTML = (title) => `<div class="cms-vp"><iframe class="cms-frame" title="${esc(title)}" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+    <div class="cms-grip" title="Drag to make the CMS taller or shorter (double-click: back to the window's height)" role="separator" aria-orientation="horizontal"><span></span></div>`;
+  App.zoomHTML = () => '<span class="cms-zoom" title="Zoom the CMS: smaller fits more of it on a laptop"><button type="button" data-z="-" aria-label="Zoom out">−</button><b class="z-val">100%</b><button type="button" data-z="+" aria-label="Zoom in">+</button></span>';
+  App.grip = function (box, key) {
+    const vp = box.querySelector('.cms-vp'), f = box.querySelector('.cms-frame'), g = box.querySelector('.cms-grip'); if (!vp || !f || !g) return;
+    const K = 'mcv_cms_h_' + (key || 'trainee'), Z = 'mcv_cms_z_' + (key || 'trainee');
+    const get = (k) => { try { return Number(localStorage.getItem(k)) || 0; } catch (e) { return 0; } };
+    const put = (k, v) => { try { if (v) localStorage.setItem(k, String(v)); else localStorage.removeItem(k); } catch (e) {} };
+    const h = get(K); if (h >= 300) vp.style.height = h + 'px';
+    // Zoom: the one chosen, else a fit (the CMS reads well from about 1100 px across; never under 70 %).
+    const fit = () => Math.max(0.7, Math.min(1, Math.floor((vp.clientWidth || 1100) / 1100 * 20) / 20));
+    const setZ = (z) => {
+      z = Math.max(0.5, Math.min(1.25, Math.round(z * 20) / 20));
+      vp.style.setProperty('--z', z);
+      const v = box.querySelector('.z-val'); if (v) v.textContent = Math.round(z * 100) + '%';
+      return z;
+    };
+    let z = setZ(get(Z) || fit());
+    box.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-z]'); if (!b) return;
+      z = setZ(z + (b.dataset.z === '+' ? 0.05 : -0.05)); put(Z, z);
+    });
+    const v = box.querySelector('.z-val');
+    if (v) { v.style.cursor = 'pointer'; v.title = 'Click: fit the CMS to this space'; v.onclick = () => { put(Z, 0); z = setZ(fit()); }; }
+    if (window.ResizeObserver) new ResizeObserver(() => { if (!get(Z)) z = setZ(fit()); }).observe(vp);
+    g.ondblclick = () => { vp.style.height = ''; put(K, 0); };
+    g.onpointerdown = (e) => {
+      e.preventDefault();
+      const y0 = e.clientY, h0 = vp.getBoundingClientRect().height;
+      f.style.pointerEvents = 'none';   // the frame would swallow the drag
+      g.setPointerCapture(e.pointerId);
+      g.onpointermove = (m) => { vp.style.height = Math.max(300, Math.round(h0 + m.clientY - y0)) + 'px'; };
+      g.onpointerup = () => { g.onpointermove = g.onpointerup = null; f.style.pointerEvents = ''; put(K, parseInt(vp.style.height, 10) || 0); };
+    };
+  };
+
   /* ---------- dialogs ---------- */
   App.modal = function ({ title, body, foot, wide, onClose }) {
     const back = document.createElement('div');
@@ -294,12 +334,29 @@
       <div id="mcOut"></div>`, onClose: () => { stopMeter && stopMeter(); if (!busy()) VoIP.Mic.close(); } });
     const busy = () => (App.p && ['connecting', 'live'].includes(App.p.status)) || (App.t && ['ringing', 'connecting', 'live'].includes(App.t.status));
     let stopMeter = null;
-    try {
-      const s = await VoIP.Mic.open();
-      const label = (s.getAudioTracks()[0] || {}).label || 'microphone';
-      m.el.querySelector('#mcMsg').innerHTML = `✅ Microphone: <b>${esc(label)}</b>.`;
-      stopMeter = VoIP.meter(s, (lv) => { const el = m.el.querySelector('#mcLevel'); if (el) el.style.width = Math.round(lv * 100) + '%'; });
-    } catch (e) { m.el.querySelector('#mcMsg').innerHTML = `<span class="err-box" style="display:block">${esc(e.message)}</span>`; }
+    // 🎙 The microphone: Automatic (the headset's own when one is plugged in), or one chosen here.
+    const openMic = async () => {
+      try {
+        const s = await VoIP.Mic.open();
+        const tr = s.getAudioTracks()[0] || {}, label = tr.label || 'microphone', cur = tr.getSettings ? tr.getSettings().deviceId : '';
+        const ins = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput' && !['default', 'communications', ''].includes(d.deviceId));
+        m.el.querySelector('#mcMsg').innerHTML = `✅ Microphone: <b>${esc(label)}</b>.
+          <div class="out-row" style="margin-top:8px"><label class="f">🎙 Microphone</label><select class="input" data-mic="1"${busy() ? ' disabled title="Change it between calls"' : ''}>
+            <option value="">Automatic (${esc(label)})</option>${ins.map((d) => `<option value="${esc(d.deviceId)}" ${VoIP.Mic.choice === d.deviceId ? 'selected' : ''}>${esc(d.label || 'Microphone')}${d.deviceId === cur ? ' · in use' : ''}</option>`).join('')}</select></div>`;
+        if (stopMeter) stopMeter();
+        stopMeter = VoIP.meter(s, (lv) => { const el = m.el.querySelector('#mcLevel'); if (el) el.style.width = Math.round(lv * 100) + '%'; });
+      } catch (e) { m.el.querySelector('#mcMsg').innerHTML = `<span class="err-box" style="display:block">${esc(e.message)}</span>`; }
+    };
+    m.el.querySelector('#mcMsg').addEventListener('change', async (e) => {
+      if (!e.target.dataset.mic || busy()) return;
+      VoIP.Mic.setChoice(e.target.value);
+      if (stopMeter) { stopMeter(); stopMeter = null; }
+      VoIP.Mic.close();
+      await openMic();
+      await VoIP.Speaker.apply();   // the headset follows the microphone
+      draw();
+    });
+    await openMic();
     // The outputs (their names show once the microphone is allowed).
     const box = m.el.querySelector('#mcOut');
     const draw = async () => {

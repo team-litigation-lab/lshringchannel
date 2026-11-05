@@ -176,19 +176,64 @@ const playCall = async (pg, sid) => {
   const sb = await te.$$eval('#lkHits [data-case]', (els) => els.map((x) => x.dataset.case).sort().join(' '));
   if (sb !== 'MC-37 MC-51') throw new Error('Case lookup should find both of Schuyler Beauchamp\'s files: ' + sb);
   await te.route(/lshcasemanagementtraining/, (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>CMS</title><h1 id="cms">CMS stand-in</h1>' }));
+  await tr.route(/lshcasemanagementtraining/, (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>CMS</title><h1 id="cms">CMS Watch live stand-in</h1>' }));
   await te.click('#lkHits [data-case="MC-37"]');
   await te.click('.case-body [data-case-open="MC-37"]');
   await te.waitForSelector('#cmsSplit:not(.hidden) iframe.cms-frame[src*="from=ringchannel"]');
-  if (!(await te.isVisible('[data-tab="cms"].on'))) throw new Error('🗂 CMS should be the open tab once the CMS is opened beside the call');
+  if (!(await te.isVisible('[data-tab="lookup"].on')) || !(await te.$('[data-pane="lookup"].lk-folded'))) throw new Error('Opening the CMS should stay on 🔎 Case lookup, with the search folded to one bar');
   const frameEl = await te.$('#cmsSplit iframe');
   await (await frameEl.contentFrame()).waitForSelector('#cms');
   await te.screenshot({ path: OUT + '/17-trainee-cms-split.png' });
+  // 💻 Laptops: at 1366 × 768 and 1280 × 720 the Console fits (no sideways scroll), the CMS has room and zooms to fit.
+  for (const [w, h] of [[1366, 768], [1280, 720]]) {
+    await te.setViewportSize({ width: w, height: h });
+    await te.waitForTimeout(400);
+    const lap = await te.evaluate(() => {
+      const vp = document.querySelector('#cmsSplit .cms-vp').getBoundingClientRect();
+      return { scroll: document.documentElement.scrollWidth - innerWidth, cmsW: Math.round(vp.width), cmsH: Math.round(vp.height), zoom: document.querySelector('#cmsSplit .z-val').textContent };
+    });
+    if (lap.scroll > 1) throw new Error(`At ${w}×${h} the Console should fit without sideways scrolling: ` + JSON.stringify(lap));
+    if (lap.cmsW < 560 || lap.cmsH < 360) throw new Error(`At ${w}×${h} the CMS should have room: ` + JSON.stringify(lap));
+    if (parseInt(lap.zoom, 10) >= 100) throw new Error(`At ${w}×${h} the CMS should zoom out to fit: ` + JSON.stringify(lap));
+    await te.screenshot({ path: `${OUT}/20-trainee-laptop-${w}.png` });
+    ok(`💻 ${w}×${h}: the Console fits the laptop (no sideways scroll), the CMS ${lap.cmsW}×${lap.cmsH} at ${lap.zoom}`);
+  }
+  await te.click('#cmsSplit [data-z="+"]');
+  if (!/%/.test(await te.textContent('#cmsSplit .z-val'))) throw new Error('The CMS zoom should show its size');
+  await te.evaluate(() => { try { localStorage.removeItem('mcv_cms_z_trainee'); } catch (e) {} });
+  await te.setViewportSize({ width: 1360, height: 900 });
+  if (await te.$('#tside .rail')) await te.click('#tside .rail');   // the laptop fold: the trainee opens the board again
+  // 👁 …and the trainer's console watches it: the CMS's Watch live on this trainee, by name and batch, under the call.
+  await tr.waitForSelector('#cmsWatch:not(.hidden) iframe.cms-frame[src*="watch="]');
+  const wsrc = new URL(await tr.getAttribute('#cmsWatch iframe', 'src'));
+  if (wsrc.searchParams.get('watch') !== 'Jamie Cruz' || !wsrc.searchParams.get('watchBatch')) throw new Error('The trainer should watch the trainee\'s CMS by name and batch: ' + wsrc);
+  await tr.click('#dialer [data-cmsjump]');
+  await tr.waitForFunction(() => document.querySelector('#cmsWatch').getBoundingClientRect().top < innerHeight / 2);
+  await tr.screenshot({ path: OUT + '/18-trainer-watches-cms.png' });
+  ok('👁 The trainee opened the CMS: the trainer\'s console opened the CMS\'s Watch live on them (Jamie Cruz, ' + wsrc.searchParams.get('watchBatch') + ') under the call');
   await te.evaluate(() => { document.querySelector('#cmsSplit iframe').dataset.kept = '1'; });
-  await te.click('[data-tab="lookup"]');
+  await te.click('[data-tab="note"]');
   if (!(await te.isHidden('#cmsSplit'))) throw new Error('The CMS frame should hide on another tab');
-  await te.click('[data-tab="cms"]');
-  if (!(await te.isVisible('#cmsSplit iframe[data-kept="1"]'))) throw new Error('The CMS frame should be kept (not reloaded) across tabs');
   await te.click('[data-tab="lookup"]');
+  if (!(await te.isVisible('#cmsSplit iframe[data-kept="1"]'))) throw new Error('The CMS frame should be kept (not reloaded) across tabs');
+  // ◀ Collapse: the phone and the switchboard fold to a rail with the call's keys; ▶ brings them back.
+  await te.click('#device .dev-collapse');
+  await te.waitForSelector('#device.dev-rail [data-act="hangup"]');
+  if (!(await te.isHidden('#tside'))) throw new Error('◀ Collapse should fold the switchboard away with the phone');
+  await te.screenshot({ path: OUT + '/19-trainee-collapsed-cms.png' });
+  await te.click('#device .rail-open');
+  await te.waitForSelector('#device:not(.dev-rail) .dev-collapse');
+  ok('◀ Collapse folds the phone and the switchboard to a rail (timer, Mute, Hold, Hang up) so the CMS takes the screen; ▶ brings them back');
+
+  // 📺 The trainee presents their own phone in Meet: their phone says how, and the trainer's dialer says to mute their Meet mic.
+  await te.click('#device [data-act="meetshare"]');
+  await te.click('.modal [data-ms="on"]');
+  await te.waitForFunction(() => /presenting this phone in Google Meet/.test(document.querySelector('#device').textContent));
+  await tr.waitForFunction(() => /IN MEET/.test(document.querySelector('#dialer .lcd-badges').textContent));
+  await te.click('#device [data-act="meetshare"]');
+  await te.click('.modal [data-ms="off"]');
+  await tr.waitForFunction(() => !/IN MEET/.test(document.querySelector('#dialer .lcd-badges').textContent));
+  ok('📺 Share in Meet: the trainee says they are presenting their phone, and the trainer\'s dialer tells them to mute their Meet mic (and stops when the trainee does)');
   ok('🗂 Case lookup has every CMS Training Library file (Schuyler Beauchamp: MC-37 and MC-51), and "Open in the CMS" opens it beside the call, kept while the trainee switches tabs');
 
   // Live note
