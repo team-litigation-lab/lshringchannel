@@ -31,6 +31,8 @@
      unavailable extensions that don't pick up a transfer
    ========================================================= */
 import CMS from './cms/call-packs.js';
+import LIBRARY from './cms/mock-cases.js';
+import { cmsFile } from './cms-files.js';
 
 export const CMS_URL = 'https://lshcasemanagementtraining-trainingcrm.pages.dev/';
 
@@ -188,6 +190,9 @@ for (const [id, d] of Object.entries(CMS.DOCS)) {
   if (CASES[id]) CASES[id].text = d.text;
   else { const m = /^\S+ · (.+?) \((.+)\)$/.exec(d.title) || []; CASES[id] = C(id, m[1] || id, m[2] || '', d.text); }
 }
+// Every other Training Library file in the CMS (MC-xx, mock-cases.js), so a trainee finds any client the CMS has on file.
+const extOf = (name) => { const d = FIRM.directory.find((x) => x.name === name || x.name.replace(/^Atty\. /, '') === name.replace(/^Atty\. /, '')); return d ? d.ext : ''; };
+for (const mc of LIBRARY.MOCK_CASES || []) if (mc && mc.id && !CASES[mc.id]) CASES[mc.id] = cmsFile(mc, extOf);
 // The other programs' case summaries (the CMS's CASES: cm, pd, ea), as case files in 🔎 Case lookup.
 const CMS_CASE_NAMES = { cm: ['CMS-CM', 'John Doe', 'MVA v. Apex Delivery Services (Case Management)'], pd: ['CMS-PD', 'Angela Carter', 'Property damage claim, 2022 RAV4 (Property Damage)'], ea: ['CMS-EA', 'Elias Thorne', 'Client profile (EA / PA)'] };
 const CMS_CASE_IDS = {};
