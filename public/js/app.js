@@ -273,6 +273,26 @@
   // The thin rail a folded panel leaves behind: click it to bring the panel back.
   App.railHTML = (key, label, icon) => `<button type="button" class="rail" data-fold="${esc(key)}" title="Maximize ${esc(label)}" aria-label="Maximize ${esc(label)}" aria-expanded="false"><span class="rail-ic">${icon}</span><span class="rail-label">${esc(label)}</span><span class="rail-max">» Maximize</span></button>`;
 
+  /* ⇕ The bar under a CMS frame: drag it to make the frame taller or shorter. Kept on this computer. */
+  App.gripHTML = () => '<div class="cms-grip" title="Drag to make the CMS taller or shorter (double-click: back to the window\'s height)" role="separator" aria-orientation="horizontal"><span></span></div>';
+  App.grip = function (box, key) {
+    const f = box.querySelector('.cms-frame'), g = box.querySelector('.cms-grip'); if (!f || !g) return;
+    const K = 'mcv_cms_h_' + (key || 'trainee');
+    try { const h = Number(localStorage.getItem(K)); if (h >= 300) f.style.height = h + 'px'; } catch (e) {}
+    g.ondblclick = () => { f.style.height = ''; try { localStorage.removeItem(K); } catch (e) {} };
+    g.onpointerdown = (e) => {
+      e.preventDefault();
+      const y0 = e.clientY, h0 = f.getBoundingClientRect().height;
+      f.style.pointerEvents = 'none';   // the frame would swallow the drag
+      g.setPointerCapture(e.pointerId);
+      g.onpointermove = (m) => { f.style.height = Math.max(300, Math.round(h0 + m.clientY - y0)) + 'px'; };
+      g.onpointerup = () => {
+        g.onpointermove = g.onpointerup = null; f.style.pointerEvents = '';
+        try { localStorage.setItem(K, String(parseInt(f.style.height, 10) || '')); } catch (err) {}
+      };
+    };
+  };
+
   /* ---------- dialogs ---------- */
   App.modal = function ({ title, body, foot, wide, onClose }) {
     const back = document.createElement('div');

@@ -772,12 +772,31 @@
     const p = App.p; if (!p) return null;
     return App.trainer() ? (p.mode === 'ai' && !p.assigned ? p : null) : p;
   }
+  const DEVFOLD = 'tdevice';
+  // The phone folded: a rail with the line's light, the timer and the keys a call needs, and ▶ to open it again.
+  function devRailHTML(p, status, led) {
+    const live = status === 'live', ring = status === 'ringing';
+    const state = live ? `<div class="rail-time" data-since="${p.answeredAt}">${U.since(p.answeredAt)}</div>`
+      : `<div class="rail-state">${ring ? 'Ringing' : status === 'connecting' || status === 'calling' ? 'Calling' : status === 'ended' ? 'Ended' : 'Ready'}</div>`;
+    return `<button type="button" class="rail-open" data-fold="${DEVFOLD}" title="Open the phone and the switchboard" aria-expanded="false"><span class="ro-ic">▶</span><span class="ro-lb">Phone</span></button>
+      <span class="led ${led}"></span>${state}
+      ${ring && !(p && p.out) ? '<button type="button" class="rk answer pulse" data-act="answer" title="Answer">📞</button>' : ''}
+      ${live ? `<button type="button" class="rk ${p.muted ? 'on' : ''}" data-act="mute" title="${p.muted ? 'Unmute' : 'Mute'}">${p.muted ? '🔇' : '🎙'}</button>` : ''}
+      ${live && !p.out ? `<button type="button" class="rk ${p.held ? 'on' : ''}" data-act="hold" title="${p.held ? 'Resume' : 'Hold'}">⏸</button>` : ''}
+      ${['live', 'connecting', 'calling'].includes(status) ? '<button type="button" class="rk hang" data-act="hangup" title="Hang up">☎</button>' : ''}`;
+  }
   function renderDevice() {
     const el = U.$('#device'); if (!el) return;
     const mode = modeOf();
     const p = shown();
     const status = p ? (p.status === 'waiting' ? 'idle' : p.status) : 'idle';
     const led = !App.connected && mode === 'live' ? 'offline' : status === 'ringing' ? 'ringing' : ['connecting', 'live'].includes(status) ? 'live' : mode === 'live' ? App.status : 'available';
+    // ◀ Collapse: the phone and the switchboard fold to a slim rail (the timer and the call's keys stay on it).
+    const grid = U.$('#phoneGrid');
+    const devFold = !!(grid && grid.classList.contains('with-side')) && App.folded(DEVFOLD);
+    if (grid) grid.classList.toggle('dev-folded', devFold);
+    el.classList.toggle('dev-rail', devFold);
+    if (devFold) { el.style.minHeight = ''; el.innerHTML = devRailHTML(p, status, led); return; }
     /* The phone is built as the trainer's dialer is, band for band: the segmented line-key row, the
        keypad, the 🔈 Speaker · key · ⌫ Delete row, then the trio that comes alive on a call with the
        same hint under it — the trainee's own, since they answer calls rather than place them. */
@@ -828,7 +847,7 @@
     else if (p && p.classOn && p.status === 'live') msg = `<div class="dev-msg coach">🎧 <b>Your class is listening in Google Meet.</b> If you're in the Meet too, mute your Meet mic and the Meet tab (right-click the tab → Mute site) until the call ends, so there's no echo.</div>`;
     else if (p && p.rec && p.status === 'ringing') msg = `<div class="dev-msg">● This call will be recorded for your review.</div>`;
     const head = mode === 'live'
-      ? `<span class="led ${led}"></span><b>My phone</b>${App.myExt ? ` <span class="mono" title="Your desk extension: your trainer dials it to ring you">ext ${esc(App.myExt)}</span>` : ''}<span class="spacer"></span><span id="trOnline">${trainerLine()}</span>`
+      ? `<span class="led ${led}"></span><b>My phone</b>${App.myExt ? ` <span class="mono" title="Your desk extension: your trainer dials it to ring you">ext ${esc(App.myExt)}</span>` : ''}<span class="spacer"></span><span id="trOnline">${trainerLine()}</span>${grid && grid.classList.contains('with-side') ? `<button type="button" class="dev-collapse" data-fold="${DEVFOLD}" title="Collapse the phone and the switchboard to a slim rail: the workspace and the CMS take the screen. The call keeps going." aria-expanded="true"><span>◀</span><span class="dc-lb">Collapse</span></button>` : ''}`
       : `<span class="led ${led}"></span><b>Practice phone</b><span class="spacer"></span><span>AI caller</span>`;
     const shownCall = p && p.status !== 'waiting' ? p : null;
     const pad = padHTML(shownCall);
@@ -889,7 +908,7 @@
     }
     const track = p.track;
     const ended = p.status === 'ended';
-    const tabs = [['note', '📝 Note'], ['lookup', '🔎 Case lookup'], ['cms', '🗂 CMS'], ['dir', '📇 Directory'], ['rules', '📘 Rules']];
+    const tabs = [['note', '📝 Note'], ['lookup', p.cmsOpen ? '🔎 Case lookup · 🗂 CMS' : '🔎 Case lookup'], ['dir', '📇 Directory'], ['rules', '📘 Rules']];
     if (p.mode === 'ai' && (p.showTranscript || ended)) tabs.splice(1, 0, ['tr', p.voice === 'text' ? '💬 Conversation' : '💬 Transcript']);
     // On a live mock call the case file comes first, as at the real front desk: look the caller up,
     // open the file (in the CMS if you like), then take the note.
@@ -909,11 +928,12 @@
         <div class="transcript" id="trLines">${p.lines.map((l) => `<div class="tl ${l.who}" data-line="${esc(l.id)}"><b>${l.who === 'caller' ? 'Caller' : 'You'}</b>${esc(l.text)}</div>`).join('')}</div>
         ${p.voice === 'text' && !ended ? `<div class="row" style="margin-top:10px"><input class="input" id="typeIn" placeholder="Type what you say…" style="flex:1" autocomplete="off"><button class="btn btn-primary" data-act="send">Send</button><span id="typeBusy" class="small muted hidden">Caller is typing…</span></div>` : ''}
       </div>` : '';
-    el.innerHTML = `${wrap}<div class="work-tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === first ? 'on' : ''}">${l}</button>`).join('')}</div>
+    el.innerHTML = `${wrap}<div class="work-tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === first ? 'on' : ''}"${k === 'lookup' && p.cmsOpen ? ` title="${p.lkOpen ? 'Click to fold the search away' : 'Click to search the case files'}"` : ''}>${l}${k === 'lookup' && p.cmsOpen ? ` <span class="lk-caret">${p.lkOpen ? '▲' : '▼'}</span>` : ''}</button>`).join('')}</div>
       <div class="pane ${first === 'note' ? 'on' : ''}" data-pane="note">${App.noteFormHTML(track, p.note, p.submitted)}</div>
       ${trPane.replace('class="pane"', `class="pane ${first === 'tr' ? 'on' : ''}"`)}
-      <div class="pane ${first === 'lookup' ? 'on' : ''}" data-pane="lookup">${App.lookupHTML(p)}</div>
-      <div class="pane ${first === 'cms' ? 'on' : ''}" data-pane="cms"><p class="small muted" style="margin:0">🗂 The CMS Training Library is open below, signed in as you, beside the call. It stays where you left it while you switch tabs and take your note.</p></div>
+      <div class="pane ${first === 'lookup' ? 'on' : ''} ${p.cmsOpen && !p.lkOpen ? 'lk-folded' : ''}" data-pane="lookup">${p.cmsOpen && !p.lkOpen
+        ? ''
+        : `${p.cmsOpen ? '' : `<div class="lk-cms"><button type="button" class="btn btn-sm btn-primary" data-act="cmsopen" title="The CMS Training Library beside the call, signed in as you">🗂 Open the CMS</button></div>`}${App.lookupHTML(p)}${p.cmsOpen ? '<div class="row" style="margin-top:8px"><button type="button" class="btn btn-sm" data-act="lkopen">▲ Fold the search</button></div>' : ''}`}</div>
       <div class="pane" data-pane="dir">${App.directoryHTML(p.status === 'live')}</div>
       <div class="pane" data-pane="rules">${App.rulesHTML(track)}</div>`;
     App.bindLookup(el, { hide: p.hideCases, live: !ended && p.status !== 'waiting',
@@ -959,35 +979,41 @@
      (the same Portal ticket 🔎 Case lookup's "Open in the CMS" uses; the CMS keeps its session in a frame, see its
      functions/_utils.js). The frame is made once and kept: the workspace redraws often during a call, and a frame
      that's redrawn reloads, so it lives beside #work (not in it) and is only shown or hidden. */
-  const cmsTabOn = () => { const p = shown(); return !!(p && !p.out && p.status !== 'waiting' && p.tab === 'cms' && U.$('#work [data-pane="cms"]')); };
+  // The CMS shows under 🔎 Case lookup once it's opened there (on the other tabs it's kept, hidden).
+  const cmsTabOn = () => { const p = shown(); return !!(p && !p.out && p.status !== 'waiting' && p.cmsOpen && U.$('#work [data-pane="lookup"].on')); };
   function syncCms() {
     const box = U.$('#cmsSplit'); if (!box) return;
     const on = cmsTabOn();
     box.classList.toggle('hidden', !on);
-    if (on && !box.dataset.loaded) openCmsSplit((shown() || {}).caseId || '', true);
+    if (on && !box.dataset.loaded) loadCms((shown() || {}).caseId || '', true);
   }
   // The trainer's console watches the trainee's CMS screen once they open it on a call (a classmate's practice call: no).
   function tellCms() {
     const p = shown();
     if (p && p.callId && !p.out && !p.peer && (p.mode === 'live' || p.assigned) && ['connecting', 'live', 'ended'].includes(p.status)) App.board.send({ t: 'cms', callId: p.callId });
   }
-  async function openCmsSplit(caseId, quiet) {
+  // Open the CMS under Case lookup (the search folds to one bar), on a case file when one is given.
+  function openCmsSplit(caseId) {
     const p = shown(), box = U.$('#cmsSplit'), w = U.$('#work');
     if (!box || !w || !p) { App.openCase(caseId); return; }
-    p.tab = 'cms';
-    U.$$('[data-tab]', w).forEach((b) => b.classList.toggle('on', b.dataset.tab === 'cms'));
-    U.$$('[data-pane]', w).forEach((x) => x.classList.toggle('on', x.dataset.pane === 'cms'));
-    box.classList.remove('hidden');
+    p.cmsOpen = true; p.lkOpen = false; p.tab = 'lookup';
+    const reload = box.dataset.loaded && caseId && box.dataset.case !== caseId;
+    renderWork();   // syncCms loads the frame the first time
+    if (reload) loadCms(caseId);
     // The workspace tabs stay in sight above the CMS (the lookup's button can sit far down the page).
     if (w.getBoundingClientRect().top < 70) window.scrollBy({ top: w.getBoundingClientRect().top - 84 });
+  }
+  async function loadCms(caseId, quiet) {
+    const box = U.$('#cmsSplit'); if (!box) return;
     box.dataset.loaded = '1'; box.dataset.case = caseId || '';
     box.innerHTML = `<div class="cms-split-head"><b>🗂 CMS Training Library</b>${caseId ? ` <span class="badge">${esc(caseId)}</span>` : ''}<span class="small muted cms-msg" style="flex:1">Opening, signed in as you…</span>
         <button class="btn btn-sm" data-cms="tab" title="Open the CMS in its own browser tab instead">↗ New tab</button><button class="btn btn-sm" data-cms="close" title="Close the CMS beside the call">✕ Close</button></div>
-      <iframe class="cms-frame" title="LSH CMS Training Library" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+      <iframe class="cms-frame" title="LSH CMS Training Library" referrerpolicy="strict-origin-when-cross-origin"></iframe>${App.gripHTML()}`;
+    App.grip(box);
     box.onclick = (e) => {
       const b = e.target.closest('[data-cms]'); if (!b) return;
       if (b.dataset.cms === 'tab') { App.openCase(box.dataset.case || '', b); tellCms(); }
-      else { box.innerHTML = ''; delete box.dataset.loaded; box.classList.add('hidden'); const q = shown(); if (q) q.tab = 'lookup'; renderWork(); }
+      else { box.innerHTML = ''; delete box.dataset.loaded; box.classList.add('hidden'); const q = shown(); if (q) { q.tab = 'lookup'; q.cmsOpen = false; } renderWork(); }
     };
     try {
       const r = await API.post('/api/cms-link', { caseId: caseId || '' });
@@ -1060,6 +1086,8 @@
     root.addEventListener('click', (e) => {
       const tab = e.target.closest('[data-tab]');
       if (tab) {
+        // 🔎 Case lookup clicked again with the CMS open: the search opens (or folds away) above the CMS.
+        if (tab.dataset.tab === 'lookup' && tab.classList.contains('on') && App.p && App.p.cmsOpen) { App.p.lkOpen = !App.p.lkOpen; renderWork(); return; }
         if (App.p) App.p.tab = tab.dataset.tab;
         const w = U.$('#work');
         U.$$('[data-tab]', w).forEach((b) => b.classList.toggle('on', b === tab));
@@ -1069,7 +1097,7 @@
       }
 
       const fold = e.target.closest('[data-fold]');
-      if (fold) { App.folded(fold.dataset.fold, !App.folded(fold.dataset.fold)); renderSide(); return; }
+      if (fold) { App.folded(fold.dataset.fold, !App.folded(fold.dataset.fold)); renderDevice(); renderSide(); fitBoard(); return; }
       const dk = e.target.closest('[data-dk]');
       if (dk) { press(dk.dataset.dk); return; }
       const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1082,6 +1110,8 @@
       else if (act === 'mute') toggleMute();
       else if (act === 'speaker') { App.toggleSpeaker(renderDevice); if (App.meetShare && VoIP.Speaker.on) U.toast('You\'re presenting in Meet: with 🔊 Speaker on, your Meet mic picks the call up from the speakers and the class hears it twice. Use your headset.'); }
       else if (act === 'meetshare') meetShare();
+      else if (act === 'cmsopen') openCmsSplit((App.p && App.p.caseId) || '');
+      else if (act === 'lkopen') { const q = shown(); if (q) { q.lkOpen = !q.lkOpen; renderWork(); } }
       else if (act === 'hold') toggleHold();
       else if (act === 'transfer') pickTransfer();
       else if (act === 'merge') pickTransfer('merge');

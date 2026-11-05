@@ -180,7 +180,7 @@ const playCall = async (pg, sid) => {
   await te.click('#lkHits [data-case="MC-37"]');
   await te.click('.case-body [data-case-open="MC-37"]');
   await te.waitForSelector('#cmsSplit:not(.hidden) iframe.cms-frame[src*="from=ringchannel"]');
-  if (!(await te.isVisible('[data-tab="cms"].on'))) throw new Error('🗂 CMS should be the open tab once the CMS is opened beside the call');
+  if (!(await te.isVisible('[data-tab="lookup"].on')) || !(await te.$('[data-pane="lookup"].lk-folded'))) throw new Error('Opening the CMS should stay on 🔎 Case lookup, with the search folded to one bar');
   const frameEl = await te.$('#cmsSplit iframe');
   await (await frameEl.contentFrame()).waitForSelector('#cms');
   await te.screenshot({ path: OUT + '/17-trainee-cms-split.png' });
@@ -193,11 +193,18 @@ const playCall = async (pg, sid) => {
   await tr.screenshot({ path: OUT + '/18-trainer-watches-cms.png' });
   ok('👁 The trainee opened the CMS: the trainer\'s console opened the CMS\'s Watch live on them (Jamie Cruz, ' + wsrc.searchParams.get('watchBatch') + ') under the call');
   await te.evaluate(() => { document.querySelector('#cmsSplit iframe').dataset.kept = '1'; });
-  await te.click('[data-tab="lookup"]');
+  await te.click('[data-tab="note"]');
   if (!(await te.isHidden('#cmsSplit'))) throw new Error('The CMS frame should hide on another tab');
-  await te.click('[data-tab="cms"]');
-  if (!(await te.isVisible('#cmsSplit iframe[data-kept="1"]'))) throw new Error('The CMS frame should be kept (not reloaded) across tabs');
   await te.click('[data-tab="lookup"]');
+  if (!(await te.isVisible('#cmsSplit iframe[data-kept="1"]'))) throw new Error('The CMS frame should be kept (not reloaded) across tabs');
+  // ◀ Collapse: the phone and the switchboard fold to a rail with the call's keys; ▶ brings them back.
+  await te.click('#device .dev-collapse');
+  await te.waitForSelector('#device.dev-rail [data-act="hangup"]');
+  if (!(await te.isHidden('#tside'))) throw new Error('◀ Collapse should fold the switchboard away with the phone');
+  await te.screenshot({ path: OUT + '/19-trainee-collapsed-cms.png' });
+  await te.click('#device .rail-open');
+  await te.waitForSelector('#device:not(.dev-rail) .dev-collapse');
+  ok('◀ Collapse folds the phone and the switchboard to a rail (timer, Mute, Hold, Hang up) so the CMS takes the screen; ▶ brings them back');
 
   // 📺 The trainee presents their own phone in Meet: their phone says how, and the trainer's dialer says to mute their Meet mic.
   await te.click('#device [data-act="meetshare"]');

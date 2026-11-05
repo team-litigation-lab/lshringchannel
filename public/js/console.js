@@ -785,7 +785,8 @@
     box.classList.remove('hidden');
     box.innerHTML = `<div class="cms-split-head"><b>👁 ${esc(who)}'s CMS, live</b><span class="small muted cms-msg" style="flex:1">Opening the CMS's Watch live, signed in as you…</span>
         <button class="btn btn-sm" data-cmsw="tab" title="Watch in its own browser tab">↗ New tab</button><button class="btn btn-sm" data-cmsw="close">✕ Close</button></div>
-      <iframe class="cms-frame" title="${esc(who)}'s CMS screen" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+      <iframe class="cms-frame" title="${esc(who)}'s CMS screen" referrerpolicy="strict-origin-when-cross-origin"></iframe>${App.gripHTML()}`;
+    App.grip(box, 'trainer');
     const ask = () => API.post('/api/cms-link', { watch: who, watchBatch: t.trainee.batch || '' });
     box.onclick = async (e) => {
       const b = e.target.closest('[data-cmsw]'); if (!b) return;
