@@ -161,14 +161,14 @@ table.list tr.click:hover td { background: #f8fafc; }
 /* ---------- the softphone (a desk phone on screen) ----------
    ☎ Console: the switchboard beside the phone (« minimizes it to a rail), the phone, and the
    workspace on the right. */
-.phone-layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
+.phone-layout { display: grid; grid-template-columns: var(--ph, 360px) 1fr; gap: 20px; align-items: start; }
 /* the board and the phone are one piece of equipment, as on the trainer's console: no gap between
    them, the phone in the same flat case, and its left side open where the board meets it */
-.phone-layout.with-side { grid-template-columns: var(--ts, 250px) 360px minmax(0, 1fr); column-gap: 0; row-gap: 18px; }
+.phone-layout.with-side { grid-template-columns: var(--ts, 250px) var(--ph, 360px) minmax(0, 1fr); column-gap: 0; row-gap: 18px; }
 .phone-layout.with-side .work-col { margin-left: 18px; }
 /* No call on: the board and the phone stand on their own, as the trainer's console does.
    Only where there is room for the pair side by side; narrower than that they stack as ever. */
-@media (min-width: 1061px) { .phone-layout.with-side.solo { grid-template-columns: var(--ts, 250px) 360px; justify-content: start; } }
+@media (min-width: 1061px) { .phone-layout.with-side.solo { grid-template-columns: var(--ts, 250px) var(--ph, 360px); justify-content: start; } }
 .phone-layout.solo .work-col, .phone-layout.solo .work { display: none; }
 .phone-layout.with-side:not(.side-folded) .device {
   background: var(--deck, #0e1f42); border-top-left-radius: 0; border-bottom-left-radius: 0;
@@ -203,7 +203,7 @@ table.list tr.click:hover td { background: #f8fafc; }
 .phone-layout.tall-phone .tside { position: static; max-height: none; overflow: visible; }
 .phone-layout.tall-phone .device { position: relative; top: 0; }
 @media (max-width: 1060px) {
-  .phone-layout.with-side, .phone-layout.with-side.side-folded { grid-template-columns: 360px minmax(0, 1fr); column-gap: 18px; row-gap: 18px; }
+  .phone-layout.with-side, .phone-layout.with-side.side-folded { grid-template-columns: var(--ph, 360px) minmax(0, 1fr); column-gap: 18px; row-gap: 18px; }
   .tside { grid-column: 1 / -1; position: static; max-height: none; }
   .phone-layout.with-side .work-col { margin-left: 0; }
   .tside .side-brand { margin-bottom: 14px; border-radius: 16px; }
@@ -276,7 +276,12 @@ table.list tr.click:hover td { background: #f8fafc; }
 /* 🗂 The CMS beside the call (trainee.js openCmsSplit): a frame as tall as the window allows */
 .cms-split { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .cms-split-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 4px; }
-.cms-frame { width: 100%; height: calc(100vh - 150px); min-height: 480px; border: 1px solid var(--line); border-radius: 10px; background: #fff; display: block; }
+.cms-vp { position: relative; overflow: hidden; height: calc(100vh - 150px); min-height: 420px; border: 1px solid var(--line); border-radius: 10px; background: #fff; --z: 1; }
+.cms-frame { position: absolute; top: 0; left: 0; border: 0; display: block; background: #fff; width: calc(100% / var(--z)); height: calc(100% / var(--z)); transform: scale(var(--z)); transform-origin: 0 0; }
+.cms-zoom { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+.cms-zoom button { border: 0; background: transparent; width: 28px; height: 28px; font-size: 16px; font-weight: 700; cursor: pointer; color: var(--navy); }
+.cms-zoom button:hover { background: var(--orange-soft); }
+.cms-zoom b { font-size: 12px; min-width: 40px; text-align: center; font-family: var(--mono); }
 .cms-grip { height: 14px; margin: -2px 0 -4px; cursor: ns-resize; display: flex; align-items: center; justify-content: center; touch-action: none; }
 .cms-grip span { width: 56px; height: 5px; border-radius: 3px; background: #cbd5e1; }
 .cms-grip:hover span { background: var(--orange); }
@@ -369,7 +374,7 @@ table.list tr.click:hover td { background: #f8fafc; }
 .console > *, .dial-stage > *, .dial-side > * { min-width: 0; }
 .console-main { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 #cmsWatch { scroll-margin-top: 84px; }
-#cmsWatch .cms-frame { height: calc(100vh - 160px); min-height: 560px; }
+#cmsWatch .cms-vp { height: calc(100vh - 160px); min-height: 480px; }
 .console-side { position: static; }
 .console-side > .card + .card { margin-top: 16px; }
 @media (max-width: 1140px) { .console-side.right { order: 3; } }
@@ -631,3 +636,32 @@ table.graded td.gcell.fail b { color: var(--red); }
 .wrow { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
 .wrow span { flex: 1; }
 .wrow input { width: 70px; padding: 4px 6px; }
+
+/* ---------- 💻 Laptops ----------
+   The Consoles step down with the screen, so the board, the phone and the CMS fit a 1366 × 768 or
+   1280 × 720 laptop (or a bigger one at 125–150 % Windows scaling): less room at the sides, a narrower
+   phone and board, and on a short screen a compact phone (smaller keys, no hint lines). The CMS has its
+   own − / + zoom and fits itself to the room it has (App.grip). */
+@media (max-width: 1500px) {
+  main:has(#phoneGrid), main:has(#consoleGrid) { padding: 12px 24px 32px; }
+  .phone-layout { --ph: 330px; }
+  .phone-layout.with-side:not(.side-folded) { --ts: 220px; }
+}
+@media (max-width: 1300px) {
+  main:has(#phoneGrid), main:has(#consoleGrid) { padding: 10px 16px 28px; }
+  .phone-layout { --ph: 300px; }
+  .phone-layout.with-side:not(.side-folded) { --ts: 200px; }
+  .dial-stage { grid-template-columns: 300px minmax(0, 1fr); }
+}
+@media (max-height: 820px) and (min-width: 961px) {
+  .device { padding: 12px; }
+  .device .lcd { min-height: 0; padding: 10px 12px; }
+  .dialpad, .device.pad .dialpad { gap: 5px; margin-top: 8px; }
+  .dk, .device.pad .dk { padding: 3px 0 2px; }
+  .dk b, .device.pad .dk b { font-size: 18px; }
+  .key { padding: 8px 6px; border-radius: 12px; }
+  .key .ic { font-size: 17px; }
+  .dev-foot { margin-top: 8px; }
+  .dev-hint, .side-brand .sb-sub { display: none; }
+  .cms-vp { height: calc(100vh - 120px); min-height: 360px; }
+}

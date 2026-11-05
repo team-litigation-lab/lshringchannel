@@ -65,18 +65,51 @@
     close() { this.stopped = true; clearTimeout(this.rt); clearInterval(this.ping); if (this.ws) try { this.ws.close(1000); } catch (e) {} this.ws = null; this.up = false; }
   }
 
+  /* 🎙 The microphone: the one chosen in 🎧 Audio check, or (Automatic) the headset's own, whatever its make.
+     The computer's default microphone is often the laptop's even with a headset plugged in (Windows and macOS
+     don't always switch), and the caller then hears the room through the laptop. So when the default is a
+     built-in microphone and a headset is connected, the headset's microphone is used instead: Windows'
+     communications microphone, else a microphone with an earpiece on the same device (one groupId: a USB or
+     Bluetooth headset, a dongle). A webcam's microphone has no earpiece, so it isn't taken for a headset; virtual
+     microphones (Krisp, NVIDIA Broadcast, Voicemeeter…) chosen as the default are left as they are. */
+  const MIC_KEY = 'mcv_mic';
   const Mic = {
     stream: null,
+    choice: (() => { try { return localStorage.getItem(MIC_KEY) || ''; } catch (e) { return ''; } })(),
+    setChoice(id) { this.choice = id || ''; try { if (id) localStorage.setItem(MIC_KEY, id); else localStorage.removeItem(MIC_KEY); } catch (e) {} },
+    get(id) { return navigator.mediaDevices.getUserMedia({ audio: Object.assign({ echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }, id ? { deviceId: { exact: id } } : {}) }); },
     async open() {
       if (this.stream && this.stream.getAudioTracks().some((t) => t.readyState === 'live')) return this.stream;
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error('This browser can\'t use a microphone here. Use Chrome or Edge on a computer, over https.'), { code: 'NO_MIC' });
       try {
-        this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+        try { this.stream = await this.get(this.choice); }
+        catch (e) { if (this.choice && e && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) this.stream = await this.get(''); else throw e; }   // the chosen one is unplugged: the default
       } catch (e) {
         const blocked = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
         throw Object.assign(new Error(blocked ? 'The microphone is blocked. Click the 🔒 in the address bar, allow the microphone, then try again.' : 'No microphone was found. Plug in a headset, then try again.'), { code: 'NO_MIC' });
       }
+      if (!this.choice) {
+        try {
+          const id = await this.headsetMic(), set = this.track() && this.track().getSettings ? this.track().getSettings() : {};
+          if (id && id !== set.deviceId) {
+            const better = await this.get(id).catch(() => null);
+            if (better) { this.stream.getTracks().forEach((t) => { try { t.stop(); } catch (e) {} }); this.stream = better; }
+          }
+        } catch (e) { /* keep the default */ }
+      }
       return this.stream;
+    },
+    // The headset's microphone to use instead of a built-in default ('' to keep the one open).
+    async headsetMic() {
+      const all = await navigator.mediaDevices.enumerateDevices();
+      const ins = all.filter((d) => d.kind === 'audioinput' && !['default', 'communications', ''].includes(d.deviceId));
+      const outs = all.filter((d) => d.kind === 'audiooutput');
+      const set = this.track() && this.track().getSettings ? this.track().getSettings() : {};
+      const cur = ins.find((d) => d.deviceId === set.deviceId) || ins.find((d) => set.groupId && d.groupId === set.groupId);
+      if (cur && !BUILT_IN.test(inner(cur.label))) return '';   // already a headset, a USB mic or a virtual one
+      const cand = ins.filter((d) => !BUILT_IN.test(inner(d.label)) && !VIRTUAL.test(d.label) && outs.some((o) => o.groupId && o.groupId === d.groupId));
+      const comms = all.find((d) => d.kind === 'audioinput' && d.deviceId === 'communications');
+      return ((comms && cand.find((d) => d.groupId === comms.groupId)) || cand[0] || { deviceId: '' }).deviceId;
     },
     close() { if (this.stream) this.stream.getTracks().forEach((t) => { try { t.stop(); } catch (e) {} }); this.stream = null; },
     track() { return this.stream ? this.stream.getAudioTracks()[0] : null; }
@@ -353,6 +386,7 @@
   const HEADSET = /headset|headphone|earphone|earpiece|earbud|airpods|buds|hands-?free|bluetooth|jabra|plantronics|\bpoly\b|logitech|logi\b|sennheiser|\bepos\b|shure|hyperx|steelseries|razer|corsair|bose|beats|\bsony\b|skullcandy|anker|soundcore|\bjbl\b|evolve|blackwire|voyager|zone wireless|\busb\b/i;
   // "Speakers (Jabra Link 380)", "Default - Headset Earphone (Poly BT700)": the device's own name, without Windows' wrapper.
   const inner = (label) => { const m = /\(([^()]+(?:\([^()]*\)[^()]*)*)\)\s*(?:\([0-9a-f]{4}:[0-9a-f]{4}\))?\s*$/i.exec(String(label || '').replace(/^(Default|Communications) - /, '')); return m ? m[1] : String(label || ''); };
+  const VIRTUAL = /virtual|stereo mix|what u hear|wave out|cable (in|out)|vb-audio|voicemeeter|blackhole|soundflower|loopback|krisp|nvidia broadcast|rtx voice|zoomaudiodevice|teams audio|obs|droidcam|iriun|camo/i;
   const looksHeadset = (d) => !!d && (HEADSET.test(d.label) || HEADSET.test(inner(d.label))) && !BUILT_IN.test(inner(d.label));
   const Speaker = {
     on: false, headset: '', speaker: '', targets: new Set(), listeners: new Set(), last: null,
@@ -373,15 +407,15 @@
       const ins = all.filter((d) => d.kind === 'audioinput');
       const mic = ins.find((d) => set.deviceId && d.deviceId === set.deviceId) || (set.groupId && ins.find((d) => d.groupId === set.groupId)) || ins.find((d) => d.deviceId === 'default') || null;
       const micGroup = (mic && mic.groupId) || set.groupId || '';
-      const onMic = micGroup && !BUILT_IN.test(inner(mic && mic.label)) ? real.find((d) => d.groupId === micGroup) : null;
+      const onMic = micGroup && !BUILT_IN.test(inner(mic && mic.label)) && !VIRTUAL.test((mic && mic.label) || '') ? real.find((d) => d.groupId === micGroup && !VIRTUAL.test(d.label)) : null;
       const comms = list.find((d) => d.deviceId === 'communications');
       const commsReal = comms && real.find((d) => d.groupId === comms.groupId);
-      const auto = onMic || (commsReal && (!def || commsReal.groupId !== def.groupId) ? commsReal : null) || real.find(looksHeadset) || null;
+      const auto = onMic || (commsReal && !VIRTUAL.test(commsReal.label) && (!def || commsReal.groupId !== def.groupId) ? commsReal : null) || real.find((d) => looksHeadset(d) && !VIRTUAL.test(d.label)) || null;
       const headset = has(this.headset) ? this.headset : auto ? auto.deviceId : 'default';
       const hs = list.find((d) => d.deviceId === headset) || def;
       let speaker = has(this.speaker) ? list.find((d) => d.deviceId === this.speaker) : null;
       if (!speaker) {
-        const other = real.filter((d) => !hs || !hs.groupId || d.groupId !== hs.groupId);
+        const other = real.filter((d) => (!hs || !hs.groupId || d.groupId !== hs.groupId) && !VIRTUAL.test(d.label));
         speaker = other.find((d) => BUILT_IN.test(inner(d.label)) && !looksHeadset(d))
           || other.find((d) => /speaker/i.test(d.label) && !looksHeadset(d))
           || other.find((d) => !looksHeadset(d))

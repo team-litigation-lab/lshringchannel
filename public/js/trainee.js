@@ -997,6 +997,8 @@
     const p = shown(), box = U.$('#cmsSplit'), w = U.$('#work');
     if (!box || !w || !p) { App.openCase(caseId); return; }
     p.cmsOpen = true; p.lkOpen = false; p.tab = 'lookup';
+    // 💻 A laptop: the switchboard folds away the first time the CMS opens, so the CMS has the room (« brings it back).
+    if (window.innerWidth < 1500 && !T.autoFolded && !App.folded('tside')) { T.autoFolded = true; App.folded('tside', true); renderSide(); }
     const reload = box.dataset.loaded && caseId && box.dataset.case !== caseId;
     renderWork();   // syncCms loads the frame the first time
     if (reload) loadCms(caseId);
@@ -1006,9 +1008,9 @@
   async function loadCms(caseId, quiet) {
     const box = U.$('#cmsSplit'); if (!box) return;
     box.dataset.loaded = '1'; box.dataset.case = caseId || '';
-    box.innerHTML = `<div class="cms-split-head"><b>🗂 CMS Training Library</b>${caseId ? ` <span class="badge">${esc(caseId)}</span>` : ''}<span class="small muted cms-msg" style="flex:1">Opening, signed in as you…</span>
+    box.innerHTML = `<div class="cms-split-head"><b>🗂 CMS Training Library</b>${caseId ? ` <span class="badge">${esc(caseId)}</span>` : ''}<span class="small muted cms-msg" style="flex:1">Opening, signed in as you…</span>${App.zoomHTML()}
         <button class="btn btn-sm" data-cms="tab" title="Open the CMS in its own browser tab instead">↗ New tab</button><button class="btn btn-sm" data-cms="close" title="Close the CMS beside the call">✕ Close</button></div>
-      <iframe class="cms-frame" title="LSH CMS Training Library" referrerpolicy="strict-origin-when-cross-origin"></iframe>${App.gripHTML()}`;
+      ${App.cmsFrameHTML('LSH CMS Training Library')}`;
     App.grip(box);
     box.onclick = (e) => {
       const b = e.target.closest('[data-cms]'); if (!b) return;

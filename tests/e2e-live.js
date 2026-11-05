@@ -184,6 +184,25 @@ const playCall = async (pg, sid) => {
   const frameEl = await te.$('#cmsSplit iframe');
   await (await frameEl.contentFrame()).waitForSelector('#cms');
   await te.screenshot({ path: OUT + '/17-trainee-cms-split.png' });
+  // 💻 Laptops: at 1366 × 768 and 1280 × 720 the Console fits (no sideways scroll), the CMS has room and zooms to fit.
+  for (const [w, h] of [[1366, 768], [1280, 720]]) {
+    await te.setViewportSize({ width: w, height: h });
+    await te.waitForTimeout(400);
+    const lap = await te.evaluate(() => {
+      const vp = document.querySelector('#cmsSplit .cms-vp').getBoundingClientRect();
+      return { scroll: document.documentElement.scrollWidth - innerWidth, cmsW: Math.round(vp.width), cmsH: Math.round(vp.height), zoom: document.querySelector('#cmsSplit .z-val').textContent };
+    });
+    if (lap.scroll > 1) throw new Error(`At ${w}×${h} the Console should fit without sideways scrolling: ` + JSON.stringify(lap));
+    if (lap.cmsW < 560 || lap.cmsH < 360) throw new Error(`At ${w}×${h} the CMS should have room: ` + JSON.stringify(lap));
+    if (parseInt(lap.zoom, 10) >= 100) throw new Error(`At ${w}×${h} the CMS should zoom out to fit: ` + JSON.stringify(lap));
+    await te.screenshot({ path: `${OUT}/20-trainee-laptop-${w}.png` });
+    ok(`💻 ${w}×${h}: the Console fits the laptop (no sideways scroll), the CMS ${lap.cmsW}×${lap.cmsH} at ${lap.zoom}`);
+  }
+  await te.click('#cmsSplit [data-z="+"]');
+  if (!/%/.test(await te.textContent('#cmsSplit .z-val'))) throw new Error('The CMS zoom should show its size');
+  await te.evaluate(() => { try { localStorage.removeItem('mcv_cms_z_trainee'); } catch (e) {} });
+  await te.setViewportSize({ width: 1360, height: 900 });
+  if (await te.$('#tside .rail')) await te.click('#tside .rail');   // the laptop fold: the trainee opens the board again
   // 👁 …and the trainer's console watches it: the CMS's Watch live on this trainee, by name and batch, under the call.
   await tr.waitForSelector('#cmsWatch:not(.hidden) iframe.cms-frame[src*="watch="]');
   const wsrc = new URL(await tr.getAttribute('#cmsWatch iframe', 'src'));
