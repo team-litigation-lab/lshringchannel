@@ -966,6 +966,11 @@
     box.classList.toggle('hidden', !on);
     if (on && !box.dataset.loaded) openCmsSplit((shown() || {}).caseId || '', true);
   }
+  // The trainer's console watches the trainee's CMS screen once they open it on a call (a classmate's practice call: no).
+  function tellCms() {
+    const p = shown();
+    if (p && p.callId && !p.out && !p.peer && (p.mode === 'live' || p.assigned) && ['connecting', 'live', 'ended'].includes(p.status)) App.board.send({ t: 'cms', callId: p.callId });
+  }
   async function openCmsSplit(caseId, quiet) {
     const p = shown(), box = U.$('#cmsSplit'), w = U.$('#work');
     if (!box || !w || !p) { App.openCase(caseId); return; }
@@ -981,7 +986,7 @@
       <iframe class="cms-frame" title="LSH CMS Training Library" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
     box.onclick = (e) => {
       const b = e.target.closest('[data-cms]'); if (!b) return;
-      if (b.dataset.cms === 'tab') App.openCase(box.dataset.case || '', b);
+      if (b.dataset.cms === 'tab') { App.openCase(box.dataset.case || '', b); tellCms(); }
       else { box.innerHTML = ''; delete box.dataset.loaded; box.classList.add('hidden'); const q = shown(); if (q) q.tab = 'lookup'; renderWork(); }
     };
     try {
@@ -989,6 +994,7 @@
       const f = U.$('.cms-frame', box), msg = U.$('.cms-msg', box);
       if (!f) return;
       f.src = r.url;
+      tellCms();
       if (msg) msg.textContent = r.authed ? 'Signed in as you. Search the client the way you would at the front desk.' : 'The CMS will ask you to come in from the LSH Training Portal (no Portal secret is set on this site).';
     } catch (e) {
       const msg = U.$('.cms-msg', box); if (msg) msg.textContent = 'Couldn\'t open the CMS: ' + e.message;

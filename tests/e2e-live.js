@@ -176,6 +176,7 @@ const playCall = async (pg, sid) => {
   const sb = await te.$$eval('#lkHits [data-case]', (els) => els.map((x) => x.dataset.case).sort().join(' '));
   if (sb !== 'MC-37 MC-51') throw new Error('Case lookup should find both of Schuyler Beauchamp\'s files: ' + sb);
   await te.route(/lshcasemanagementtraining/, (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>CMS</title><h1 id="cms">CMS stand-in</h1>' }));
+  await tr.route(/lshcasemanagementtraining/, (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>CMS</title><h1 id="cms">CMS Watch live stand-in</h1>' }));
   await te.click('#lkHits [data-case="MC-37"]');
   await te.click('.case-body [data-case-open="MC-37"]');
   await te.waitForSelector('#cmsSplit:not(.hidden) iframe.cms-frame[src*="from=ringchannel"]');
@@ -183,6 +184,14 @@ const playCall = async (pg, sid) => {
   const frameEl = await te.$('#cmsSplit iframe');
   await (await frameEl.contentFrame()).waitForSelector('#cms');
   await te.screenshot({ path: OUT + '/17-trainee-cms-split.png' });
+  // 👁 …and the trainer's console watches it: the CMS's Watch live on this trainee, by name and batch, under the call.
+  await tr.waitForSelector('#cmsWatch:not(.hidden) iframe.cms-frame[src*="watch="]');
+  const wsrc = new URL(await tr.getAttribute('#cmsWatch iframe', 'src'));
+  if (wsrc.searchParams.get('watch') !== 'Jamie Cruz' || !wsrc.searchParams.get('watchBatch')) throw new Error('The trainer should watch the trainee\'s CMS by name and batch: ' + wsrc);
+  await tr.click('#dialer [data-cmsjump]');
+  await tr.waitForFunction(() => document.querySelector('#cmsWatch').getBoundingClientRect().top < innerHeight / 2);
+  await tr.screenshot({ path: OUT + '/18-trainer-watches-cms.png' });
+  ok('👁 The trainee opened the CMS: the trainer\'s console opened the CMS\'s Watch live on them (Jamie Cruz, ' + wsrc.searchParams.get('watchBatch') + ') under the call');
   await te.evaluate(() => { document.querySelector('#cmsSplit iframe').dataset.kept = '1'; });
   await te.click('[data-tab="lookup"]');
   if (!(await te.isHidden('#cmsSplit'))) throw new Error('The CMS frame should hide on another tab');

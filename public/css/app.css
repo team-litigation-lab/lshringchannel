@@ -337,6 +337,9 @@ table.list tr.click:hover td { background: #f8fafc; }
 @media (max-width: 1240px) { .console { --sl: 240px; } }
 @media (max-width: 1140px) { .console { grid-template-columns: minmax(0, 1fr); } }
 .console > *, .dial-stage > *, .dial-side > * { min-width: 0; }
+.console-main { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+#cmsWatch { scroll-margin-top: 84px; }
+#cmsWatch .cms-frame { height: calc(100vh - 160px); min-height: 560px; }
 .console-side { position: static; }
 .console-side > .card + .card { margin-top: 16px; }
 @media (max-width: 1140px) { .console-side.right { order: 3; } }
