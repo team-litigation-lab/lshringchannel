@@ -158,6 +158,7 @@
       // 🗂 The trainee opened the CMS: watch their CMS screen here.
       case 'cms':
         if (!mine) return;
+        if (!t.traineeCms) C.scriptOn = false;
         t.traineeCms = true; watchCms(t);
         return;
       // 📺 The trainee is presenting their phone tab in Meet: the class hears you from it, so you mute your own Meet mic and the Meet tab.
@@ -727,12 +728,14 @@
         <button class="btn btn-green" data-act="takehere">📞 Take the call here</button></div>`;
       return;
     }
-    if (!t) {
-      el.innerHTML = `<div class="dial-stage solo"><div class="device dialer" id="dialer"></div></div>`;
-      renderDialer();
-      return;
+    /* Built once and kept (the trainee's CMS frame in it would reload if it were redrawn): the dialer, and
+       beside it a column with the call's cards (#dialSide, redrawn) and the trainee's CMS (#cmsWatch, kept). */
+    if (!U.$('#dialSide', el) || !U.$('#cmsWatch', el)) {
+      el.innerHTML = `<div class="dial-stage" id="dialStage"><div class="device dialer" id="dialer"></div><div class="dial-col" id="dialCol"><div class="dial-side" id="dialSide"></div><div class="cms-split card hidden" id="cmsWatch"></div></div></div>`;
     }
-    el.innerHTML = `<div class="dial-stage"><div class="device dialer" id="dialer"></div><div class="dial-side" id="dialSide"></div></div>`;
+    U.$('#dialStage', el).classList.toggle('solo', !t);
+    syncWatch();
+    if (!t) { U.$('#dialSide', el).innerHTML = ''; renderDialer(); return; }
     const side = U.$('#dialSide');
     if (t.status === 'ended') { renderEndedSide(side); renderDialer(); return; }
     const s = t.scenario;
@@ -773,6 +776,21 @@
     if (t.traineeCms) watchCms(t);   // after a reload: the trainee already has the CMS open
   }
 
+  /* 👁 While the trainee's CMS is up, it takes the column beside the dialer: the caller's script and the
+     checklist and note step aside (a transfer waiting for the trainer, and the case file the trainee chose,
+     stay on top). 🎭 Script brings the script back with the CMS folded to its bar (still loaded); 👁 Their CMS
+     goes back to it. */
+  function syncWatch() {
+    const col = U.$('#dialCol'), box = U.$('#cmsWatch'); if (!col || !box) return;
+    const t = App.t;
+    const on = !!(t && t.traineeCms && box.dataset.who && t.status !== 'elsewhere');
+    col.classList.toggle('watching', on && !C.scriptOn);
+    col.classList.toggle('script-on', on && !!C.scriptOn);
+    box.classList.toggle('hidden', !on);
+    const b = U.$('[data-cmsw="script"]', box);
+    if (b) b.innerHTML = C.scriptOn ? '👁 Their CMS' : '🎭 Script';
+  }
+
   /* 👁 The trainee's CMS screen, live, under the call: the CMS's own 👁 Watch live (its live-view.js), opened by a
      link (?watch=) signed in with this trainer's Portal ticket, as soon as the trainee opens the CMS on the call.
      A frame kept beside #stage (the stage redraws, and a redrawn frame reloads); it stays until the trainer closes
@@ -780,17 +798,20 @@
   async function watchCms(t) {
     const box = U.$('#cmsWatch'); if (!box || !t || !t.trainee) return;
     const who = t.trainee.name || '';
-    if (!who || box.dataset.who === who) return;
+    if (!who) return;
+    if (box.dataset.who === who) { syncWatch(); return; }   // already watching them: just show it
     box.dataset.who = who;
-    box.classList.remove('hidden');
-    box.innerHTML = `<div class="cms-split-head"><b>👁 ${esc(who)}'s CMS, live</b><span class="small muted cms-msg" style="flex:1">Opening the CMS's Watch live, signed in as you…</span>${App.zoomHTML()}
-        <button class="btn btn-sm" data-cmsw="tab" title="Watch in its own browser tab">↗ New tab</button><button class="btn btn-sm" data-cmsw="close">✕ Close</button></div>
+    C.scriptOn = false;
+    box.innerHTML = `<div class="cms-split-head"><b>👁 ${esc(who)}'s CMS, live</b><span class="small muted cms-msg" style="flex:1">Opening the CMS's Monitoring, signed in as you…</span>${App.zoomHTML()}
+        <button class="btn btn-sm" data-cmsw="script" title="The caller's script, the checklist and the note (the CMS stays open)">🎭 Script</button><button class="btn btn-sm" data-cmsw="tab" title="Watch in its own browser tab">↗ New tab</button><button class="btn btn-sm" data-cmsw="close">✕ Close</button></div>
       ${App.cmsFrameHTML(who + "'s CMS screen")}`;
     App.grip(box, 'trainer');
+    syncWatch();
     const ask = () => API.post('/api/cms-link', { watch: who, watchBatch: t.trainee.batch || '' });
     box.onclick = async (e) => {
       const b = e.target.closest('[data-cmsw]'); if (!b) return;
-      if (b.dataset.cmsw === 'close') { box.innerHTML = ''; box.classList.add('hidden'); delete box.dataset.who; return; }
+      if (b.dataset.cmsw === 'close') { box.innerHTML = ''; delete box.dataset.who; if (App.t) App.t.traineeCms = false; C.scriptOn = false; syncWatch(); renderDialBadges(); return; }
+      if (b.dataset.cmsw === 'script') { C.scriptOn = !C.scriptOn; syncWatch(); return; }
       const tab = window.open('', '_blank');
       try { const r = await ask(); if (tab) tab.location = r.url; } catch (err) { if (tab) tab.close(); U.toast(err.message, 'error'); }
     };
@@ -799,8 +820,8 @@
       const f = U.$('.cms-frame', box), msg = U.$('.cms-msg', box);
       if (!f || box.dataset.who !== who) return;
       f.src = r.url;
-      if (msg) msg.textContent = r.authed ? `${who} opened the CMS: their screen shows here, about a second behind.` : 'The CMS will ask you to sign in (no Portal secret is set on this site): then Master Control → Monitoring → 👁 Watch live.';
-      U.toast(`👁 ${who} opened the CMS: their screen is under the call (👁 THEIR CMS ↓ on your phone takes you there).`);
+      if (msg) msg.textContent = r.authed ? `${who} opened the CMS: Monitoring opens their 👁 Watch live here (or pick them from the list).` : 'The CMS will ask you to sign in (no Portal secret is set on this site): then Master Control → Monitoring → 👁 Watch live.';
+      U.toast(`👁 ${who} opened the CMS: their screen is beside your phone (🎭 Script brings the script back).`);
       renderDialBadges();
     } catch (err) {
       const msg = U.$('.cms-msg', box); if (msg) msg.textContent = 'Couldn\'t open the CMS: ' + err.message;
@@ -845,7 +866,7 @@
         if (t.traineeMuted) f.push('<span class="lb mute">TRAINEE MUTED</span>');
         if (t.muted) f.push('<span class="lb mute">YOU\'RE MUTED</span>');
         if (t.coaching) f.push('<span class="lb coach">⏸ COACHING</span>');
-        if (t.traineeCms) f.push('<span class="lb coach" data-cmsjump="1" style="cursor:pointer" title="The trainee has the CMS open: their screen is under the call. Click to go to it.">👁 THEIR CMS ↓</span>');
+        if (t.traineeCms) f.push('<span class="lb coach" data-cmsjump="1" style="cursor:pointer" title="The trainee has the CMS open: click to see their screen beside your phone.">👁 THEIR CMS</span>');
         if (t.traineeShare) f.push('<span class="lb coach" title="The trainee is presenting their phone tab in Google Meet: the class hears you through it. Mute your Meet mic and the Meet tab until the call ends.">📺 IN MEET · MUTE YOUR MEET MIC</span>');
         if (confCount()) f.push(`<span class="lb conf">👥 CONFERENCE · ${confCount() + 1}</span>`);
         if (t.peerLost) f.push('<span class="lb warn">TRAINEE RECONNECTING</span>');
@@ -1084,7 +1105,7 @@
       const app = App.host();
       // The main screen is ☎ the dialer and nothing else. ☎ Switchboard folds the board out beside it.
       app.innerHTML = `<div class="console" id="consoleGrid">
-        <aside class="console-side" id="sideL"></aside><div class="console-main"><div class="console-stage" id="stage"></div><div class="cms-split card hidden" id="cmsWatch"></div></div></div>`;
+        <aside class="console-side" id="sideL"></aside><div class="console-main"><div class="console-stage" id="stage"></div></div></div>`;
       App.leave = () => { document.removeEventListener('keydown', onKey); if (App.t && App.t.status === 'ended' && App.t.upload !== 'saving') App.t = null; };
       app.firstChild.addEventListener('click', onClick);
       app.firstChild.addEventListener('change', onChange);
@@ -1098,7 +1119,7 @@
 
   function onClick(e) {
     const jump = e.target.closest('[data-cmsjump]');
-    if (jump) { const w = U.$('#cmsWatch'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    if (jump) { C.scriptOn = false; syncWatch(); const w = U.$('#dialCol'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     // The switchboard is the phone's contact list: a trainee's row puts their extension on the dialer; 📞 also rings.
     const ringBtn = e.target.closest('[data-ring]');
     if (ringBtn) { if (App.t) return; pickTrainee(ringBtn.dataset.ring); ring(); return; }

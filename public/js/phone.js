@@ -65,7 +65,6 @@
     close() { this.stopped = true; clearTimeout(this.rt); clearInterval(this.ping); if (this.ws) try { this.ws.close(1000); } catch (e) {} this.ws = null; this.up = false; }
   }
 
-  // 🎙 The microphone: the computer's own (the one the user has set as their microphone), nothing chosen here.
   const Mic = {
     stream: null,
     async open() {
@@ -341,53 +340,32 @@
   /* 🔊 Speaker: where the call is heard, like a desk phone's speaker key.
      Off: the headset (the computer's default audio output). On: the speakers, so a room can listen.
      The call audio, the phone's sounds (ringing, ringback, keypad tones) and the AI caller all follow it.
-     Chrome and Edge can send audio to a chosen output (setSinkId). Unless 🎧 Audio check sets them, the two are
-     found the same way for any make of headset (Jabra, Poly, Logitech, AirPods, a no-name USB one…):
-       the headset is the output on the same device as the microphone in use (a headset is one device, with a mic and
-       an earpiece: one groupId), else Windows' default communications device, else an output named like a headset;
-       the speaker is an output that ISN'T on that device, preferring the computer's own (built-in, Realtek, a
-       monitor) over anything that looks like another headset.
-     Names alone can't do it: Windows calls a USB headset's earpiece "Speakers (Jabra Link 380)", and Chrome's
-     default output is often the laptop's speakers while the headset is plugged in. Kept on this computer. */
+     Chrome and Edge can send audio to a chosen output (setSinkId); the speaker is found by its name
+     ("Speakers", "Built-in", "Realtek"…) unless the audio check sets one. Kept on this computer. */
   const SPK_KEY = 'mcv_speaker';
-  const BUILT_IN = /built-?in|internal|realtek|high definition audio|\bintel\b|conexant|cirrus|macbook|imac|mac mini|studio display|display audio|monitor|hdmi|displayport|nvidia|\bamd\b|sound blaster|lautsprecher|altavoz|haut-parleur|alto-falante|altoparlant/i;
-  const HEADSET = /headset|headphone|earphone|earpiece|earbud|airpods|buds|hands-?free|bluetooth|jabra|plantronics|\bpoly\b|logitech|logi\b|sennheiser|\bepos\b|shure|hyperx|steelseries|razer|corsair|bose|beats|\bsony\b|skullcandy|anker|soundcore|\bjbl\b|evolve|blackwire|voyager|zone wireless|\busb\b/i;
-  // "Speakers (Jabra Link 380)", "Default - Headset Earphone (Poly BT700)": the device's own name, without Windows' wrapper.
-  const inner = (label) => { const m = /\(([^()]+(?:\([^()]*\)[^()]*)*)\)\s*(?:\([0-9a-f]{4}:[0-9a-f]{4}\))?\s*$/i.exec(String(label || '').replace(/^(Default|Communications) - /, '')); return m ? m[1] : String(label || ''); };
-  const VIRTUAL = /virtual|stereo mix|what u hear|wave out|cable (in|out)|vb-audio|voicemeeter|blackhole|soundflower|loopback|krisp|nvidia broadcast|rtx voice|zoomaudiodevice|teams audio|obs|droidcam|iriun|camo/i;
-  const looksHeadset = (d) => !!d && (HEADSET.test(d.label) || HEADSET.test(inner(d.label))) && !BUILT_IN.test(inner(d.label));
+  const SPK_NAME = /speaker|built-?in|internal|realtek|lautsprecher|altavoz|haut-parleur|alto-falante|altoparlant/i;
+  const NOT_SPK = /headset|headphone|earphone|earbud|airpods|buds|hands-?free|bluetooth/i;
   const Speaker = {
     on: false, headset: '', speaker: '', targets: new Set(), listeners: new Set(), last: null,
     load() { try { Object.assign(this, JSON.parse(localStorage.getItem(SPK_KEY) || '{}')); } catch (e) {} return this; },
     store() { try { localStorage.setItem(SPK_KEY, JSON.stringify({ on: this.on, headset: this.headset, speaker: this.speaker })); } catch (e) {} },
     supported() { return !!(window.HTMLMediaElement && 'setSinkId' in HTMLMediaElement.prototype); },
-    async devices() { try { return await navigator.mediaDevices.enumerateDevices(); } catch (e) { return []; } },
-    async outputs() { return (await this.devices()).filter((d) => d.kind === 'audiooutput'); },
+    async outputs() {
+      try { return (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audiooutput'); } catch (e) { return []; }
+    },
     // The outputs to use: { headset, speaker } device ids, their names, and whether the speaker is a different output.
     async route() {
-      const all = await this.devices();
-      const list = all.filter((d) => d.kind === 'audiooutput');
+      const list = await this.outputs();
       const real = list.filter((d) => !['default', 'communications', ''].includes(d.deviceId));
       const def = list.find((d) => d.deviceId === 'default') || real[0] || null;
       const has = (id) => id && list.some((d) => d.deviceId === id);
-      // The microphone the phone is using (or the default one): a headset's earpiece shares its groupId.
-      const track = Mic.track(), set = track && track.getSettings ? track.getSettings() : {};
-      const ins = all.filter((d) => d.kind === 'audioinput');
-      const mic = ins.find((d) => set.deviceId && d.deviceId === set.deviceId) || (set.groupId && ins.find((d) => d.groupId === set.groupId)) || ins.find((d) => d.deviceId === 'default') || null;
-      const micGroup = (mic && mic.groupId) || set.groupId || '';
-      const onMic = micGroup && !BUILT_IN.test(inner(mic && mic.label)) && !VIRTUAL.test((mic && mic.label) || '') ? real.find((d) => d.groupId === micGroup && !VIRTUAL.test(d.label)) : null;
-      const comms = list.find((d) => d.deviceId === 'communications');
-      const commsReal = comms && real.find((d) => d.groupId === comms.groupId);
-      const auto = onMic || (commsReal && !VIRTUAL.test(commsReal.label) && (!def || commsReal.groupId !== def.groupId) ? commsReal : null) || real.find((d) => looksHeadset(d) && !VIRTUAL.test(d.label)) || null;
-      const headset = has(this.headset) ? this.headset : auto ? auto.deviceId : 'default';
-      const hs = list.find((d) => d.deviceId === headset) || def;
+      const headset = has(this.headset) ? this.headset : 'default';
       let speaker = has(this.speaker) ? list.find((d) => d.deviceId === this.speaker) : null;
       if (!speaker) {
-        const other = real.filter((d) => (!hs || !hs.groupId || d.groupId !== hs.groupId) && !VIRTUAL.test(d.label));
-        speaker = other.find((d) => BUILT_IN.test(inner(d.label)) && !looksHeadset(d))
-          || other.find((d) => /speaker/i.test(d.label) && !looksHeadset(d))
-          || other.find((d) => !looksHeadset(d))
-          || null;
+        const other = real.filter((d) => !def || d.groupId !== def.groupId);
+        speaker = other.find((d) => SPK_NAME.test(d.label) && !NOT_SPK.test(d.label))
+          || (def && SPK_NAME.test(def.label) && !NOT_SPK.test(def.label) ? def : null)
+          || other.find((d) => !NOT_SPK.test(d.label)) || null;
       }
       const name = (id) => { const d = list.find((x) => x.deviceId === id); return d ? d.label.replace(/^(Default|Communications) - /, '') : ''; };
       const speakerId = speaker ? speaker.deviceId : headset;

@@ -192,7 +192,6 @@
     makeRtc(p, stream, servers, 0);
     App.board.send({ t: 'accept', callId: p.callId });
     T.shareSync();
-    VoIP.Speaker.apply().catch(() => {});   // the microphone is open: the headset is the output on its device
   }
 
   // After a reload mid-call: a fresh connection, and the trainer's console sends a new offer.
@@ -843,7 +842,7 @@
     else if (p && p.handedFrom && ['ringing', 'live'].includes(p.status)) msg = `<div class="dev-msg transfer">↪ <b>A call transferred to you</b> from ${esc(p.handedFrom)}. The caller has already spoken to them: pick the call up, find out where they got to, and take it from there.</div>`;
     else if (p && p.conf && p.status === 'live') msg = `<div class="dev-msg coach">👥 <b>Conference call.</b> On the line with you: ${esc(p.conf.others.join(', ') || 'your trainer')}${p.conf.trainer ? ' and ' + esc(p.conf.trainer) + ' (the caller)' : ''}. Everyone hears everyone.</div>`;
     else if (p && p.notice && p.status === 'live') msg = `<div class="dev-msg">${esc(p.notice)}</div>`;
-    else if (App.meetShare && p && !p.out && ['ringing', 'connecting', 'live'].includes(p.status)) msg = `<div class="dev-msg coach">📺 <b>You're presenting this phone in Google Meet.</b> The class hears the caller from this tab and you through your Meet mic: keep your Meet mic <b>on</b> and your headset on. ${VoIP.Speaker.on ? '<b>Turn 🔊 Speaker off</b>: your Meet mic would pick the call up from the speakers.' : ''}</div>`;
+    else if (App.meetShare && p && !p.out && ['ringing', 'connecting', 'live'].includes(p.status)) msg = `<div class="dev-msg coach">📺 <b>You're presenting this phone in Google Meet.</b> The class hears the caller from this tab and you through your Meet mic: keep your Meet mic <b>on</b> and your headset on.</div>`;
     else if (p && p.classOn && p.status === 'live') msg = `<div class="dev-msg coach">🎧 <b>Your class is listening in Google Meet.</b> If you're in the Meet too, mute your Meet mic and the Meet tab (right-click the tab → Mute site) until the call ends, so there's no echo.</div>`;
     else if (p && p.rec && p.status === 'ringing') msg = `<div class="dev-msg">● This call will be recorded for your review.</div>`;
     const head = mode === 'live'
@@ -960,7 +959,7 @@
   function meetShare() {
     const m = App.modal({ title: '📺 Share your phone in Google Meet', body: `<p class="small muted">Your class hears the call from this tab, the way it hears a video someone presents. Use Chrome or Edge.</p>
       <ol class="small">
-        <li>Wear your headset (any make). Turn <b>🔊 Speaker off</b>.</li>
+        <li>Wear your headset.</li>
         <li>In Meet: <b>Present now → A tab</b>, pick <b>this</b> tab (LSH Ring Channel), turn on <b>Also share tab audio</b>, then <b>Share</b>. Choose "A tab", not "Window" or "Entire screen": only a tab carries the sound.</li>
         <li>Keep your Meet mic <b>on</b>: the class hears you through Meet, and the caller through this tab.</li>
         <li>Your caller mutes their Meet mic and the Meet tab while you're on the call (their console tells them).</li>
@@ -970,7 +969,6 @@
     m.el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-ms]'); if (!b) return;
       setMeetShare(b.dataset.ms === 'on');
-      if (App.meetShare && VoIP.Speaker.on) App.toggleSpeaker(renderDevice);
       m.close();
     });
   }
@@ -1110,7 +1108,7 @@
       else if (act === 'decline') decline();
       else if (act === 'hangup') hangup();
       else if (act === 'mute') toggleMute();
-      else if (act === 'speaker') { App.toggleSpeaker(renderDevice); if (App.meetShare && VoIP.Speaker.on) U.toast('You\'re presenting in Meet: with 🔊 Speaker on, your Meet mic picks the call up from the speakers and the class hears it twice. Use your headset.'); }
+      else if (act === 'speaker') App.toggleSpeaker(renderDevice);
       else if (act === 'meetshare') meetShare();
       else if (act === 'cmsopen') openCmsSplit((App.p && App.p.caseId) || '');
       else if (act === 'lkopen') { const q = shown(); if (q) { q.lkOpen = !q.lkOpen; renderWork(); } }
