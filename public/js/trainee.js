@@ -191,6 +191,8 @@
     if (App.p !== p || p.status !== 'connecting') return;
     makeRtc(p, stream, servers, 0);
     App.board.send({ t: 'accept', callId: p.callId });
+    T.shareSync();
+    VoIP.Speaker.apply().catch(() => {});   // the microphone is open: the headset is the output on its device
   }
 
   // After a reload mid-call: a fresh connection, and the trainer's console sends a new offer.
@@ -822,6 +824,7 @@
     else if (p && p.handedFrom && ['ringing', 'live'].includes(p.status)) msg = `<div class="dev-msg transfer">↪ <b>A call transferred to you</b> from ${esc(p.handedFrom)}. The caller has already spoken to them: pick the call up, find out where they got to, and take it from there.</div>`;
     else if (p && p.conf && p.status === 'live') msg = `<div class="dev-msg coach">👥 <b>Conference call.</b> On the line with you: ${esc(p.conf.others.join(', ') || 'your trainer')}${p.conf.trainer ? ' and ' + esc(p.conf.trainer) + ' (the caller)' : ''}. Everyone hears everyone.</div>`;
     else if (p && p.notice && p.status === 'live') msg = `<div class="dev-msg">${esc(p.notice)}</div>`;
+    else if (App.meetShare && p && !p.out && ['ringing', 'connecting', 'live'].includes(p.status)) msg = `<div class="dev-msg coach">📺 <b>You're presenting this phone in Google Meet.</b> The class hears the caller from this tab and you through your Meet mic: keep your Meet mic <b>on</b> and your headset on. ${VoIP.Speaker.on ? '<b>Turn 🔊 Speaker off</b>: your Meet mic would pick the call up from the speakers.' : ''}</div>`;
     else if (p && p.classOn && p.status === 'live') msg = `<div class="dev-msg coach">🎧 <b>Your class is listening in Google Meet.</b> If you're in the Meet too, mute your Meet mic and the Meet tab (right-click the tab → Mute site) until the call ends, so there's no echo.</div>`;
     else if (p && p.rec && p.status === 'ringing') msg = `<div class="dev-msg">● This call will be recorded for your review.</div>`;
     const head = mode === 'live'
@@ -836,7 +839,7 @@
       ${shownCall ? '' : lineKeys}
       ${pad}
       ${p && p.out ? outKeysHTML(p) : App.keysHTML(shownCall, idleKeys)}
-      <div class="dev-foot"><span title="Call volume">🔉</span><input type="range" min="0" max="1" step="0.05" value="${App.volume == null ? 1 : App.volume}" data-act="volume" aria-label="Call volume">${!App.connected && mode === 'live' ? '<span>Offline</span>' : `<button type="button" class="dev-link" data-act="miccheck">🎧 Audio check</button>`}</div>`;
+      <div class="dev-foot"><span title="Call volume">🔉</span><input type="range" min="0" max="1" step="0.05" value="${App.volume == null ? 1 : App.volume}" data-act="volume" aria-label="Call volume">${!App.connected && mode === 'live' ? '<span>Offline</span>' : `<button type="button" class="dev-link" data-act="miccheck">🎧 Audio check</button><button type="button" class="dev-link ${App.meetShare ? 'on' : ''}" data-act="meetshare" title="Present this phone in Google Meet so your class hears the call">📺 ${App.meetShare ? 'In Meet' : 'Share in Meet'}</button>`}</div>`;
   }
   // 🤝 The screen and keys of a practice call you placed (you are the caller).
   function outLcd(p) {
@@ -918,6 +921,38 @@
       onOpen: (id) => openCmsSplit(id) });
     const box = U.$('#trLines', el); if (box) box.scrollTop = box.scrollHeight;
     syncCms();
+  }
+
+  /* 📺 Share in Meet: the trainee presents this tab in Google Meet themselves, with no trainer Class view.
+     Meet's "Also share tab audio" sends what this tab plays: the caller, the ringback and the hold music. The
+     trainee's own voice reaches the class through their Meet mic, as in any Meet. The caller (a trainer or a
+     classmate in the same Meet) is told, through the board, to mute their Meet mic and the Meet tab, or the class
+     would hear them twice. Nothing can tell from inside a tab whether Meet is sharing it, so the trainee says so. */
+  App.meetShare = (() => { try { return sessionStorage.getItem('mcv_meetshare') === '1'; } catch (e) { return false; } })();
+  function setMeetShare(on) {
+    App.meetShare = !!on;
+    try { if (on) sessionStorage.setItem('mcv_meetshare', '1'); else sessionStorage.removeItem('mcv_meetshare'); } catch (e) {}
+    const p = App.p;
+    if (p && p.callId && !p.out && p.mode !== 'ai' && ['ringing', 'connecting', 'live'].includes(p.status)) App.board.send({ t: 'share', callId: p.callId, on: App.meetShare });
+    renderDevice();
+  }
+  T.shareSync = () => { const p = App.p; if (App.meetShare && p && p.callId && !p.out && p.mode !== 'ai') App.board.send({ t: 'share', callId: p.callId, on: true }); };
+  function meetShare() {
+    const m = App.modal({ title: '📺 Share your phone in Google Meet', body: `<p class="small muted">Your class hears the call from this tab, the way it hears a video someone presents. Use Chrome or Edge.</p>
+      <ol class="small">
+        <li>Wear your headset (any make). Turn <b>🔊 Speaker off</b>.</li>
+        <li>In Meet: <b>Present now → A tab</b>, pick <b>this</b> tab (LSH Ring Channel), turn on <b>Also share tab audio</b>, then <b>Share</b>. Choose "A tab", not "Window" or "Entire screen": only a tab carries the sound.</li>
+        <li>Keep your Meet mic <b>on</b>: the class hears you through Meet, and the caller through this tab.</li>
+        <li>Your caller mutes their Meet mic and the Meet tab while you're on the call (their console tells them).</li>
+        <li>When the call is over, stop presenting in Meet and press <b>Stop sharing</b> here.</li>
+      </ol>
+      <div class="row" style="margin-top:12px">${App.meetShare ? '<button class="btn btn-orange" data-ms="off">Stop sharing</button>' : '<button class="btn btn-primary" data-ms="on">I\'m presenting this tab</button>'}<button class="btn" data-x="1">Close</button></div>` });
+    m.el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-ms]'); if (!b) return;
+      setMeetShare(b.dataset.ms === 'on');
+      if (App.meetShare && VoIP.Speaker.on) App.toggleSpeaker(renderDevice);
+      m.close();
+    });
   }
 
   /* 🗂 The CMS beside the call: the CMS Training Library in a frame under the workspace tabs, signed in as the trainee
@@ -1039,7 +1074,8 @@
       else if (act === 'decline') decline();
       else if (act === 'hangup') hangup();
       else if (act === 'mute') toggleMute();
-      else if (act === 'speaker') App.toggleSpeaker(renderDevice);
+      else if (act === 'speaker') { App.toggleSpeaker(renderDevice); if (App.meetShare && VoIP.Speaker.on) U.toast('You\'re presenting in Meet: with 🔊 Speaker on, your Meet mic picks the call up from the speakers and the class hears it twice. Use your headset.'); }
+      else if (act === 'meetshare') meetShare();
       else if (act === 'hold') toggleHold();
       else if (act === 'transfer') pickTransfer();
       else if (act === 'merge') pickTransfer('merge');

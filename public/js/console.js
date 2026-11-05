@@ -51,7 +51,7 @@
   // What was happening on the line (hold, mute, coaching, a transfer waiting for an answer).
   const liveState = (lv) => {
     lv = lv || {};
-    return { traineeHeld: !!lv.held, holdAt: lv.holdAt || 0, traineeMuted: !!lv.traineeMuted, coaching: !!lv.coaching,
+    return { traineeHeld: !!lv.held, holdAt: lv.holdAt || 0, traineeMuted: !!lv.traineeMuted, coaching: !!lv.coaching, traineeShare: !!lv.traineeShare,
       transfer: lv.transfer ? Object.assign({ at: Date.now() }, lv.transfer) : null };
   };
   C.onPresence = function () { if (App.route.name === 'console') { renderRoster(); if (!App.t) { syncDial(); renderDialer(); } } };
@@ -155,6 +155,12 @@
         renderDialer();
         return;
       case 'mute': if (mine) { t.traineeMuted = !!m.on; renderDialer(); } return;
+      // 📺 The trainee is presenting their phone tab in Meet: the class hears you from it, so you mute your own Meet mic and the Meet tab.
+      case 'share':
+        if (!mine) return;
+        t.traineeShare = !!m.on; renderDialer();
+        if (m.on) U.toast(`📺 ${(t.trainee && t.trainee.name) || 'The trainee'} is presenting their phone in Google Meet: the class hears you through it. Mute your Meet mic and the Meet tab until the call ends, so there's no echo.`);
+        return;
       case 'transfer':
         if (!mine) return;
         t.transfer = { to: m.to, ext: m.ext, role: m.role, kind: m.kind || 'cold', unavailable: !!m.unavailable, at: Date.now() };
@@ -799,6 +805,7 @@
         if (t.traineeMuted) f.push('<span class="lb mute">TRAINEE MUTED</span>');
         if (t.muted) f.push('<span class="lb mute">YOU\'RE MUTED</span>');
         if (t.coaching) f.push('<span class="lb coach">⏸ COACHING</span>');
+        if (t.traineeShare) f.push('<span class="lb coach" title="The trainee is presenting their phone tab in Google Meet: the class hears you through it. Mute your Meet mic and the Meet tab until the call ends.">📺 IN MEET · MUTE YOUR MEET MIC</span>');
         if (confCount()) f.push(`<span class="lb conf">👥 CONFERENCE · ${confCount() + 1}</span>`);
         if (t.peerLost) f.push('<span class="lb warn">TRAINEE RECONNECTING</span>');
         if (t.quality) f.push(`<span class="lb" title="${t.quality.rtt != null ? t.quality.rtt + ' ms round trip' : ''}${t.quality.loss ? ' · ' + t.quality.loss + '% loss' : ''}${t.quality.relay ? ' · via TURN relay' : ''}"><span class="bars q${t.quality.bars}"><i></i><i></i><i></i><i></i></span>${t.quality.relay ? ' RELAY' : ''}</span>`);

@@ -189,6 +189,16 @@ const playCall = async (pg, sid) => {
   await te.click('[data-tab="cms"]');
   if (!(await te.isVisible('#cmsSplit iframe[data-kept="1"]'))) throw new Error('The CMS frame should be kept (not reloaded) across tabs');
   await te.click('[data-tab="lookup"]');
+
+  // 📺 The trainee presents their own phone in Meet: their phone says how, and the trainer's dialer says to mute their Meet mic.
+  await te.click('#device [data-act="meetshare"]');
+  await te.click('.modal [data-ms="on"]');
+  await te.waitForFunction(() => /presenting this phone in Google Meet/.test(document.querySelector('#device').textContent));
+  await tr.waitForFunction(() => /IN MEET/.test(document.querySelector('#dialer .lcd-badges').textContent));
+  await te.click('#device [data-act="meetshare"]');
+  await te.click('.modal [data-ms="off"]');
+  await tr.waitForFunction(() => !/IN MEET/.test(document.querySelector('#dialer .lcd-badges').textContent));
+  ok('📺 Share in Meet: the trainee says they are presenting their phone, and the trainer\'s dialer tells them to mute their Meet mic (and stops when the trainee does)');
   ok('🗂 Case lookup has every CMS Training Library file (Schuyler Beauchamp: MC-37 and MC-51), and "Open in the CMS" opens it beside the call, kept while the trainee switches tabs');
 
   // Live note

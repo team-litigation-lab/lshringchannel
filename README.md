@@ -186,7 +186,7 @@ On a call from the trainer, the trainee's **Transfer** key opens the other train
 
 **🔊 Speaker**, on the trainer's dialer and on the trainee's phone, works like a desk phone's speaker key: the call moves from the headset to the computer's speakers (so a training room can listen), and back when pressed again.
 - Everything on the phone follows it: the call, the ringing and ringback, the keypad tones, and the AI practice caller. The screen shows 🔊 SPEAKER while it's on.
-- The phone finds the speakers by their name ("Speakers", "Built-in", "Realtek"…). **🎧 Audio check** lists the outputs: choose the headset and the speaker there, and play a test tone on each.
+- The phone finds the headset and the speakers the same way for any make of headset (Jabra, Poly, Logitech, AirPods, a no-name USB one): the headset is the output on the same device as the microphone in use, else Windows' communications device; the speakers are an output that isn't on that device, preferring the computer's own. Names alone don't work: Windows calls a USB headset's earpiece "Speakers (Jabra Link 380)". **🎧 Audio check** lists the outputs: choose the headset and the speaker there, and play a test tone on each.
 - The setting is kept on that computer.
 - It needs Chrome or Edge (they can choose where sound plays) and the microphone allowed, so the phone can see the outputs' names. If the computer has only one output, the screen says the call already plays there.
 - On speaker, the microphone hears the room: Chrome's echo cancellation removes the call's own sound, but a headset is still best for graded calls.
@@ -213,6 +213,8 @@ To let the batch listen to a mock call in your Google Meet (and record it with M
 They never see the caller's script or the goals, and the call's title only shows once the call is over. The Class view follows your console from call to call, so keep it open for the whole session. Present it from Chrome or Edge, where Meet can share a tab's audio.
 
 This is separate from the platform's own recording: every live call is still recorded on the console and kept with its scorecard.
+
+**📺 A trainee presents their own phone (no Class view).** A trainee can share the call in a Meet themselves: **📺 Share in Meet** under their phone gives the steps. They present their Ring Channel tab (*Present now → A tab*, *Also share tab audio* on), keep their Meet mic **on** and their headset on, and press *I'm presenting this tab*. The class hears the caller from the tab and the trainee through Meet. The caller's dialer then shows **📺 IN MEET · MUTE YOUR MEET MIC**: the caller (trainer or classmate) mutes their Meet mic and the Meet tab until the call ends, or the class hears them twice.
 
 **Timings the phone measures for the scorecard:** rings before the answer (the standard is 3), call length, each hold and its length, and each transfer and how it ended.
 
