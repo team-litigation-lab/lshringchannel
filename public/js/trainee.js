@@ -868,16 +868,17 @@
   // What comes up beside the phone: how a live mock call goes while it's idle, and the panes a call needs once one is on.
   function renderWork() {
     const el = U.$('#work'); if (!el) return;
-    const grid = el.parentElement;
+    const grid = U.$('#phoneGrid');
     const mode = modeOf();
     const p = shown();
     /* ☎ The Console is the switchboard and the phone and nothing else, as the trainer's is: the panes
        a call needs come up when a call does, and the trainee's own screens are a tab away. */
     const solo = !p && grid && grid.classList.contains('with-side');
     if (grid) grid.classList.toggle('solo', !!solo);
-    if (solo) { el.innerHTML = ''; fitBoard(); return; }
-    if (p && p.out) { el.innerHTML = outWorkHTML(p); bindOutWork(el, p); return; }
+    if (solo) { el.innerHTML = ''; syncCms(); fitBoard(); return; }
+    if (p && p.out) { el.innerHTML = outWorkHTML(p); bindOutWork(el, p); syncCms(); return; }
     if (!p || p.status === 'waiting') {
+      syncCms();
       if (mode === 'ai' && p) { el.innerHTML = briefHTML(p); return; }
       el.innerHTML = welcomeHTML();
       loadRecent();
@@ -885,7 +886,7 @@
     }
     const track = p.track;
     const ended = p.status === 'ended';
-    const tabs = [['note', '📝 Note'], ['lookup', '🔎 Case lookup'], ['dir', '📇 Directory'], ['rules', '📘 Rules']];
+    const tabs = [['note', '📝 Note'], ['lookup', '🔎 Case lookup'], ['cms', '🗂 CMS'], ['dir', '📇 Directory'], ['rules', '📘 Rules']];
     if (p.mode === 'ai' && (p.showTranscript || ended)) tabs.splice(1, 0, ['tr', p.voice === 'text' ? '💬 Conversation' : '💬 Transcript']);
     // On a live mock call the case file comes first, as at the real front desk: look the caller up,
     // open the file (in the CMS if you like), then take the note.
@@ -909,11 +910,55 @@
       <div class="pane ${first === 'note' ? 'on' : ''}" data-pane="note">${App.noteFormHTML(track, p.note, p.submitted)}</div>
       ${trPane.replace('class="pane"', `class="pane ${first === 'tr' ? 'on' : ''}"`)}
       <div class="pane ${first === 'lookup' ? 'on' : ''}" data-pane="lookup">${App.lookupHTML(p)}</div>
+      <div class="pane ${first === 'cms' ? 'on' : ''}" data-pane="cms"><p class="small muted" style="margin:0">🗂 The CMS Training Library is open below, signed in as you, beside the call. It stays where you left it while you switch tabs and take your note.</p></div>
       <div class="pane" data-pane="dir">${App.directoryHTML(p.status === 'live')}</div>
       <div class="pane" data-pane="rules">${App.rulesHTML(track)}</div>`;
     App.bindLookup(el, { hide: p.hideCases, live: !ended && p.status !== 'waiting',
-      onPick: (id) => { p.caseId = id; if (p.mode === 'live' || p.assigned) App.board.send({ t: 'case', callId: p.callId, caseId: id }); } });
+      onPick: (id) => { p.caseId = id; if (p.mode === 'live' || p.assigned) App.board.send({ t: 'case', callId: p.callId, caseId: id }); },
+      onOpen: (id) => openCmsSplit(id) });
     const box = U.$('#trLines', el); if (box) box.scrollTop = box.scrollHeight;
+    syncCms();
+  }
+
+  /* 🗂 The CMS beside the call: the CMS Training Library in a frame under the workspace tabs, signed in as the trainee
+     (the same Portal ticket 🔎 Case lookup's "Open in the CMS" uses; the CMS keeps its session in a frame, see its
+     functions/_utils.js). The frame is made once and kept: the workspace redraws often during a call, and a frame
+     that's redrawn reloads, so it lives beside #work (not in it) and is only shown or hidden. */
+  const cmsTabOn = () => { const p = shown(); return !!(p && !p.out && p.status !== 'waiting' && p.tab === 'cms' && U.$('#work [data-pane="cms"]')); };
+  function syncCms() {
+    const box = U.$('#cmsSplit'); if (!box) return;
+    const on = cmsTabOn();
+    box.classList.toggle('hidden', !on);
+    if (on && !box.dataset.loaded) openCmsSplit((shown() || {}).caseId || '', true);
+  }
+  async function openCmsSplit(caseId, quiet) {
+    const p = shown(), box = U.$('#cmsSplit'), w = U.$('#work');
+    if (!box || !w || !p) { App.openCase(caseId); return; }
+    p.tab = 'cms';
+    U.$$('[data-tab]', w).forEach((b) => b.classList.toggle('on', b.dataset.tab === 'cms'));
+    U.$$('[data-pane]', w).forEach((x) => x.classList.toggle('on', x.dataset.pane === 'cms'));
+    box.classList.remove('hidden');
+    // The workspace tabs stay in sight above the CMS (the lookup's button can sit far down the page).
+    if (w.getBoundingClientRect().top < 70) window.scrollBy({ top: w.getBoundingClientRect().top - 84 });
+    box.dataset.loaded = '1'; box.dataset.case = caseId || '';
+    box.innerHTML = `<div class="cms-split-head"><b>🗂 CMS Training Library</b>${caseId ? ` <span class="badge">${esc(caseId)}</span>` : ''}<span class="small muted cms-msg" style="flex:1">Opening, signed in as you…</span>
+        <button class="btn btn-sm" data-cms="tab" title="Open the CMS in its own browser tab instead">↗ New tab</button><button class="btn btn-sm" data-cms="close" title="Close the CMS beside the call">✕ Close</button></div>
+      <iframe class="cms-frame" title="LSH CMS Training Library" referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+    box.onclick = (e) => {
+      const b = e.target.closest('[data-cms]'); if (!b) return;
+      if (b.dataset.cms === 'tab') App.openCase(box.dataset.case || '', b);
+      else { box.innerHTML = ''; delete box.dataset.loaded; box.classList.add('hidden'); const q = shown(); if (q) q.tab = 'lookup'; renderWork(); }
+    };
+    try {
+      const r = await API.post('/api/cms-link', { caseId: caseId || '' });
+      const f = U.$('.cms-frame', box), msg = U.$('.cms-msg', box);
+      if (!f) return;
+      f.src = r.url;
+      if (msg) msg.textContent = r.authed ? 'Signed in as you. Search the client the way you would at the front desk.' : 'The CMS will ask you to come in from the LSH Training Portal (no Portal secret is set on this site).';
+    } catch (e) {
+      const msg = U.$('.cms-msg', box); if (msg) msg.textContent = 'Couldn\'t open the CMS: ' + e.message;
+      if (!quiet) U.toast('Couldn\'t open the CMS: ' + e.message, 'error');
+    }
   }
 
   // 🎭 Beside the phone while you're the caller: who you could be (a client on a case file), and what they've noted.
@@ -978,6 +1023,7 @@
         const w = U.$('#work');
         U.$$('[data-tab]', w).forEach((b) => b.classList.toggle('on', b === tab));
         U.$$('[data-pane]', w).forEach((x) => x.classList.toggle('on', x.dataset.pane === tab.dataset.tab));
+        syncCms();
         return;
       }
 
@@ -1041,7 +1087,7 @@
          the next one: an AI call (a trainer's, or their own practice) waits until its score is read. */
       if (App.p && App.p.mode === 'ai' && App.p.status === 'ended' && App.p.submitted && !App.p.grading && App.p.seenGrade) App.p = null;
       if (App.p && App.p.mode === 'live' && App.p.status === 'ended' && App.p.submitted) App.p = null;
-      app.innerHTML = `<div class="phone-layout with-side" id="phoneGrid"><div class="tside" id="tside"></div><div class="device" id="device"></div><div class="work card" id="work"></div></div>`;
+      app.innerHTML = `<div class="phone-layout with-side" id="phoneGrid"><div class="tside" id="tside"></div><div class="device" id="device"></div><div class="work-col"><div class="work card" id="work"></div><div class="cms-split card hidden" id="cmsSplit"></div></div></div>`;
       bindPage(app.firstChild);
       renderAll();
     }
@@ -1059,7 +1105,7 @@
       // A trainee's practice call runs on ☎ their Console: the picker hands it over and follows it there.
       if (!App.trainer() && App.p && App.p.mode === 'ai' && !App.p.assigned) { location.hash = '#/phone'; return; }
       if (App.p && App.p.mode === 'ai') {
-        app.innerHTML = `<div class="phone-layout" id="phoneGrid"><div class="device" id="device"></div><div class="work card" id="work"></div></div>`;
+        app.innerHTML = `<div class="phone-layout" id="phoneGrid"><div class="device" id="device"></div><div class="work-col"><div class="work card" id="work"></div><div class="cms-split card hidden" id="cmsSplit"></div></div></div>`;
         bindPage(app.firstChild);
         renderAll();
         return;

@@ -169,6 +169,28 @@ const playCall = async (pg, sid) => {
   if (!/mock=/.test(cms.url) || !/from=ringchannel/.test(cms.url)) throw new Error('The CMS link should open the case file: ' + JSON.stringify(cms));
   ok(`🔎 Case lookup is the first screen on a live call: ${caseId} previewed, chosen as the case file, shown on the trainer's console, and it opens in the CMS (${cms.authed ? 'signed in with a Portal ticket' : 'plain link: no Portal secret on this test site'})`);
 
+  // Every Training Library file in the CMS is in Case lookup (not only the ones a call is about): MC-37 and MC-51
+  // are Schuyler Beauchamp's two files. "Open in the CMS" opens the CMS beside the call, in a frame that a redraw keeps.
+  await te.fill('#lkQ', 'schuyler beauchamp');
+  await te.waitForFunction(() => document.querySelectorAll('#lkHits [data-case]').length === 2);
+  const sb = await te.$$eval('#lkHits [data-case]', (els) => els.map((x) => x.dataset.case).sort().join(' '));
+  if (sb !== 'MC-37 MC-51') throw new Error('Case lookup should find both of Schuyler Beauchamp\'s files: ' + sb);
+  await te.route(/lshcasemanagementtraining/, (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>CMS</title><h1 id="cms">CMS stand-in</h1>' }));
+  await te.click('#lkHits [data-case="MC-37"]');
+  await te.click('.case-body [data-case-open="MC-37"]');
+  await te.waitForSelector('#cmsSplit:not(.hidden) iframe.cms-frame[src*="from=ringchannel"]');
+  if (!(await te.isVisible('[data-tab="cms"].on'))) throw new Error('🗂 CMS should be the open tab once the CMS is opened beside the call');
+  const frameEl = await te.$('#cmsSplit iframe');
+  await (await frameEl.contentFrame()).waitForSelector('#cms');
+  await te.screenshot({ path: OUT + '/17-trainee-cms-split.png' });
+  await te.evaluate(() => { document.querySelector('#cmsSplit iframe').dataset.kept = '1'; });
+  await te.click('[data-tab="lookup"]');
+  if (!(await te.isHidden('#cmsSplit'))) throw new Error('The CMS frame should hide on another tab');
+  await te.click('[data-tab="cms"]');
+  if (!(await te.isVisible('#cmsSplit iframe[data-kept="1"]'))) throw new Error('The CMS frame should be kept (not reloaded) across tabs');
+  await te.click('[data-tab="lookup"]');
+  ok('🗂 Case lookup has every CMS Training Library file (Schuyler Beauchamp: MC-37 and MC-51), and "Open in the CMS" opens it beside the call, kept while the trainee switches tabs');
+
   // Live note
   await te.click('[data-tab="note"]');
   await te.fill('[data-k="caller"]', 'Greg Hollis, adjuster at Liberty Crest');

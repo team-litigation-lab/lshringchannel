@@ -162,11 +162,11 @@ table.list tr.click:hover td { background: #f8fafc; }
 /* the board and the phone are one piece of equipment, as on the trainer's console: no gap between
    them, the phone in the same flat case, and its left side open where the board meets it */
 .phone-layout.with-side { grid-template-columns: var(--ts, 250px) 360px minmax(0, 1fr); column-gap: 0; row-gap: 18px; }
-.phone-layout.with-side .work { margin-left: 18px; }
+.phone-layout.with-side .work-col { margin-left: 18px; }
 /* No call on: the board and the phone stand on their own, as the trainer's console does.
    Only where there is room for the pair side by side; narrower than that they stack as ever. */
 @media (min-width: 1061px) { .phone-layout.with-side.solo { grid-template-columns: var(--ts, 250px) 360px; justify-content: start; } }
-.phone-layout.solo .work { display: none; }
+.phone-layout.solo .work-col, .phone-layout.solo .work { display: none; }
 .phone-layout.with-side:not(.side-folded) .device {
   background: var(--deck, #0e1f42); border-top-left-radius: 0; border-bottom-left-radius: 0;
   box-shadow: 10px 22px 44px -16px rgba(8, 18, 38, .5);
@@ -174,7 +174,7 @@ table.list tr.click:hover td { background: #f8fafc; }
 .phone-layout { --deck: #0e1f42; }
 .phone-layout.with-side.side-folded { column-gap: 18px; }
 .phone-layout.with-side.side-folded { --ts: 52px; }
-@media (max-width: 1240px) { .phone-layout.with-side { --ts: 220px; } .phone-layout.with-side .work { margin-left: 14px; } }
+@media (max-width: 1240px) { .phone-layout.with-side { --ts: 220px; } .phone-layout.with-side .work-col { margin-left: 14px; } }
 .phone-layout > * { min-width: 0; }
 .tside { position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow: auto; }
 /* A phone taller than the window: nothing sticks, so the board and the phone scroll as one piece. */
@@ -183,7 +183,7 @@ table.list tr.click:hover td { background: #f8fafc; }
 @media (max-width: 1060px) {
   .phone-layout.with-side, .phone-layout.with-side.side-folded { grid-template-columns: 360px minmax(0, 1fr); column-gap: 18px; row-gap: 18px; }
   .tside { grid-column: 1 / -1; position: static; max-height: none; }
-  .phone-layout.with-side .work { margin-left: 0; }
+  .phone-layout.with-side .work-col { margin-left: 0; }
   .tside .side-brand { margin-bottom: 14px; border-radius: 16px; }
   .tside .roster { border-radius: var(--radius); }
   .phone-layout.with-side:not(.side-folded) .device { border-radius: 26px; }
@@ -250,6 +250,11 @@ table.list tr.click:hover td { background: #f8fafc; }
 
 /* ---------- the workspace beside the phone ---------- */
 .work { min-width: 0; }
+.work-col { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+/* 🗂 The CMS beside the call (trainee.js openCmsSplit): a frame as tall as the window allows */
+.cms-split { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.cms-split-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 4px; }
+.cms-frame { width: 100%; height: calc(100vh - 260px); min-height: 480px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .work-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: -4px 0 14px; overflow-x: auto; }
 .work-tabs button { border: 0; background: transparent; padding: 10px 14px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
 .work-tabs button.on { color: var(--navy); border-bottom-color: var(--orange); }

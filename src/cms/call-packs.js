@@ -1,6 +1,6 @@
 /* ⚠ MIRRORED FROM THE CMS: do not edit here.
-   Source: team-litigation-lab/CaseManagementTraining/call-packs.js. Change a call in the CMS; scripts/sync-cms-calls.mjs (and the
-   Sync CMS calls workflow) copies it here, and src/scenarios.js turns it into Ring Channel's calls. */
+   Source: team-litigation-lab/CaseManagementTraining/call-packs.js. Change it in the CMS; scripts/sync-cms-calls.mjs (and the
+   Sync CMS calls workflow) copies it here, and Ring Channel turns it into Ring Channel's calls. */
 /* =========================================================
    LSH CMS — CALL SIMULATOR: THE CALL LINES
    ---------------------------------------------------------

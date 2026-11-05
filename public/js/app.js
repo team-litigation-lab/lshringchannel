@@ -439,7 +439,7 @@
 
   App.bindLookup = function (root, opts) {
     const o = Array.isArray(opts) ? { hide: opts } : (opts || {});
-    const hide = o.hide || [], live = !!o.live, onPick = o.onPick;
+    const hide = o.hide || [], live = !!o.live, onPick = o.onPick, onOpen = o.onOpen;
     const q = U.$('#lkQ', root), out = U.$('#lkHits', root), picked = U.$('#lkPicked', root);
     if (!q) return;
     const cases = Object.values(App.cfg.cases).filter((c) => !hide.includes(c.id));
@@ -459,7 +459,7 @@
     if (picked) picked.onclick = (e) => { if (e.target.closest('[data-case-clear]')) setPicked(''); };
     out.onclick = (e) => {
       const cms = e.target.closest('[data-case-open]');
-      if (cms) { App.openCase(cms.dataset.caseOpen, cms); return; }
+      if (cms) { if (onOpen) onOpen(cms.dataset.caseOpen); else App.openCase(cms.dataset.caseOpen, cms); return; }
       const use = e.target.closest('[data-case-use]');
       if (use) { setPicked(use.dataset.caseUse); return; }
       const hit = e.target.closest('[data-case]'); if (!hit || hit.classList.contains('open')) return;
@@ -468,7 +468,7 @@
       hit.classList.add('open');
       hit.insertAdjacentHTML('beforeend', `<div class="case-body"><div class="case-head small muted">📁 Preview · case file ${esc(c.id)}</div><pre class="case">${esc(c.text)}</pre>
         <div class="row">${live ? `<button class="btn btn-sm btn-green" data-case-use="${esc(c.id)}">✅ This is the case file</button>` : ''}
-        <button class="btn btn-sm" data-case-open="${esc(c.id)}" title="Opens ${esc(c.id)} in the CMS Training Library, signed in as you">🗂 Open ${esc(c.id)} in the CMS ↗</button></div></div>`);
+        <button class="btn btn-sm" data-case-open="${esc(c.id)}" title="Opens ${esc(c.id)} in the CMS Training Library, signed in as you${onOpen ? ', beside the call' : ''}">🗂 Open ${esc(c.id)} in the CMS${onOpen ? '' : ' ↗'}</button></div></div>`);
     };
   };
 

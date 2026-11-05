@@ -37,6 +37,7 @@
       { icon: '🗂', title: 'During the call', points: [
           '📝 Note: the message slip, the calendar entry or the intake note, depending on the line.',
           '🔎 Case lookup: the firm\'s case files, searched by name, phone, date of birth or case number.',
+          '🗂 CMS: the CMS Training Library beside the call, signed in as you (Case lookup\'s "Open in the CMS" opens a file there).',
           '📇 Directory: the firm\'s extensions, with Transfer buttons.',
           '📘 Rules: the front-desk rules and the line\'s reminders.'],
         where: '☎ Console: they come up beside the phone while you\'re on a call.',
