@@ -334,29 +334,12 @@
       <div id="mcOut"></div>`, onClose: () => { stopMeter && stopMeter(); if (!busy()) VoIP.Mic.close(); } });
     const busy = () => (App.p && ['connecting', 'live'].includes(App.p.status)) || (App.t && ['ringing', 'connecting', 'live'].includes(App.t.status));
     let stopMeter = null;
-    // 🎙 The microphone: Automatic (the headset's own when one is plugged in), or one chosen here.
-    const openMic = async () => {
-      try {
-        const s = await VoIP.Mic.open();
-        const tr = s.getAudioTracks()[0] || {}, label = tr.label || 'microphone', cur = tr.getSettings ? tr.getSettings().deviceId : '';
-        const ins = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput' && !['default', 'communications', ''].includes(d.deviceId));
-        m.el.querySelector('#mcMsg').innerHTML = `✅ Microphone: <b>${esc(label)}</b>.
-          <div class="out-row" style="margin-top:8px"><label class="f">🎙 Microphone</label><select class="input" data-mic="1"${busy() ? ' disabled title="Change it between calls"' : ''}>
-            <option value="">Automatic (${esc(label)})</option>${ins.map((d) => `<option value="${esc(d.deviceId)}" ${VoIP.Mic.choice === d.deviceId ? 'selected' : ''}>${esc(d.label || 'Microphone')}${d.deviceId === cur ? ' · in use' : ''}</option>`).join('')}</select></div>`;
-        if (stopMeter) stopMeter();
-        stopMeter = VoIP.meter(s, (lv) => { const el = m.el.querySelector('#mcLevel'); if (el) el.style.width = Math.round(lv * 100) + '%'; });
-      } catch (e) { m.el.querySelector('#mcMsg').innerHTML = `<span class="err-box" style="display:block">${esc(e.message)}</span>`; }
-    };
-    m.el.querySelector('#mcMsg').addEventListener('change', async (e) => {
-      if (!e.target.dataset.mic || busy()) return;
-      VoIP.Mic.setChoice(e.target.value);
-      if (stopMeter) { stopMeter(); stopMeter = null; }
-      VoIP.Mic.close();
-      await openMic();
-      await VoIP.Speaker.apply();   // the headset follows the microphone
-      draw();
-    });
-    await openMic();
+    try {
+      const s = await VoIP.Mic.open();
+      const label = (s.getAudioTracks()[0] || {}).label || 'microphone';
+      m.el.querySelector('#mcMsg').innerHTML = `✅ Microphone: <b>${esc(label)}</b>.`;
+      stopMeter = VoIP.meter(s, (lv) => { const el = m.el.querySelector('#mcLevel'); if (el) el.style.width = Math.round(lv * 100) + '%'; });
+    } catch (e) { m.el.querySelector('#mcMsg').innerHTML = `<span class="err-box" style="display:block">${esc(e.message)}</span>`; }
     // The outputs (their names show once the microphone is allowed).
     const box = m.el.querySelector('#mcOut');
     const draw = async () => {
