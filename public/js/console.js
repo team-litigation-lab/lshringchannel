@@ -54,7 +54,7 @@
     return { traineeHeld: !!lv.held, holdAt: lv.holdAt || 0, traineeMuted: !!lv.traineeMuted, coaching: !!lv.coaching, traineeShare: !!lv.traineeShare, traineeCms: !!lv.traineeCms,
       transfer: lv.transfer ? Object.assign({ at: Date.now() }, lv.transfer) : null };
   };
-  C.onPresence = function () { if (App.route.name === 'console') { renderRoster(); if (!App.t) { syncDial(); renderDialer(); } } };
+  C.onPresence = function () { if (App.route.name === 'console') { renderRoster(); if (!App.t) { syncDial(); renderDialer(); } cmsPresence(); } };
 
   const fromBrief = (m) => ({ callId: m.callId, scenario: m.scenario, trainee: m.trainee, line: m.line, lineLabel: m.lineLabel, callerId: m.callerId, record: !!m.recording, graded: !!m.graded,
     ringAt: m.createdAt || Date.now(), note: m.note || {}, ticks: m.ticks || [], metrics: m.metrics || {}, traineeHeld: false, traineeMuted: false, muted: false, transfer: null, coaching: false });
@@ -155,10 +155,12 @@
         renderDialer();
         return;
       case 'mute': if (mine) { t.traineeMuted = !!m.on; renderDialer(); } return;
+      // 👁 A trainee opened the CMS (on a call or not): watch their CMS screen here.
+      case 'cms-open': C.autoWatch(m.trainee); return;
       // 🗂 The trainee opened the CMS: watch their CMS screen here.
       case 'cms':
         if (!mine) return;
-        t.traineeCms = true; watchCms(t);
+        t.traineeCms = true; watchCms(t.trainee);
         return;
       // 📺 The trainee is presenting their phone tab in Meet: the class hears you from it, so you mute your own Meet mic and the Meet tab.
       case 'share':
@@ -659,6 +661,7 @@
       ${shown.map((x) => `<div class="tr ${x.id === pick.traineeId ? 'sel' : ''}" data-tid="${esc(x.id)}">
           <span class="led ${x.call ? 'ringing' : x.status}"></span>
           <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)} ${x.hand ? '<span class="hand-wave" title="Asked for a mock call">✋</span>' : ''}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''} · ${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}${x.tabs > 1 ? ` · ${x.tabs} tabs` : ''}</div></div>
+          ${x.cms ? `<button class="btn btn-sm ${C.watching && C.watching.id === x.id ? 'btn-orange' : ''}" data-cmswatch="${esc(x.id)}" title="${esc(x.name)} has the CMS open: watch their screen under the dialer">👁</button>` : ''}
           <button class="btn btn-sm ${x.call ? '' : 'btn-green'}" data-ring="${esc(x.id)}" ${x.call || active(App.t) ? 'disabled' : ''}>📞</button></div>`).join('') || '<div class="empty small">Nobody is online. Trainees open <b>📞 My phone</b> to take calls.</div>'}
       ${offline.length ? `<details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">${offline.length} offline</summary>${offline.map((x) => `<div class="tr" style="cursor:default"><span class="led"></span><div><div class="nm" style="font-weight:500">${esc(x.name)}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''}${x.last_seen ? ' · seen ' + U.when(x.last_seen) : ''}</div></div></div>`).join('')}</details>` : ''}
       ${optionsHTML()}`;
@@ -770,41 +773,86 @@
         </div>
       </div>`;
     renderDialer(); renderTransfer(); renderCase(); renderConf(); renderLiveNote();
-    if (t.traineeCms) watchCms(t);   // after a reload: the trainee already has the CMS open
+    if (t.traineeCms) watchCms(t.trainee, true);   // after a reload: the trainee already has the CMS open
   }
 
-  /* 👁 The trainee's CMS screen, live, under the call: the CMS's own 👁 Watch live (its live-view.js), opened by a
-     link (?watch=) signed in with this trainer's Portal ticket, as soon as the trainee opens the CMS on the call.
-     A frame kept beside #stage (the stage redraws, and a redrawn frame reloads); it stays until the trainer closes
-     it or another trainee opens the CMS. */
-  async function watchCms(t) {
-    const box = U.$('#cmsWatch'); if (!box || !t || !t.trainee) return;
-    const who = t.trainee.name || '';
-    if (!who || box.dataset.who === who) return;
-    box.dataset.who = who;
+  /* 👁 A trainee's CMS screen, live, under the dialer: the CMS's own 👁 Watch live (Master Control → Monitoring,
+     its live-view.js), opened by a link (?watch=) signed in with this trainer's Portal ticket, as soon as a trainee
+     opens the CMS (beside their call, in its own tab, on a call or not; their phone tells the switchboard).
+     A frame kept beside #stage (the stage redraws, and a redrawn frame reloads). It follows the trainee on the
+     trainer's call; otherwise the latest trainee to open the CMS. ✕ Close keeps it closed for that trainee
+     until they open the CMS again; 👁 on a trainee's switchboard row watches them by hand. */
+  C.watching = null;          // { id, name, batch } of the trainee being watched
+  const dismissed = new Set();   // "id:cmsAt": a CMS opening the trainer closed the watch on
+  const cmsOf = (id) => (App.presence.trainees || []).find((x) => x.id === id && x.cms) || null;
+  const onCallWith = (id) => !!(active(App.t) && App.t.trainee && App.t.trainee.id === id);
+  async function watchCms(tr, quiet) {
+    const box = U.$('#cmsWatch'); if (!box || !tr || !tr.name) return;
+    const who = tr.name;
+    C.watching = { id: tr.id || '', name: who, batch: tr.batch || '' };
+    if (box.dataset.who === who && U.$('.cms-frame', box)) { cmsNote(); return; }   // already watching them: keep the frame
+    box.dataset.who = who; box.dataset.tid = tr.id || '';
     box.classList.remove('hidden');
     box.innerHTML = `<div class="cms-split-head"><b>👁 ${esc(who)}'s CMS, live</b><span class="small muted cms-msg" style="flex:1">Opening the CMS's Watch live, signed in as you…</span>${App.zoomHTML()}
         <button class="btn btn-sm" data-cmsw="tab" title="Watch in its own browser tab">↗ New tab</button><button class="btn btn-sm" data-cmsw="close">✕ Close</button></div>
       ${App.cmsFrameHTML(who + "'s CMS screen")}`;
     App.grip(box, 'trainer');
-    const ask = () => API.post('/api/cms-link', { watch: who, watchBatch: t.trainee.batch || '' });
+    const ask = () => API.post('/api/cms-link', { watch: who, watchBatch: tr.batch || '' });
     box.onclick = async (e) => {
       const b = e.target.closest('[data-cmsw]'); if (!b) return;
-      if (b.dataset.cmsw === 'close') { box.innerHTML = ''; box.classList.add('hidden'); delete box.dataset.who; return; }
+      if (b.dataset.cmsw === 'close') {
+        const x = cmsOf(box.dataset.tid); if (x) dismissed.add(x.id + ':' + (x.cmsAt || 0));
+        box.innerHTML = ''; box.classList.add('hidden'); delete box.dataset.who; delete box.dataset.tid; C.watching = null; renderRoster(); renderDialBadges(); return;
+      }
       const tab = window.open('', '_blank');
       try { const r = await ask(); if (tab) tab.location = r.url; } catch (err) { if (tab) tab.close(); U.toast(err.message, 'error'); }
     };
     try {
       const r = await ask();
-      const f = U.$('.cms-frame', box), msg = U.$('.cms-msg', box);
+      const f = U.$('.cms-frame', box);
       if (!f || box.dataset.who !== who) return;
       f.src = r.url;
-      if (msg) msg.textContent = r.authed ? `${who} opened the CMS: their screen shows here, about a second behind.` : 'The CMS will ask you to sign in (no Portal secret is set on this site): then Master Control → Monitoring → 👁 Watch live.';
-      U.toast(`👁 ${who} opened the CMS: their screen is under the call (👁 THEIR CMS ↓ on your phone takes you there).`);
-      renderDialBadges();
+      box.dataset.authed = r.authed ? '1' : '';
+      cmsNote();
+      if (!quiet) U.toast(`👁 ${who} opened the CMS: their screen is under ${onCallWith(tr.id) ? 'the call (👁 THEIR CMS ↓ on your phone takes you there)' : 'the dialer'}.`);
+      renderDialBadges(); renderRoster();
+      if (!quiet && !onCallWith(tr.id)) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) {
       const msg = U.$('.cms-msg', box); if (msg) msg.textContent = 'Couldn\'t open the CMS: ' + err.message;
     }
+  }
+  // The line over the frame: still open, or closed (the CMS's Watch live then shows their last screen).
+  function cmsNote() {
+    const box = U.$('#cmsWatch'), msg = box && U.$('.cms-msg', box); if (!msg || !box.dataset.who) return;
+    const who = box.dataset.who, open = !box.dataset.tid || !!cmsOf(box.dataset.tid);
+    msg.textContent = (open ? `${who} has the CMS open: their screen shows here, about a second behind.` : `${who} closed the CMS (or left Ring Channel). It opens here again when they reopen it.`)
+      + (box.dataset.authed ? '' : ' The CMS will ask you to sign in (no Portal secret is set on this site): then Master Control → Monitoring → 👁 Watch live.');
+  }
+  /* Watch the trainee who just opened the CMS, unless the trainer is on a call with someone else (their row's 👁 is there for that).
+     quiet: from presence (a reload, or back on the Console), no toast. */
+  C.autoWatch = function (tr, quiet) {
+    if (!tr || !tr.id) return;
+    const x = cmsOf(tr.id);
+    if (quiet && x && dismissed.has(x.id + ':' + (x.cmsAt || 0))) return;
+    if (active(App.t) && App.t.trainee && App.t.trainee.id !== tr.id) {
+      if (!quiet) U.toast(`👁 ${tr.name} opened the CMS. You're on a call with ${App.t.trainee.name}: 👁 on ${tr.name}'s switchboard row shows their screen.`);
+      renderRoster(); return;
+    }
+    if (!U.$('#cmsWatch')) {   // on another page: the Console shows it when the trainer goes back
+      if (!quiet) U.toast(`👁 ${tr.name} opened the CMS: ☎ Console shows their screen.`);
+      return;
+    }
+    watchCms(tr, quiet);
+  };
+  // From the switchboard's presence: who has the CMS open now. Opens the watch on a fresh Console, notes a closed CMS.
+  function cmsPresence() {
+    const box = U.$('#cmsWatch'); if (!box) return;
+    if (box.dataset.who) { cmsNote(); return; }
+    const t = App.t, open = (App.presence.trainees || []).filter((x) => x.cms);
+    const pick = (t && active(t) && t.trainee && open.find((x) => x.id === t.trainee.id))
+      || (C.watching && open.find((x) => x.id === C.watching.id))
+      || open.slice().sort((a, b) => (b.cmsAt || 0) - (a.cmsAt || 0))[0];
+    if (pick) C.autoWatch(pick, true);
   }
 
   /* ---------- ☎ the dialer: the trainer's desk phone ---------- */
@@ -1092,6 +1140,7 @@
       document.addEventListener('keydown', onKey);
       loadPick();   // the call the picker's tab left for it
       render();
+      cmsPresence();   // 👁 back on the Console: the trainee who has the CMS open shows under the dialer
       try { C.roster = (await API.post('/api/trainees')).trainees; renderRoster(); if (!App.t) { syncDial(); renderDialer(); } } catch (e) {}
     }
   });
@@ -1099,6 +1148,8 @@
   function onClick(e) {
     const jump = e.target.closest('[data-cmsjump]');
     if (jump) { const w = U.$('#cmsWatch'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    const cw = e.target.closest('[data-cmswatch]');
+    if (cw) { const x = cmsOf(cw.dataset.cmswatch); if (x) { watchCms(x, true); const w = U.$('#cmsWatch'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' }); } return; }
     // The switchboard is the phone's contact list: a trainee's row puts their extension on the dialer; 📞 also rings.
     const ringBtn = e.target.closest('[data-ring]');
     if (ringBtn) { if (App.t) return; pickTrainee(ringBtn.dataset.ring); ring(); return; }
