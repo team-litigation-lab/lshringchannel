@@ -51,7 +51,7 @@
   // What was happening on the line (hold, mute, coaching, a transfer waiting for an answer).
   const liveState = (lv) => {
     lv = lv || {};
-    return { traineeHeld: !!lv.held, holdAt: lv.holdAt || 0, traineeMuted: !!lv.traineeMuted, coaching: !!lv.coaching, traineeShare: !!lv.traineeShare, traineeCms: !!lv.traineeCms,
+    return { traineeHeld: !!lv.held, holdAt: lv.holdAt || 0, traineeMuted: !!lv.traineeMuted, coaching: !!lv.coaching, traineeCms: !!lv.traineeCms,
       transfer: lv.transfer ? Object.assign({ at: Date.now() }, lv.transfer) : null };
   };
   C.onPresence = function () { if (App.route.name === 'console') { renderRoster(); if (!App.t) { syncDial(); renderDialer(); } cmsPresence(); } };
@@ -160,13 +160,8 @@
       // 🗂 The trainee opened the CMS: watch their CMS screen here.
       case 'cms':
         if (!mine) return;
+        if (!t.traineeCms) C.scriptOn = false;   // the script steps aside for their CMS
         t.traineeCms = true; watchCms(t.trainee);
-        return;
-      // 📺 The trainee is presenting their phone tab in Meet: the class hears you from it, so you mute your own Meet mic and the Meet tab.
-      case 'share':
-        if (!mine) return;
-        t.traineeShare = !!m.on; renderDialer();
-        if (m.on) U.toast(`📺 ${(t.trainee && t.trainee.name) || 'The trainee'} is presenting their phone in Google Meet: the class hears you through it. Mute your Meet mic and the Meet tab until the call ends, so there's no echo.`);
         return;
       case 'transfer':
         if (!mine) return;
@@ -730,12 +725,14 @@
         <button class="btn btn-green" data-act="takehere">📞 Take the call here</button></div>`;
       return;
     }
-    if (!t) {
-      el.innerHTML = `<div class="dial-stage solo"><div class="device dialer" id="dialer"></div></div>`;
-      renderDialer();
-      return;
+    /* Built once and kept (the trainee's CMS frame in it would reload if it were redrawn): the dialer, and
+       beside it a column with the call's cards (#dialSide, redrawn) and the trainee's CMS (#cmsWatch, kept). */
+    if (!U.$('#dialSide', el) || !U.$('#cmsWatch', el)) {
+      el.innerHTML = `<div class="dial-stage" id="dialStage"><div class="device dialer" id="dialer"></div><div class="dial-col" id="dialCol"><div class="dial-side" id="dialSide"></div><div class="cms-split card hidden" id="cmsWatch"></div></div></div>`;
     }
-    el.innerHTML = `<div class="dial-stage"><div class="device dialer" id="dialer"></div><div class="dial-side" id="dialSide"></div></div>`;
+    U.$('#dialStage', el).classList.toggle('solo', !t);
+    syncWatch();
+    if (!t) { U.$('#dialSide', el).innerHTML = ''; renderDialer(); return; }
     const side = U.$('#dialSide');
     if (t.status === 'ended') { renderEndedSide(side); renderDialer(); return; }
     const s = t.scenario;
@@ -776,7 +773,22 @@
     if (t.traineeCms) watchCms(t.trainee, true);   // after a reload: the trainee already has the CMS open
   }
 
-  /* 👁 A trainee's CMS screen, live, under the dialer: the CMS's own 👁 Watch live (Master Control → Monitoring,
+  /* 👁 Where the trainee's CMS shows: beside the dialer, in the column the call's cards use (#dialCol). On a call
+     the caller's script and the checklist and note step aside for it (a transfer waiting for the trainer, and the
+     case file the trainee chose, stay on top); 🎭 Script brings them back with the CMS folded to its bar, still
+     loaded, and 👁 Their CMS goes back to it. With no call the dialer and the CMS stand side by side. */
+  function syncWatch() {
+    const stage = U.$('#dialStage'), col = U.$('#dialCol'), box = U.$('#cmsWatch'); if (!stage || !col || !box) return;
+    const t = App.t, watching = !!box.dataset.who, call = !!(t && t.status !== 'elsewhere');
+    stage.classList.toggle('has-watch', watching);
+    box.classList.toggle('hidden', !watching);
+    col.classList.toggle('watching', watching && call && !C.scriptOn);
+    col.classList.toggle('script-on', watching && call && !!C.scriptOn);
+    const b = U.$('[data-cmsw="script"]', box);
+    if (b) { b.classList.toggle('hidden', !call); b.innerHTML = C.scriptOn ? '👁 Their CMS' : '🎭 Script'; }
+  }
+
+  /* 👁 A trainee's CMS screen, live, beside the dialer: the CMS's own 👁 Watch live (Master Control → Monitoring,
      its live-view.js), opened by a link (?watch=) signed in with this trainer's Portal ticket, as soon as a trainee
      opens the CMS (beside their call, in its own tab, on a call or not; their phone tells the switchboard).
      A frame kept beside #stage (the stage redraws, and a redrawn frame reloads). It follows the trainee on the
@@ -790,20 +802,21 @@
     const box = U.$('#cmsWatch'); if (!box || !tr || !tr.name) return;
     const who = tr.name;
     C.watching = { id: tr.id || '', name: who, batch: tr.batch || '' };
-    if (box.dataset.who === who && U.$('.cms-frame', box)) { cmsNote(); return; }   // already watching them: keep the frame
+    if (box.dataset.who === who && U.$('.cms-frame', box)) { cmsNote(); syncWatch(); return; }   // already watching them: keep the frame
     box.dataset.who = who; box.dataset.tid = tr.id || '';
-    box.classList.remove('hidden');
     box.innerHTML = `<div class="cms-split-head"><b>👁 ${esc(who)}'s CMS, live</b><span class="small muted cms-msg" style="flex:1">Opening the CMS's Watch live, signed in as you…</span>${App.zoomHTML()}
-        <button class="btn btn-sm" data-cmsw="tab" title="Watch in its own browser tab">↗ New tab</button><button class="btn btn-sm" data-cmsw="close">✕ Close</button></div>
+        <button class="btn btn-sm" data-cmsw="script" title="The caller's script, the checklist and the note (the CMS stays open)">🎭 Script</button><button class="btn btn-sm" data-cmsw="tab" title="Watch in its own browser tab">↗ New tab</button><button class="btn btn-sm" data-cmsw="close">✕ Close</button></div>
       ${App.cmsFrameHTML(who + "'s CMS screen")}`;
     App.grip(box, 'trainer');
+    syncWatch();
     const ask = () => API.post('/api/cms-link', { watch: who, watchBatch: tr.batch || '' });
     box.onclick = async (e) => {
       const b = e.target.closest('[data-cmsw]'); if (!b) return;
       if (b.dataset.cmsw === 'close') {
         const x = cmsOf(box.dataset.tid); if (x) dismissed.add(x.id + ':' + (x.cmsAt || 0));
-        box.innerHTML = ''; box.classList.add('hidden'); delete box.dataset.who; delete box.dataset.tid; C.watching = null; renderRoster(); renderDialBadges(); return;
+        box.innerHTML = ''; delete box.dataset.who; delete box.dataset.tid; C.watching = null; C.scriptOn = false; syncWatch(); renderRoster(); renderDialBadges(); return;
       }
+      if (b.dataset.cmsw === 'script') { C.scriptOn = !C.scriptOn; syncWatch(); return; }
       const tab = window.open('', '_blank');
       try { const r = await ask(); if (tab) tab.location = r.url; } catch (err) { if (tab) tab.close(); U.toast(err.message, 'error'); }
     };
@@ -814,7 +827,7 @@
       f.src = r.url;
       box.dataset.authed = r.authed ? '1' : '';
       cmsNote();
-      if (!quiet) U.toast(`👁 ${who} opened the CMS: their screen is under ${onCallWith(tr.id) ? 'the call (👁 THEIR CMS ↓ on your phone takes you there)' : 'the dialer'}.`);
+      if (!quiet) U.toast(`👁 ${who} opened the CMS: their screen is beside your dialer${onCallWith(tr.id) ? ' (🎭 Script brings the script back)' : ''}.`);
       renderDialBadges(); renderRoster();
       if (!quiet && !onCallWith(tr.id)) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) {
@@ -893,8 +906,7 @@
         if (t.traineeMuted) f.push('<span class="lb mute">TRAINEE MUTED</span>');
         if (t.muted) f.push('<span class="lb mute">YOU\'RE MUTED</span>');
         if (t.coaching) f.push('<span class="lb coach">⏸ COACHING</span>');
-        if (t.traineeCms) f.push('<span class="lb coach" data-cmsjump="1" style="cursor:pointer" title="The trainee has the CMS open: their screen is under the call. Click to go to it.">👁 THEIR CMS ↓</span>');
-        if (t.traineeShare) f.push('<span class="lb coach" title="The trainee is presenting their phone tab in Google Meet: the class hears you through it. Mute your Meet mic and the Meet tab until the call ends.">📺 IN MEET · MUTE YOUR MEET MIC</span>');
+        if (t.traineeCms) f.push('<span class="lb coach" data-cmsjump="1" style="cursor:pointer" title="The trainee has the CMS open: click to see their screen beside your phone.">👁 THEIR CMS</span>');
         if (confCount()) f.push(`<span class="lb conf">👥 CONFERENCE · ${confCount() + 1}</span>`);
         if (t.peerLost) f.push('<span class="lb warn">TRAINEE RECONNECTING</span>');
         if (t.quality) f.push(`<span class="lb" title="${t.quality.rtt != null ? t.quality.rtt + ' ms round trip' : ''}${t.quality.loss ? ' · ' + t.quality.loss + '% loss' : ''}${t.quality.relay ? ' · via TURN relay' : ''}"><span class="bars q${t.quality.bars}"><i></i><i></i><i></i><i></i></span>${t.quality.relay ? ' RELAY' : ''}</span>`);
@@ -1103,7 +1115,29 @@
     };
   };
   // On a conference the class hears every trainee on the line (the trainer's own voice goes through Meet).
-  C.remoteStream = () => (App.t && App.t.mix ? App.t.mix.voices() : (App.t && App.t.rtc && App.t.rtc.remote) || null);
+  /* What the Class view plays. Chrome renders a call's own (WebRTC) audio through the first window that played it,
+     this console, so the Class view tab given the call's stream sent Meet silence: the class heard the trainer
+     (Meet mic) but never the trainee. The Class view gets a copy instead, made here with Web Audio: ordinary audio,
+     which plays in whatever tab plays it, so Meet's "share tab audio" carries it. A conference is already such a
+     copy (the mixer's voices). The console's own <audio> keeps the call's stream (muted while the class listens),
+     which Chrome needs to feed Web Audio. */
+  let classCopy = null;
+  C.remoteStream = function () {
+    const t = App.t;
+    if (t && t.mix) return t.mix.voices();
+    const src = (t && t.rtc && t.rtc.remote) || null;
+    if (!src) return null;
+    if (classCopy && classCopy.src === src && classCopy.ctx.state !== 'closed') { if (classCopy.ctx.state === 'suspended') classCopy.ctx.resume().catch(() => {}); return classCopy.out; }
+    if (classCopy) { try { classCopy.ctx.close(); } catch (e) {} classCopy = null; }
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const node = ctx.createMediaStreamSource(src), dest = ctx.createMediaStreamDestination();
+      node.connect(dest);
+      ctx.resume().catch(() => {});
+      classCopy = { src, ctx, out: dest.stream };
+      return dest.stream;
+    } catch (e) { return src; }
+  };
 
   /* ---------- 🤖 AI calls: its own page ----------
      The calls where the AI plays the caller: the ones ringing or on the line, the ones that ended and
@@ -1132,7 +1166,7 @@
       const app = App.host();
       // The main screen is ☎ the dialer and nothing else. ☎ Switchboard folds the board out beside it.
       app.innerHTML = `<div class="console" id="consoleGrid">
-        <aside class="console-side" id="sideL"></aside><div class="console-main"><div class="console-stage" id="stage"></div><div class="cms-split card hidden" id="cmsWatch"></div></div></div>`;
+        <aside class="console-side" id="sideL"></aside><div class="console-main"><div class="console-stage" id="stage"></div></div></div>`;
       App.leave = () => { document.removeEventListener('keydown', onKey); if (App.t && App.t.status === 'ended' && App.t.upload !== 'saving') App.t = null; };
       app.firstChild.addEventListener('click', onClick);
       app.firstChild.addEventListener('change', onChange);
@@ -1147,9 +1181,9 @@
 
   function onClick(e) {
     const jump = e.target.closest('[data-cmsjump]');
-    if (jump) { const w = U.$('#cmsWatch'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    if (jump) { C.scriptOn = false; syncWatch(); const w = U.$('#dialCol'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     const cw = e.target.closest('[data-cmswatch]');
-    if (cw) { const x = cmsOf(cw.dataset.cmswatch); if (x) { watchCms(x, true); const w = U.$('#cmsWatch'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' }); } return; }
+    if (cw) { const x = cmsOf(cw.dataset.cmswatch); if (x) { C.scriptOn = false; watchCms(x, true); const w = U.$('#dialCol'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' }); } return; }
     // The switchboard is the phone's contact list: a trainee's row puts their extension on the dialer; 📞 also rings.
     const ringBtn = e.target.closest('[data-ring]');
     if (ringBtn) { if (App.t) return; pickTrainee(ringBtn.dataset.ring); ring(); return; }

@@ -554,11 +554,6 @@ export class Switchboard extends DurableObject {
         if (!(r.data.live || {}).traineeCms) { this.setLive(r, { traineeCms: true }); this.save(r); }
         this.send(this.peerOf(r, side), { t: 'cms', callId: r.id });
         return;
-      case 'share':   // 📺 the trainee is presenting their own phone tab in Google Meet (no trainer Class view)
-        if (!party || side !== 't' || !['ringing', 'connecting', 'live'].includes(r.status)) return;
-        this.setLive(r, { traineeShare: !!m.on }); this.save(r);
-        this.send(this.peerOf(r, side), { t: 'share', callId: r.id, on: !!m.on });
-        return;
       case 'mute':
         if (!party || r.status !== 'live') return;
         this.setLive(r, side === 't' ? { traineeMuted: !!m.on } : { trainerMuted: !!m.on }); this.save(r);
@@ -1163,7 +1158,7 @@ export class Switchboard extends DurableObject {
     const row = this.sql.exec(`SELECT v FROM settings WHERE k = 'grading'`).toArray()[0];
     const v = row ? JSON.parse(row.v) : {};
     const out = Object.assign({}, DEFAULT_SETTINGS, v);
-    out.weights = Object.assign({ reception: {}, calendar: {}, intake: {} }, v.weights || {});
+    out.weights = Object.assign({ reception: {}, calendar: {}, intake: {}, claims: {} }, v.weights || {});
     return out;
   }
   saveSettings(o) {

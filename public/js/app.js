@@ -352,29 +352,12 @@
       <div id="mcOut"></div>`, onClose: () => { stopMeter && stopMeter(); if (!busy()) VoIP.Mic.close(); } });
     const busy = () => (App.p && ['connecting', 'live'].includes(App.p.status)) || (App.t && ['ringing', 'connecting', 'live'].includes(App.t.status));
     let stopMeter = null;
-    // 🎙 The microphone: Automatic (the headset's own when one is plugged in), or one chosen here.
-    const openMic = async () => {
-      try {
-        const s = await VoIP.Mic.open();
-        const tr = s.getAudioTracks()[0] || {}, label = tr.label || 'microphone', cur = tr.getSettings ? tr.getSettings().deviceId : '';
-        const ins = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput' && !['default', 'communications', ''].includes(d.deviceId));
-        m.el.querySelector('#mcMsg').innerHTML = `✅ Microphone: <b>${esc(label)}</b>.
-          <div class="out-row" style="margin-top:8px"><label class="f">🎙 Microphone</label><select class="input" data-mic="1"${busy() ? ' disabled title="Change it between calls"' : ''}>
-            <option value="">Automatic (${esc(label)})</option>${ins.map((d) => `<option value="${esc(d.deviceId)}" ${VoIP.Mic.choice === d.deviceId ? 'selected' : ''}>${esc(d.label || 'Microphone')}${d.deviceId === cur ? ' · in use' : ''}</option>`).join('')}</select></div>`;
-        if (stopMeter) stopMeter();
-        stopMeter = VoIP.meter(s, (lv) => { const el = m.el.querySelector('#mcLevel'); if (el) el.style.width = Math.round(lv * 100) + '%'; });
-      } catch (e) { m.el.querySelector('#mcMsg').innerHTML = `<span class="err-box" style="display:block">${esc(e.message)}</span>`; }
-    };
-    m.el.querySelector('#mcMsg').addEventListener('change', async (e) => {
-      if (!e.target.dataset.mic || busy()) return;
-      VoIP.Mic.setChoice(e.target.value);
-      if (stopMeter) { stopMeter(); stopMeter = null; }
-      VoIP.Mic.close();
-      await openMic();
-      await VoIP.Speaker.apply();   // the headset follows the microphone
-      draw();
-    });
-    await openMic();
+    try {
+      const s = await VoIP.Mic.open();
+      const label = (s.getAudioTracks()[0] || {}).label || 'microphone';
+      m.el.querySelector('#mcMsg').innerHTML = `✅ Microphone: <b>${esc(label)}</b>.`;
+      stopMeter = VoIP.meter(s, (lv) => { const el = m.el.querySelector('#mcLevel'); if (el) el.style.width = Math.round(lv * 100) + '%'; });
+    } catch (e) { m.el.querySelector('#mcMsg').innerHTML = `<span class="err-box" style="display:block">${esc(e.message)}</span>`; }
     // The outputs (their names show once the microphone is allowed).
     const box = m.el.querySelector('#mcOut');
     const draw = async () => {
@@ -467,7 +450,7 @@
   /* ---------- the workspace: note, case lookup, directory, rules ---------- */
   App.formFor = (track) => App.cfg.forms[(App.cfg.tracks[track] || App.cfg.tracks.reception).note];
 
-  App.noteFormHTML = function (track, note, locked) {
+  App.noteFormHTML = function (track, note, locked, opts) {
     const form = App.formFor(track);
     note = note || {};
     const f = (x) => {
@@ -479,7 +462,7 @@
       else input = `<input class="input" data-k="${x.k}" value="${esc(v)}" ${dis}>`;
       return `<div class="field" ${x.short ? 'style="max-width:260px"' : ''}><label class="f">${esc(x.label)}</label>${input}</div>`;
     };
-    return `<div class="note-form"><h3 style="margin-bottom:10px">📝 ${esc(form.title)}</h3>${form.fields.map(f).join('')}</div>`;
+    return `<div class="note-form">${opts && opts.bare ? '' : `<h3 style="margin-bottom:10px">📝 ${esc(form.title)}</h3>`}${form.fields.map(f).join('')}</div>`;
   };
   App.readNote = (root) => { const o = {}; U.$$('[data-k]', root).forEach((el) => { if (el.value.trim()) o[el.dataset.k] = el.value; }); return o; };
 
@@ -603,5 +586,5 @@
   };
 
   App.levelBadge = (l) => `<span class="badge lvl-${esc(l)}">${esc(l)}</span>`;
-  App.trackBadge = (t) => { const x = App.cfg.tracks[t]; return x ? `<span class="badge ${t === 'intake' ? 'violet' : t === 'calendar' ? 'blue' : 'orange'}">${x.icon} ${esc(x.label)}</span>` : ''; };
+  App.trackBadge = (t) => { const x = App.cfg.tracks[t]; return x ? `<span class="badge ${t === 'intake' ? 'violet' : t === 'calendar' ? 'blue' : t === 'claims' ? 'green' : 'orange'}">${x.icon} ${esc(x.label)}</span>` : ''; };
 })();

@@ -177,24 +177,6 @@ table.list tr.click:hover td { background: #f8fafc; }
 .phone-layout { --deck: #0e1f42; }
 .phone-layout.with-side.side-folded { column-gap: 18px; }
 .phone-layout.with-side.side-folded { --ts: 52px; }
-/* ◀ Collapse: the phone (and the switchboard with it) folded to a rail */
-.phone-layout.with-side.dev-folded, .phone-layout.with-side.dev-folded.side-folded { grid-template-columns: 78px minmax(0, 1fr); column-gap: 14px; }
-.phone-layout.dev-folded .tside { display: none; }
-.phone-layout.dev-folded .work-col { margin-left: 0; }
-.device.dev-rail { padding: 10px 7px; align-items: center; gap: 10px; border-radius: 18px !important; min-height: 0; }
-.dev-rail .rail-open { width: 100%; border: 0; border-radius: 12px; background: var(--orange); color: #fff; font-weight: 800; cursor: pointer; padding: 10px 0; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 13px; }
-.dev-rail .rail-open .ro-ic { font-size: 18px; line-height: 1; }
-.dev-rail .rail-time { font-family: ui-monospace, Menlo, monospace; color: #4ade80; font-weight: 700; font-size: 14px; }
-.dev-rail .rail-state { font-size: 11px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; text-align: center; }
-.dev-rail .rk { width: 56px; height: 46px; border: 0; border-radius: 12px; background: #1e3a6e; color: #fff; font-size: 20px; cursor: pointer; }
-.dev-rail .rk.on { background: #92400e; }
-.dev-rail .rk.answer { background: #16a34a; }
-.dev-rail .rk.hang { background: #dc2626; }
-/* ◀ Collapse: a tall tab on the phone's right edge, in the gap before the workspace */
-.dev-collapse { position: absolute; right: -17px; top: 50%; transform: translateY(-50%); z-index: 3; width: 30px; height: 96px; border: 0; border-radius: 0 12px 12px 0; background: var(--orange); color: #fff; font-weight: 800; font-size: 12px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; box-shadow: 4px 6px 16px -6px rgba(8, 18, 38, .5); }
-.dev-collapse .dc-lb { writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: .5px; }
-.dev-collapse:hover { background: #ea580c; }
-.dev-foot { flex-wrap: wrap; row-gap: 6px; }
 .tside .roster .fold-btn, .console-side .roster .fold-btn { font-size: 13px; padding: 7px 12px; border-radius: 10px; }
 @media (max-width: 1240px) { .phone-layout.with-side { --ts: 220px; } .phone-layout.with-side .work-col { margin-left: 14px; } }
 .phone-layout > * { min-width: 0; }
@@ -213,8 +195,12 @@ table.list tr.click:hover td { background: #f8fafc; }
 @media (max-width: 960px) { .phone-layout, .phone-layout.with-side, .phone-layout.with-side.side-folded { grid-template-columns: 1fr; } }
 .device { background: linear-gradient(160deg, #13254d, #0a1530 70%); color: #e2e8f0; border-radius: 26px; padding: 16px; box-shadow: 0 20px 50px rgba(8, 18, 38, .35), inset 0 1px 0 rgba(255, 255, 255, .06); position: sticky; top: 76px; display: flex; flex-direction: column; }
 .device > .lcd { flex: 1 1 auto; }
+/* No keypad (ringing, connecting, the call ended): the screen keeps its own size and the keys (📞 Answer,
+   Decline) sit right under it, in sight, rather than the screen stretching down to the switchboard's length. */
+#device:not(.pad) > .lcd { flex: 0 0 auto; min-height: 240px; }
+@media (max-height: 820px) and (min-width: 961px) { #device:not(.pad) > .lcd { min-height: 200px; } }
 .device .lcd .lcd-main { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
-@media (max-width: 960px) { .device { position: relative; top: 0; } .dev-collapse { display: none; } }
+@media (max-width: 960px) { .device { position: relative; top: 0; } }
 .dev-head { display: flex; align-items: center; gap: 8px; padding: 2px 4px 12px; font-size: 13px; color: #94a3b8; white-space: nowrap; }
 .dev-head > span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .dev-head b { color: #e2e8f0; font-weight: 700; }
@@ -276,6 +262,7 @@ table.list tr.click:hover td { background: #f8fafc; }
 /* 🗂 The CMS beside the call (trainee.js openCmsSplit): a frame as tall as the window allows */
 .cms-split { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 .cms-split-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 4px; }
+.cms-split-head .cms-msg { order: 10; flex: 1 1 100% !important; }
 .cms-vp { position: relative; overflow: hidden; height: calc(100vh - 150px); min-height: 420px; border: 1px solid var(--line); border-radius: 10px; background: #fff; --z: 1; }
 .cms-frame { position: absolute; top: 0; left: 0; border: 0; display: block; background: #fff; width: calc(100% / var(--z)); height: calc(100% / var(--z)); transform: scale(var(--z)); transform-origin: 0 0; }
 .cms-zoom { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
@@ -330,7 +317,7 @@ table.list tr.click:hover td { background: #f8fafc; }
 .scen h4 { margin: 0; font-size: 15px; }
 .scen .meta { display: flex; gap: 6px; flex-wrap: wrap; }
 .scen p { margin: 0; font-size: 13px; color: var(--muted); }
-.lvl-Beginner { background: #dcfce7; color: #166534; } .lvl-Intermediate { background: var(--blue-soft); color: #1e40af; } .lvl-Advanced { background: #fee2e2; color: #991b1b; }
+.lvl-Starter { background: #ecfdf5; color: #047857; } .lvl-Beginner { background: #dcfce7; color: #166534; } .lvl-Intermediate { background: var(--blue-soft); color: #1e40af; } .lvl-Advanced { background: #fee2e2; color: #991b1b; }
 
 /* ---------- trainer console ----------
    🎛 Console: ☎ the switchboard joined to the dialer on the left, with how the next call is placed
@@ -373,8 +360,20 @@ table.list tr.click:hover td { background: #f8fafc; }
 @media (max-width: 1140px) { .console { grid-template-columns: minmax(0, 1fr); } }
 .console > *, .dial-stage > *, .dial-side > * { min-width: 0; }
 .console-main { min-width: 0; display: flex; flex-direction: column; gap: 14px; }
-#cmsWatch { scroll-margin-top: 84px; }
-#cmsWatch .cms-vp { height: calc(100vh - 160px); min-height: 480px; }
+/* 👁 The trainee's CMS beside the trainer's dialer (console.js syncWatch) */
+.dial-col { min-width: 0; display: flex; flex-direction: column; }
+.dial-col, #cmsWatch { scroll-margin-top: 84px; }
+.dial-stage.solo:not(.has-watch) .dial-col { display: none; }
+/* No call, but a trainee's CMS to watch: the dialer and their CMS side by side */
+.dial-stage.solo.has-watch { grid-template-columns: 360px minmax(0, 1fr); justify-content: stretch; }
+@media (max-width: 1300px) and (min-width: 1101px) { .dial-stage.solo.has-watch { grid-template-columns: 300px minmax(0, 1fr); } }
+@media (max-width: 1100px) { .dial-stage.solo.has-watch { grid-template-columns: minmax(0, 1fr); } }
+.dial-col.watching .dial-side .script-card, .dial-col.watching .dial-side .live-cols { display: none; }
+.dial-col.watching .dial-side > :not(:empty) { margin-bottom: 14px; }
+.dial-col.script-on #cmsWatch { margin-bottom: 16px; }
+.dial-col.script-on #cmsWatch .cms-vp, .dial-col.script-on #cmsWatch .cms-grip, .dial-col.script-on #cmsWatch .cms-zoom { display: none; }
+.dial-col.script-on { flex-direction: column-reverse; justify-content: flex-end; }
+#cmsWatch .cms-vp { height: calc(100vh - 150px); min-height: 480px; }
 .console-side { position: static; }
 .console-side > .card + .card { margin-top: 16px; }
 @media (max-width: 1140px) { .console-side.right { order: 3; } }
@@ -651,8 +650,8 @@ table.graded td.gcell.fail b { color: var(--red); }
   main:has(#phoneGrid), main:has(#consoleGrid) { padding: 10px 16px 28px; }
   .phone-layout { --ph: 300px; }
   .phone-layout.with-side:not(.side-folded) { --ts: 200px; }
-  .dial-stage { grid-template-columns: 300px minmax(0, 1fr); }
 }
+@media (max-width: 1300px) and (min-width: 1101px) { .dial-stage { grid-template-columns: 300px minmax(0, 1fr); } }
 @media (max-height: 820px) and (min-width: 961px) {
   .device { padding: 12px; }
   .device .lcd { min-height: 0; padding: 10px 12px; }

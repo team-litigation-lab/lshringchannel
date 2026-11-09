@@ -17,8 +17,10 @@ export function callerPrompt(s) {
   const away = (s.unavailable || []).map((x) => FIRM.directory.find((d) => d.ext === x)).filter(Boolean).map((d) => d.name);
   // A CMS call from another program is at its own firm (the script says which), and in some the trainee phones the caller (dir: out).
   const out = s.dir === 'out';
-  const intro = s.program && s.program !== 'FT'
-    ? `You are ${s.caller.name} (${s.caller.role}). This is a live phone call with someone who works at the firm, and ${out ? 'they have phoned you' : 'you are the caller'}.`
+  const intro = out
+    ? `You are ${s.caller.name} (${s.caller.role}). This is a live phone call: someone who works at ${s.program && s.program !== 'FT' ? 'a law firm' : FIRM.name + ', a personal-injury law firm,'} has phoned you, and you have answered.`
+    : s.program && s.program !== 'FT'
+    ? `You are ${s.caller.name} (${s.caller.role}). This is a live phone call with someone who works at the firm, and you are the caller.`
     : `You are ${s.caller.name} (${s.caller.role}), phoning ${FIRM.name}, a personal-injury law firm, on its ${line.label.toLowerCase()}. This is a live phone call and you are the caller. The person who answers works at the firm${s.track === 'intake' ? ' (the intake team)' : ' (the front desk)'}.`;
   return `${intro}
 
