@@ -353,13 +353,20 @@ export class Switchboard extends DurableObject {
       case 'cms-open': {
         if (me.role !== 't') return;
         const was = !!this.att(ws).cms;
-        this.setAtt(ws, { cms: !!m.on, cmsAt: m.on ? (was ? this.att(ws).cmsAt || t : t) : 0 });
-        this.presence();
-        if (m.on && !was) {
+        // Another of their tabs already had it open: not a new opening.
+        const other = this.ctx.getWebSockets().some((w) => w !== ws && w.readyState === OPEN && this.att(w).role === 't' && this.att(w).id === me.id && this.att(w).cms);
+        // A phone that reconnected (a network blip, a deploy) says so and keeps when it first opened the CMS.
+        const since = Number(m.since) > 0 && Number(m.since) <= t && t - Number(m.since) < 12 * 3600000 ? Number(m.since) : t;
+        this.setAtt(ws, { cms: !!m.on, cmsAt: m.on ? (was ? this.att(ws).cmsAt || since : since) : 0 });
+        // The trainers hear of a new opening before the presence that shows it, so the console announces it.
+        if (m.on && !was && !other && !m.resend) {
           const prof = this.trainee(me.id) || {};
           const msg = { t: 'cms-open', trainee: { id: me.id, name: prof.name || me.name, batch: prof.batch || me.batch || '', ext: prof.ext || me.ext || '' }, at: t };
           for (const w of this.ctx.getWebSockets()) if (w.readyState === OPEN && this.att(w).role === 'a') this.send(w, msg);
         }
+        this.presence();
+        return;
+      }
         return;
       }
 

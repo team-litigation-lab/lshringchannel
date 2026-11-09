@@ -225,7 +225,7 @@
   App.connect = function () {
     const b = App.board = new VoIP.Board();
     const net = document.getElementById('netbar');
-    b.on('up', (m) => { net.classList.add('hidden'); App.connected = true; App.myExt = (m.me && m.me.ext) || ''; App.cms.sent = null; (App.trainer() ? Console : Trainee).onUp(m); App.cmsReport(); });
+    b.on('up', (m) => { net.classList.add('hidden'); App.connected = true; App.myExt = (m.me && m.me.ext) || ''; App.cms.resend = App.cms.sent === true; App.cms.sent = null; (App.trainer() ? Console : Trainee).onUp(m); App.cmsReport(); });
     b.on('down', () => { App.connected = false; setTimeout(() => { if (!App.connected) net.classList.remove('hidden'); }, 2500); });
     b.on('presence', (m) => {
       App.desks = m.desks || [];   // the trainers who are on, each with their own extension
@@ -242,7 +242,7 @@
   /* 🗂 Whether this trainee has the CMS open: beside the call (#cmsSplit's frame) or in a tab opened from here
      (watched until it's closed). The switchboard tells the trainers, and their console opens the CMS's
      👁 Watch live on this trainee. A CMS tab opened some other way (the Portal) can't be seen from here. */
-  App.cms = { tabs: new Set(), sent: null };
+  App.cms = { tabs: new Set(), sent: null, since: 0, resend: false };
   App.cmsOpen = function () {
     App.cms.tabs.forEach((w) => { try { if (!w || w.closed) App.cms.tabs.delete(w); } catch (e) { App.cms.tabs.delete(w); } });
     const f = document.querySelector('#cmsSplit .cms-frame');
@@ -252,8 +252,11 @@
     if (!App.me || App.trainer() || !App.board || !App.connected) return;
     const on = App.cmsOpen();
     if (on === App.cms.sent) return;
-    App.cms.sent = on;
-    App.board.send({ t: 'cms-open', on });
+    // since: when it was first opened, kept across a reconnect; resend: the same opening, told again after a reconnect.
+    if (on && !App.cms.since) App.cms.since = Date.now();
+    if (!on) App.cms.since = 0;
+    App.board.send({ t: 'cms-open', on, since: App.cms.since, resend: on && App.cms.resend });
+    App.cms.sent = on; App.cms.resend = false;
   };
   setInterval(() => { try { App.cmsReport(); } catch (e) {} }, 2000);
 

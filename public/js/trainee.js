@@ -981,8 +981,12 @@
      that's redrawn reloads, so it lives beside #work (not in it) and is only shown or hidden. */
   // The CMS shows under 🔎 Case lookup once it's opened there (on the other tabs it's kept, hidden).
   const cmsTabOn = () => { const p = shown(); return !!(p && !p.out && p.status !== 'waiting' && p.cmsOpen && U.$('#work [data-pane="lookup"].on')); };
+  // The call the CMS was opened beside: once it's over (no call, or the next one), the frame is closed, not kept hidden.
+  const sameCall = (a, b) => !!(a && b && (a === b || (a.callId && a.callId === b.callId)));
+  function unloadCms(box) { box.innerHTML = ''; delete box.dataset.loaded; box._call = null; box.classList.add('hidden'); App.cmsReport(); }
   function syncCms() {
     const box = U.$('#cmsSplit'); if (!box) return;
+    if (box.dataset.loaded && !sameCall(box._call, shown())) unloadCms(box);
     const on = cmsTabOn();
     box.classList.toggle('hidden', !on);
     if (on && !box.dataset.loaded) loadCms((shown() || {}).caseId || '', true);
@@ -1007,7 +1011,7 @@
   }
   async function loadCms(caseId, quiet) {
     const box = U.$('#cmsSplit'); if (!box) return;
-    box.dataset.loaded = '1'; box.dataset.case = caseId || '';
+    box.dataset.loaded = '1'; box.dataset.case = caseId || ''; box._call = shown();
     box.innerHTML = `<div class="cms-split-head"><b>🗂 CMS Training Library</b>${caseId ? ` <span class="badge">${esc(caseId)}</span>` : ''}<span class="small muted cms-msg" style="flex:1">Opening, signed in as you…</span>${App.zoomHTML()}
         <button class="btn btn-sm" data-cms="tab" title="Open the CMS in its own browser tab instead">↗ New tab</button><button class="btn btn-sm" data-cms="close" title="Close the CMS beside the call">✕ Close</button></div>
       ${App.cmsFrameHTML('LSH CMS Training Library')}`;
@@ -1015,7 +1019,7 @@
     box.onclick = (e) => {
       const b = e.target.closest('[data-cms]'); if (!b) return;
       if (b.dataset.cms === 'tab') { App.openCase(box.dataset.case || '', b); tellCms(); }
-      else { box.innerHTML = ''; delete box.dataset.loaded; box.classList.add('hidden'); const q = shown(); if (q) { q.tab = 'lookup'; q.cmsOpen = false; } renderWork(); App.cmsReport(); }
+      else { unloadCms(box); const q = shown(); if (q) { q.tab = 'lookup'; q.cmsOpen = false; } renderWork(); }
     };
     try {
       const r = await API.post('/api/cms-link', { caseId: caseId || '' });
