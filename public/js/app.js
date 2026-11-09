@@ -140,13 +140,25 @@
   // One home per page: an old address (or a link from inside a page) opens the screen that now holds it.
   App.ALIAS = { calls: 'logs/calls', scenarios: 'logs/scenarios', messaging: 'logs/messaging', clientmessaging: 'logs/clientmessaging', graded: 'admin/graded', trainees: 'admin/monitoring', monitoring: 'admin/monitoring', aicalls: 'admin/aicalls', setup: 'admin/setup' };
 
+  /* 🎛 The mock call mode (trainers, on the top bar): what shows beside the dialer while they play the caller.
+       ☎ Reception · Intake   the trainee's CMS screen, live, as soon as they open it (console.js watchCms)
+       📅 Calendaring         the trainee's Google Calendar Simulator on the Portal (console.js watchCal), the trainee on the call
+     Kept on this browser (rc_mock_mode). */
+  App.mockMode = () => { try { return localStorage.getItem('rc_mock_mode') === 'calendar' ? 'calendar' : 'cms'; } catch (e) { return 'cms'; } };
+  App.setMockMode = function (v) {
+    try { localStorage.setItem('rc_mock_mode', v === 'calendar' ? 'calendar' : 'cms'); } catch (e) {}
+    U.toast(v === 'calendar' ? '📅 Calendaring: the trainee\'s Google Calendar Simulator shows beside your dialer on a call.' : '☎ Reception · Intake: the trainee\'s CMS shows beside your dialer when they open it.');
+    if (window.Console && typeof Console.modeChanged === 'function') Console.modeChanged();
+  };
   App.header = function () {
     const nav = document.getElementById('nav'), who = document.getElementById('who');
     if (!App.me) { nav.innerHTML = ''; who.innerHTML = ''; return; }
     const here = App.screenOf(App.route.name);
     const portal = App.trainer() && App.cfg && App.cfg.portal
       ? `<a href="${esc(App.cfg.portal)}" title="The LSH Training Portal: its Training Directory">🏠 Main Portal</a>` : '';
-    nav.innerHTML = App.navItems().map(([k, l]) => `<a href="#/${k}" class="${here === k ? 'on' : ''}">${l}${k === 'logs' && App.unread ? '<span class="dot"></span>' : ''}</a>`).join('') + portal;
+    const mode = App.trainer() ? `<label class="hdr-mode" title="What shows beside your dialer while you play the caller">Mode <select onchange="App.setMockMode(this.value)" aria-label="Mock call mode">
+        <option value="cms"${App.mockMode() === 'cms' ? ' selected' : ''}>☎ Reception · Intake (CMS)</option><option value="calendar"${App.mockMode() === 'calendar' ? ' selected' : ''}>📅 Calendaring (Calendar Simulator)</option></select></label>` : '';
+    nav.innerHTML = App.navItems().map(([k, l]) => `<a href="#/${k}" class="${here === k ? 'on' : ''}">${l}${k === 'logs' && App.unread ? '<span class="dot"></span>' : ''}</a>`).join('') + mode + portal;
     const install = App.installPrompt && !App.installed() ? '<button type="button" class="hdr-install" onclick="App.install()" title="Install Ring Channel as an app: its own window and icon">⬇ Install</button>' : '';
     who.innerHTML = `${install}<span class="chip">${App.trainer() ? '🎓 Trainer' : '🎧 Trainee'} · ${esc(App.me.name)}${App.me.batch ? ' · ' + esc(App.me.batch) : ''}</span><button type="button" title="Signed in as ${esc(App.me.name)}" onclick="App.logout()">Log out</button>`;
   };
