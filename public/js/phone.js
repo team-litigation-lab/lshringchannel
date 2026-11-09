@@ -389,7 +389,7 @@
   const VIRTUAL = /virtual|stereo mix|what u hear|wave out|cable (in|out)|vb-audio|voicemeeter|blackhole|soundflower|loopback|krisp|nvidia broadcast|rtx voice|zoomaudiodevice|teams audio|obs|droidcam|iriun|camo/i;
   const looksHeadset = (d) => !!d && (HEADSET.test(d.label) || HEADSET.test(inner(d.label))) && !BUILT_IN.test(inner(d.label));
   const Speaker = {
-    on: false, headset: '', speaker: '', targets: new Set(), listeners: new Set(), last: null,
+    on: false, headset: '', speaker: '', targets: new Set(), listeners: new Set(), followers: new Set(), lead: null, last: null,
     load() { try { Object.assign(this, JSON.parse(localStorage.getItem(SPK_KEY) || '{}')); } catch (e) {} return this; },
     store() { try { localStorage.setItem(SPK_KEY, JSON.stringify({ on: this.on, headset: this.headset, speaker: this.speaker })); } catch (e) {} },
     supported() { return !!(window.HTMLMediaElement && 'setSinkId' in HTMLMediaElement.prototype); },
@@ -426,7 +426,11 @@
       const same = (a, b) => { const x = list.find((d) => d.deviceId === a), y = list.find((d) => d.deviceId === b); return a === b || (x && y && x.groupId && x.groupId === y.groupId); };
       return { list, headset, speaker: speakerId, headsetName: name(headset) || 'the computer\'s sound', speakerName: name(speakerId) || 'the computer\'s sound', separate: !same(headset, speakerId) };
     },
-    async sinkId() { const r = this.last = await this.route(); return this.on ? r.speaker : r.headset; },
+    async sinkId() {
+      // A window that follows another (📺 the Class view follows the console that opened it): the console's key and outputs.
+      if (this.lead) { try { const r = this.last = await this.lead.route(); return this.lead.on ? r.speaker : r.headset; } catch (e) { this.lead = null; } }
+      const r = this.last = await this.route(); return this.on ? r.speaker : r.headset;
+    },
     // A <audio> element or an AudioContext that plays call audio.
     async register(target) { if (!target) return; this.targets.add(target); try { await this.applyTo(target, await this.sinkId()); } catch (e) {} },
     unregister(target) { this.targets.delete(target); },
@@ -436,7 +440,23 @@
       if ((t.sinkId || '') === want || (t.sinkId && t.sinkId.type === 'none')) return;
       try { await t.setSinkId(want); } catch (e) { console.warn('setSinkId', e && e.message); }
     },
-    async apply() { const id = await this.sinkId(); await Promise.all([...this.targets].map((t) => this.applyTo(t, id))); return id; },
+    async apply() {
+      const id = await this.sinkId();
+      await Promise.all([...this.targets].map((t) => this.applyTo(t, id)));
+      this.followers.forEach((f) => { try { f(); } catch (e) { this.followers.delete(f); } });
+      return id;
+    },
+    /* 📺 Follow another window's speaker key. The Class view plays the call while the console goes quiet, so
+       its sound (the call and the ringback) must go where the console's 🔊 Speaker says, or the key does nothing. */
+    follow(lead) {
+      if (!lead || lead === this || this.lead === lead) return;
+      this.unfollow();
+      this.lead = lead;
+      this._follow = () => { this.apply().catch(() => {}); };
+      lead.followers.add(this._follow);
+      this._follow();
+    },
+    unfollow() { if (this.lead && this._follow) { try { this.lead.followers.delete(this._follow); } catch (e) {} } this.lead = null; this._follow = null; },
     // Turn the speaker on or off. Returns a note when there's nothing to switch to.
     async set(on) {
       this.on = !!on; this.store();

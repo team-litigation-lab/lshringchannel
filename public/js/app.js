@@ -225,7 +225,7 @@
   App.connect = function () {
     const b = App.board = new VoIP.Board();
     const net = document.getElementById('netbar');
-    b.on('up', (m) => { net.classList.add('hidden'); App.connected = true; App.myExt = (m.me && m.me.ext) || ''; (App.trainer() ? Console : Trainee).onUp(m); });
+    b.on('up', (m) => { net.classList.add('hidden'); App.connected = true; App.myExt = (m.me && m.me.ext) || ''; App.cms.sent = null; (App.trainer() ? Console : Trainee).onUp(m); App.cmsReport(); });
     b.on('down', () => { App.connected = false; setTimeout(() => { if (!App.connected) net.classList.remove('hidden'); }, 2500); });
     b.on('presence', (m) => {
       App.desks = m.desks || [];   // the trainers who are on, each with their own extension
@@ -238,6 +238,24 @@
     b.on('graded', (m) => { if (App.gradedHook) App.gradedHook(m); });
     b.connect();
   };
+
+  /* 🗂 Whether this trainee has the CMS open: beside the call (#cmsSplit's frame) or in a tab opened from here
+     (watched until it's closed). The switchboard tells the trainers, and their console opens the CMS's
+     👁 Watch live on this trainee. A CMS tab opened some other way (the Portal) can't be seen from here. */
+  App.cms = { tabs: new Set(), sent: null };
+  App.cmsOpen = function () {
+    App.cms.tabs.forEach((w) => { try { if (!w || w.closed) App.cms.tabs.delete(w); } catch (e) { App.cms.tabs.delete(w); } });
+    const f = document.querySelector('#cmsSplit .cms-frame');
+    return !!(f && f.getAttribute('src')) || App.cms.tabs.size > 0;
+  };
+  App.cmsReport = function () {
+    if (!App.me || App.trainer() || !App.board || !App.connected) return;
+    const on = App.cmsOpen();
+    if (on === App.cms.sent) return;
+    App.cms.sent = on;
+    App.board.send({ t: 'cms-open', on });
+  };
+  setInterval(() => { try { App.cmsReport(); } catch (e) {} }, 2000);
 
   App.tick = function () {
     const n = Date.now();
@@ -485,7 +503,7 @@
     const tab = window.open('', '_blank');
     try {
       const r = await API.post('/api/cms-link', { caseId });
-      if (tab) tab.location = r.url; else window.open(r.url, '_blank', 'noopener');
+      if (tab) { tab.location = r.url; if (!App.trainer()) { App.cms.tabs.add(tab); App.cmsReport(); } } else window.open(r.url, '_blank', 'noopener');
       if (!r.authed) U.toast('The CMS will ask you to come in from the LSH Training Portal (no Portal secret is set on this site).');
     } catch (e) {
       if (tab) tab.close();

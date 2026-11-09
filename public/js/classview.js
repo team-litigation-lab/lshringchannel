@@ -57,6 +57,7 @@
         <div id="cvBody"></div>
         <audio id="cvAudio" playsinline></audio>
       </div>`;
+      VoIP.Speaker.follow(opener().VoIP.Speaker);   // 🔊 this tab's sound goes where the console's Speaker key says
       U.$('#cvStart').onclick = start;
       U.$('#cvHide').onclick = () => U.$('#cvSetup').classList.add('hidden');
       clearInterval(timer);
@@ -83,7 +84,7 @@
     const a = U.$('#cvAudio'); if (a) { a.pause(); a.srcObject = null; }
     playStream(null);
     if (raf) { cancelAnimationFrame(raf); raf = null; }
-    if (cvOut.ctx) { try { cvOut.ctx.close(); } catch (e) {} cvOut.ctx = cvOut.out = cvOut.an = null; }
+    if (cvOut.ctx) { VoIP.Speaker.unregister(cvOut.ctx); try { cvOut.ctx.close(); } catch (e) {} cvOut.ctx = cvOut.out = cvOut.an = null; }
   }
 
   // This window's AudioContext: what it plays is this tab's sound, the sound Meet shares.
@@ -94,6 +95,7 @@
       cvOut.out = c.createGain();
       cvOut.an = c.createAnalyser(); cvOut.an.fftSize = 512;
       cvOut.out.connect(cvOut.an); cvOut.out.connect(c.destination);
+      VoIP.Speaker.register(c);   // the headset, or the speakers when the console's 🔊 Speaker is on
       const lvl = U.$('#cvLevel'), d = new Uint8Array(cvOut.an.fftSize);
       const draw = () => {
         if (!cvOut.an) return;
@@ -128,13 +130,14 @@
   }
   window.addEventListener('pagehide', () => {
     const op = opener();
+    VoIP.Speaker.unfollow();
     if (op && App.isClassView) { op.Console.classAudio = false; try { op.Console.syncAudio(); } catch (e) {} }
   });
 
   function tick() {
     const op = opener();
     if (!op) {
-      clearInterval(timer); stopAudio();
+      clearInterval(timer); stopAudio(); VoIP.Speaker.unfollow();
       const b = U.$('#cvBody'); if (b) b.innerHTML = `<div class="cv-idle"><h1>The console was closed</h1><p>Open the Class view again from the console.</p></div>`;
       return;
     }
