@@ -29,7 +29,7 @@ import { FIRM, CASES, TRACKS, NOTE_FORMS, LINES, LEVELS, CMS_URL, AI_VOICES, PRO
 import { hasAI, keyNames, generate, parseJson, liveToken } from './gemini.js';
 import { callerPrompt, liveSetup } from './prompts.js';
 import { traineeThreads, threadById, contactPrompt, msgGradePrompt, cleanMsgGrade, MSG_RUBRIC, MSG_SHEET, MSG_RULES, MESSAGE_LINE, CLIENT_LINE, MESSAGE_PROGRAMS, MESSAGE_ROLES, ROLE_LABELS } from './messaging.js';
-import { readPortalTicket, portalHome, mintTicket } from './portal.js';
+import { readPortalTicket, portalHome, mintTicket, calendarLink } from './portal.js';
 
 export { Switchboard, Grader };
 
@@ -215,6 +215,16 @@ export default {
         u.searchParams.set('from', 'ringchannel');
         if (ticket) u.searchParams.set('ticket', ticket);
         return json({ url: u.toString(), authed: !!ticket });
+      }
+      // 📅 A trainer watching a trainee's Google Calendar Simulator beside the dialer (📅 Calendaring mode): the Portal's trainer view
+      // of their calendar, signed in as this trainer (src/portal.js calendarLink). Trainers only.
+      if (path === '/api/cal-link') {
+        if (!admin) return json({ error: 'Not allowed' }, 403);
+        if ((await sb.countUsage(me.id, 'callink', 3600000)) >= 120) return json({ error: 'Too many calendars opened this hour.' }, 429);
+        await sb.logUsage(me.id, 'callink');
+        const who = String(body.watch || '').trim().slice(0, 120); if (!who) return json({ error: 'Which trainee?' }, 400);
+        try { return json(await calendarLink(env, me.name, who, String(body.watchBatch || '').trim().slice(0, 60))); }
+        catch (e) { return json({ error: String(e && e.message || e).slice(0, 240) }, 502); }
       }
       if (path === '/api/ice') {
         if ((await sb.countUsage(me.id, 'ice', 3600000)) >= 120) return json({ error: 'Too many requests.' }, 429);

@@ -1,7 +1,7 @@
 // The LSH Training Portal's ticket, checked with the shared secret (src/portal.js verifyLocal), and the graded calls
 // Ring Channel sends back to the Portal's course (reportGradedCall, the Call Simulator integration): run by tests/run.sh.
 import { createHmac } from 'node:crypto';
-import { verifyLocal, reportGradedCall, splitName } from '../src/portal.js';
+import { verifyLocal, reportGradedCall, splitName, calendarLink } from '../src/portal.js';
 import { courseCall, trackFromLink, programOk } from '../src/scenarios.js';
 
 const SECRET = 'shared-secret';
@@ -70,3 +70,24 @@ globalThis.fetch = realFetch;
 
 if (bad) process.exit(1);
 console.log(`✅ Graded calls to the Portal's course: ${lineCases.length} link lines, ${course.length} course slots, the gateway call, and nothing sent without the secret`);
+
+/* 📅 Calendaring mode: the trainee's Google Calendar Simulator on the Portal, found by name and Batch ID (server to server,
+   AI_GATEWAY_SECRET) and opened as the Portal's trainer view (gcal.html?trainee=<username>) with this trainer's ticket */
+{
+  const real = globalThis.fetch; let asked = null;
+  globalThis.fetch = async (url, init = {}) => { asked = { url: String(url), key: (init.headers || {})['X-Gateway-Key'] };
+    const u = new URL(String(url)); const who = u.searchParams.get('name');
+    return new Response(JSON.stringify({ success: true, username: who === 'Ana Lopez' ? 'ana.lopez' : '', cards: [] })); };
+  const env = { AI_GATEWAY_SECRET: 'gw', PORTAL_SSO_SECRET: SECRET, PORTAL_URL: 'https://portal.example' };
+  const r = await calendarLink(env, 'Coach Tess', 'Ana Lopez', 'B100626');
+  const u = new URL(r.url), t = await verifyLocal(SECRET, u.searchParams.get('ticket'));
+  if (u.origin + u.pathname !== 'https://portal.example/simulators/gcal.html' || u.searchParams.get('trainee') !== 'ana.lopez' || !r.authed || !t.ok || !t.admin || t.name !== 'Coach Tess') { bad++; console.log(`❌ the calendar link: ${r.url} ${JSON.stringify(t)}`); }
+  if (!asked || asked.key !== 'gw' || !/\/api\/calsim-scorecard\?/.test(asked.url) || !/batch=B100626/.test(asked.url)) { bad++; console.log(`❌ the Portal wasn't asked for the trainee: ${JSON.stringify(asked)}`); }
+  let e1 = ''; try { await calendarLink(env, 'Coach Tess', 'Nobody Here', 'B1'); } catch (e) { e1 = e.message; }
+  if (!/No Training Portal account/.test(e1)) { bad++; console.log(`❌ no account should say so: ${e1}`); }
+  let e2 = ''; try { await calendarLink({ PORTAL_SSO_SECRET: SECRET }, 'Coach Tess', 'Ana Lopez', 'B1'); } catch (e) { e2 = e.message; }
+  if (!/AI_GATEWAY_SECRET/.test(e2)) { bad++; console.log(`❌ without the gateway secret it should say so: ${e2}`); }
+  globalThis.fetch = real;
+  if (bad) process.exit(1);
+  console.log('✅ Calendaring mode: the trainee\'s Google Calendar Simulator found by name and Batch ID and opened signed in as the trainer; no account and no secret each say so');
+}

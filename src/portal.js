@@ -63,6 +63,30 @@ function expOf(payload) {
    dropping them on its sign-in page. It needs PORTAL_SSO_SECRET here (the same secret the Portal
    signs with, which the CMS checks); without it there's no ticket to make and the plain link is used.
    who: { admin, name } for a trainer, or { first, last, batch } for a trainee. */
+/* 📅 The trainee's Google Calendar Simulator on the Portal, for a trainer watching a Calendar Management mock call beside the
+   dialer (the console's 📅 Calendaring mode, public/js/console.js watchCal): the Portal's trainer view of a trainee's calendar
+   (simulators/gcal.html?trainee=<their Portal username>), signed in with this trainer's ticket. The username comes from the
+   Portal, server to server with AI_GATEWAY_SECRET (its /api/calsim-scorecard finds a trainee by name and Batch ID).
+   Returns { url, authed } or throws with what's missing. */
+export async function calendarLink(env, trainer, name, batch) {
+  const key = String((env && env.AI_GATEWAY_SECRET) || '').trim();
+  if (!key) throw new Error('AI_GATEWAY_SECRET isn\'t set on Ring Channel, so the trainee\'s Portal account can\'t be looked up.');
+  const base = portalUrl(env);
+  let username = '';
+  try {
+    const r = await fetch(base + '/api/calsim-scorecard?' + new URLSearchParams({ name: String(name || ''), batch: String(batch || '') }), { headers: { 'X-Gateway-Key': key } });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j || !j.success) throw new Error((j && j.error) || 'The Portal answered ' + r.status);
+    username = String(j.username || '');
+  } catch (e) { throw new Error('The Portal couldn\'t be reached: ' + String(e && e.message || e).slice(0, 160)); }
+  if (!username) throw new Error(`No Training Portal account was found for ${name}${batch ? ' (' + batch + ')' : ''}.`);
+  const ticket = await mintTicket(env, { admin: true, name: trainer }, 5);
+  const u = new URL(base + '/simulators/gcal.html');
+  u.searchParams.set('trainee', username);
+  if (ticket) u.searchParams.set('ticket', ticket);
+  return { url: u.toString(), authed: !!ticket, username };
+}
+
 export async function mintTicket(env, who, minutes) {
   const secret = String(env.PORTAL_SSO_SECRET || '').trim();
   if (!secret) return '';

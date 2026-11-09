@@ -772,7 +772,8 @@
         </div>
       </div>`;
     renderDialer(); renderTransfer(); renderCase(); renderConf(); renderLiveNote();
-    if (t.traineeCms) C.autoWatch(t.trainee, true);   // after a reload: the trainee already has the CMS open
+    if (App.mockMode() === 'calendar') { if (t.trainee && t.status !== 'ended') watchCal(t.trainee, true); }   // 📅 Calendaring: their calendar beside the dialer
+    else if (t.traineeCms) C.autoWatch(t.trainee, true);   // after a reload: the trainee already has the CMS open
   }
 
   /* 👁 Where the trainee's CMS shows: beside the dialer, in the column the call's cards use (#dialCol). On a call
@@ -788,6 +789,8 @@
     col.classList.toggle('script-on', watching && call && !!C.scriptOn);
     const b = U.$('[data-cmsw="script"]', box);
     if (b) { b.classList.toggle('hidden', !call); b.innerHTML = C.scriptOn ? '👁 Their CMS' : '🎭 Script'; }
+    const bc = U.$('[data-calw="script"]', box);
+    if (bc) { bc.classList.toggle('hidden', !call); bc.innerHTML = C.scriptOn ? '📅 Their calendar' : '🎭 Script'; }
   }
 
   /* 👁 A trainee's CMS screen, live, beside the dialer: the CMS's own 👁 Watch live (Master Control → Monitoring,
@@ -804,6 +807,7 @@
   const onCallWith = (id) => !!(busy(App.t) && App.t.trainee && App.t.trainee.id === id);
   async function watchCms(tr, quiet) {
     const box = U.$('#cmsWatch'); if (!box || !tr || !tr.name) return;
+    if (App.mockMode() === 'calendar' && busy(App.t)) return;   // (📅 Calendaring: the trainee's calendar is the one beside the dialer)
     const who = tr.name, tid = tr.id || '';
     C.watching = { id: tid, name: who, batch: tr.batch || '' };
     // Already watching them (or opening it): keep the frame, a redrawn frame reloads.
@@ -812,6 +816,7 @@
       if (!quiet && !box.dataset.announced) announce(tr);
       return;
     }
+    clearInterval(calTimer); delete box.dataset.kind; delete box.dataset.clean;
     box.dataset.who = who; box.dataset.tid = tid; box.dataset.loading = '1'; delete box.dataset.announced;
     box.innerHTML = `<div class="cms-split-head"><b>👁 ${esc(who)}'s CMS, live</b><span class="small muted cms-msg" style="flex:1">Opening the CMS's Watch live, signed in as you…</span>${App.zoomHTML()}
         <button class="btn btn-sm" data-cmsw="script" title="The caller's script, the checklist and the note (the CMS stays open)">🎭 Script</button><button class="btn btn-sm" data-cmsw="tab" title="Watch in its own browser tab">↗ New tab</button><button class="btn btn-sm" data-cmsw="close">✕ Close</button></div>
@@ -846,6 +851,65 @@
       delete box.dataset.loading;   // no link in the frame: the next opening tries again
     }
   }
+  /* 📅 Calendaring mode (the top bar's Mode): the trainee on the call, their Google Calendar Simulator on the Portal beside the
+     dialer — the Portal's trainer view of their calendar (as they save it, with the automated check and the CALENDAR MANAGEMENT
+     MOCK CALL scorecard to fill in), signed in as this trainer (/api/cal-link, src/portal.js calendarLink). It reads their
+     calendar again every 20 s (⟳ Auto, on by default) and on ↻; 🎭 Script, ↗ New tab and ✕ Close as on the CMS watch. */
+  let calTimer = null;
+  async function watchCal(tr, quiet) {
+    const box = U.$('#cmsWatch'); if (!box || !tr || !tr.name) return;
+    const who = tr.name, tid = tr.id || '';
+    if (box.dataset.kind === 'cal' && box.dataset.tid === tid && box.dataset.who === who) { syncWatch(); return; }
+    if (closedFor.has('cal:' + tid) && quiet) return;
+    C.watching = { id: tid, name: who, batch: tr.batch || '' };
+    box.dataset.kind = 'cal'; box.dataset.who = who; box.dataset.tid = tid; box.dataset.loading = '1'; delete box.dataset.announced;
+    box.innerHTML = `<div class="cms-split-head"><b>📅 ${esc(who)}'s Google Calendar Simulator</b><span class="small muted cms-msg" style="flex:1">Opening their calendar on the Training Portal, signed in as you…</span>${App.zoomHTML()}
+        <label class="small" title="Read their calendar again every 20 seconds"><input type="checkbox" data-calw="auto" checked> ⟳ Auto</label>
+        <button class="btn btn-sm" data-calw="reload" title="Read their calendar again now">↻</button>
+        <button class="btn btn-sm" data-calw="script" title="The caller's script, the checklist and the note (the calendar stays open)">🎭 Script</button><button class="btn btn-sm" data-calw="tab" title="Open it in its own browser tab">↗ New tab</button><button class="btn btn-sm" data-calw="close">✕ Close</button></div>
+      ${App.cmsFrameHTML(who + "'s Google Calendar Simulator")}`;
+    App.grip(box, 'trainer');
+    syncWatch();
+    const ask = () => API.post('/api/cal-link', { watch: who, watchBatch: tr.batch || '' });
+    const reload = () => { const f = U.$('.cms-frame', box); if (f && box.dataset.clean) f.src = box.dataset.clean; };
+    clearInterval(calTimer);
+    calTimer = setInterval(() => { const a = U.$('[data-calw="auto"]', box); if (box.dataset.kind === 'cal' && a && a.checked && !document.hidden) reload(); }, 20000);
+    box.onclick = async (e) => {
+      const b = e.target.closest('[data-calw]'); if (!b || b.dataset.calw === 'auto') return;
+      if (b.dataset.calw === 'close') {
+        if (box.dataset.tid) closedFor.add('cal:' + box.dataset.tid);
+        clearInterval(calTimer); box.innerHTML = ''; ['who', 'tid', 'loading', 'announced', 'authed', 'kind', 'clean'].forEach((k) => delete box.dataset[k]);
+        C.watching = null; C.scriptOn = false; syncWatch(); renderRoster(); renderDialBadges(); return;
+      }
+      if (b.dataset.calw === 'script') { C.scriptOn = !C.scriptOn; syncWatch(); return; }
+      if (b.dataset.calw === 'reload') { reload(); return; }
+      const tab = window.open('', '_blank');
+      try { const r = await ask(); if (tab) tab.location = r.url; } catch (err) { if (tab) tab.close(); U.toast(err.message, 'error'); }
+    };
+    try {
+      const r = await ask();
+      const f = U.$('.cms-frame', box);
+      if (!f || box.dataset.tid !== tid || box.dataset.kind !== 'cal') return;
+      f.src = r.url;
+      // (read again without the ticket: it works once, and the Portal's session it opened is kept)
+      try { const u = new URL(r.url); u.searchParams.delete('ticket'); box.dataset.clean = u.toString(); } catch (e2) {}
+      delete box.dataset.loading;
+      const msg = U.$('.cms-msg', box);
+      if (msg) msg.textContent = `${who}'s calendar as they save it, with the automated check and the Calendar Management Mock Call scorecard below it.` + (r.authed ? '' : ' The Portal will ask you to sign in (no Portal secret is set on this site).');
+      if (!quiet) U.toast(`📅 ${who}'s Google Calendar Simulator is beside your dialer.`);
+    } catch (err) {
+      if (box.dataset.tid !== tid) return;
+      const msg = U.$('.cms-msg', box); if (msg) msg.textContent = 'Couldn\'t open their calendar: ' + err.message;
+      delete box.dataset.loading;
+    }
+  }
+  // The top bar's Mode changed: on a call, the pane beside the dialer follows it.
+  C.modeChanged = function () {
+    const box = U.$('#cmsWatch'), t = App.t; if (!box) return;
+    if (box.dataset.who) { clearInterval(calTimer); box.innerHTML = ''; ['who', 'tid', 'loading', 'announced', 'authed', 'kind', 'clean'].forEach((k) => delete box.dataset[k]); C.watching = null; }
+    if (busy(t) && t.trainee) { if (App.mockMode() === 'calendar') watchCal(t.trainee); else if (t.traineeCms) watchCms(t.trainee, true); }
+    syncWatch();
+  };
   // Once per opening: a quiet watch (from presence) still gets its toast when the switchboard's 'cms-open' comes.
   function announce(tr) {
     const box = U.$('#cmsWatch'); if (box) box.dataset.announced = '1';
@@ -853,7 +917,7 @@
   }
   // The line over the frame: still open, or closed (the CMS's Watch live then shows their last screen).
   function cmsNote() {
-    const box = U.$('#cmsWatch'), msg = box && U.$('.cms-msg', box); if (!msg || !box.dataset.who || box.dataset.loading) return;
+    const box = U.$('#cmsWatch'), msg = box && U.$('.cms-msg', box); if (!msg || !box.dataset.who || box.dataset.loading || box.dataset.kind === 'cal') return;
     const who = box.dataset.who, open = !box.dataset.tid || !!cmsOf(box.dataset.tid);
     msg.textContent = (open ? `${who} has the CMS open: their screen shows here, about a second behind.` : `${who} closed the CMS (or left Ring Channel). It opens here again when they reopen it.`)
       + (box.dataset.authed ? '' : ' The CMS will ask you to sign in (no Portal secret is set on this site): then Master Control → Monitoring → 👁 Watch live.');
