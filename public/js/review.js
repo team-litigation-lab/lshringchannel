@@ -389,7 +389,7 @@
   // One row per graded call, with every metric's score and feedback (a sheet for the ranking reports).
   function downloadCsv(calls) {
     const names = [];
-    ['reception', 'intake', 'calendar'].forEach((k) => (App.cfg.tracks[k].rubric || []).forEach((m) => { if (!names.includes(m.name)) names.push(m.name); }));
+    Object.keys(App.cfg.tracks).forEach((k) => (App.cfg.tracks[k].rubric || []).forEach((m) => { if (!names.includes(m.name)) names.push(m.name); }));
     const pm = App.cfg.settings && App.cfg.settings.passMark;
     const head = ['Date', 'Trainee', 'Batch', 'Line', 'Mock call', 'Trainer', 'Status', 'Weighted average (of 5)', 'Score %', ...(pm != null ? [`Pass (≥ ${pm}%)`] : []), 'Verdict', 'Summary'];
     names.forEach((n) => head.push(n + ' (score)', n + ' (feedback)'));
@@ -604,7 +604,7 @@
       </details>
       <div class="row" style="margin-top:12px"><button class="btn btn-orange" id="sSave">Save</button><span class="small muted" id="sMsg"></span></div>`;
     U.$('#sSave').onclick = async () => {
-      const weights = { reception: {}, calendar: {}, intake: {} };
+      const weights = Object.fromEntries(Object.keys(App.cfg.tracks).map((k) => [k, {}]));
       U.$$('[data-w]', el).forEach((i) => { weights[i.dataset.w][i.dataset.m] = Number(i.value); });
       const pass = U.$('#sPass').value.trim();
       try {
