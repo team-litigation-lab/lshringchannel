@@ -161,7 +161,9 @@
       case 'cms':
         if (!mine) return;
         if (!t.traineeCms) C.scriptOn = false;   // the script steps aside for their CMS
-        t.traineeCms = true; renderDialBadges(); C.autoWatch(t.trainee, true);   // the toast comes with 'cms-open'
+        t.traineeCms = true; renderDialBadges();
+        // The trainee on this call opened it: their CMS replaces any other watch, even one closed earlier (the toast comes with 'cms-open').
+        closedFor.delete(t.trainee.id); watchCms(t.trainee, true); syncWatch();
         return;
       case 'transfer':
         if (!mine) return;

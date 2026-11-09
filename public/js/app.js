@@ -233,8 +233,9 @@
       else { App.trainersOnline = m.trainers || 0; App.peers = m.peers || []; Trainee.onPresence(); }
     });
     b.on('error', (m) => U.toast(m.msg, 'error'));
+    b.on('cms-at', (m) => { if (App.cms.sent && m.at) App.cms.since = m.at; });   // 🗂 when the switchboard says the CMS was opened
     b.on('trouble', () => { API.post('/api/me').catch(() => {}); });
-    b.on('*', (m) => { if (!['hello', 'presence', 'error'].includes(m.t)) (App.trainer() ? Console : Trainee).onBoard(m); });
+    b.on('*', (m) => { if (!['hello', 'presence', 'error', 'cms-at'].includes(m.t)) (App.trainer() ? Console : Trainee).onBoard(m); });
     b.on('graded', (m) => { if (App.gradedHook) App.gradedHook(m); });
     b.connect();
   };
