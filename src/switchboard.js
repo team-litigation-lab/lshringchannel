@@ -367,8 +367,6 @@ export class Switchboard extends DurableObject {
         this.presence();
         return;
       }
-        return;
-      }
 
       /* ----- 🤖 the trainer sends an AI caller to a trainee's phone -----
          The AI plays the caller (the call picked, or a random one on the line); the trainee's phone rings like any call,
