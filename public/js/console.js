@@ -1120,7 +1120,7 @@
     else if (act === 'backspace') setDial(pick.dial.slice(0, -1));
     else if (act === 'airing') aiRing();
     else if (act === 'aisetup') aiSetup();
-    else if (act === 'speaker') App.toggleSpeaker(renderDialer);
+    else if (act === 'speaker') { App.toggleSpeaker(renderDialer).then(() => { if (C.classOn() && VoIP.Speaker.on) U.toast('📺 The Class view plays the call on the speakers now. Your Meet mic will hear it from the room and the class hears the trainee twice: keep your headset on for a class in Meet.'); }); }
     else if (act === 'hangup') hangup();
     else if (act === 'mute') toggleMute();
     else if (act === 'coach') toggleCoach();

@@ -264,6 +264,15 @@ const playCall = async (pg, sid) => {
   ok(`Class view plays the call (level ${cvAudio.peak}) and the console goes quiet so the trainer doesn't hear it twice`);
   await te.waitForFunction(() => /class is listening/.test(document.querySelector('#device').textContent), null, { timeout: 5000 });
   ok('The trainee\'s phone reminds them the class is listening in Meet (mute the Meet tab)');
+  // 🔊 Speaker with the Class view on: the console is quiet and the Class view plays the call, so the Class view's sound follows the key.
+  await tr.evaluate(() => { const S = VoIP.Speaker; S._route = S.route; S.route = async () => ({ list: [], headset: 'default', speaker: 'spk-test', headsetName: 'Headset', speakerName: 'Speakers', separate: true }); });
+  await cv.evaluate(() => { window.__sinks = []; const c = ClassAudio.ctx; let cur = c.sinkId || ''; Object.defineProperty(c, 'sinkId', { get: () => cur, configurable: true }); c.setSinkId = async (id) => { cur = id; window.__sinks.push(id); }; });
+  await tr.click('#dialer [data-act="speaker"]');
+  await cv.waitForFunction(() => window.__sinks.includes('spk-test'), null, { timeout: 5000 });
+  await tr.click('#dialer [data-act="speaker"]');
+  await cv.waitForFunction(() => window.__sinks[window.__sinks.length - 1] === '', null, { timeout: 5000 });
+  await tr.evaluate(() => { const S = VoIP.Speaker; S.route = S._route; delete S._route; });
+  ok('🔊 Speaker with the Class view on: the Class view (what Meet shares) moves to the speakers and back with the console\'s key');
   const cvText = await cv.textContent('#cvBody');
   if (!/Jamie Cruz/.test(cvText) || !/Greg Hollis, adjuster at Liberty Crest/.test(cvText) || !/LIBERTY CREST INS/.test(cvText)) throw new Error('Class view content: ' + cvText.slice(0, 300));
   if (/Your offer on Robert Chen|What you know|An Offer With a Deadline/.test(await cv.textContent('body'))) throw new Error('Class view shows the script or the title during the call');
