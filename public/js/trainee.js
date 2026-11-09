@@ -967,7 +967,7 @@
     box.onclick = (e) => {
       const b = e.target.closest('[data-cms]'); if (!b) return;
       if (b.dataset.cms === 'tab') { App.openCase(box.dataset.case || '', b); tellCms(); }
-      else { box.innerHTML = ''; delete box.dataset.loaded; delete box.dataset.case; box.classList.add('hidden'); const q = shown(); if (q) { q.tab = 'lookup'; q.cmsOpen = false; q.cmsCase = ''; } renderWork(); }
+      else { box.innerHTML = ''; delete box.dataset.loaded; delete box.dataset.case; box.classList.add('hidden'); const q = shown(); if (q) { q.tab = 'lookup'; q.cmsOpen = false; q.cmsCase = ''; } renderWork(); App.cmsReport(); }
     };
     try {
       const r = await API.post('/api/cms-link', { caseId: caseId || '' });
@@ -975,7 +975,7 @@
       const f = U.$('.cms-frame', box), msg = U.$('.cms-msg', box);
       if (!f) return;
       f.src = r.url;
-      tellCms();
+      tellCms(); App.cmsReport();   // 👁 the trainers' consoles open Watch live on this trainee
       if (msg) msg.textContent = r.authed ? 'Signed in as you. Search the client the way you would at the front desk.' : 'The CMS will ask you to come in from the LSH Training Portal (no Portal secret is set on this site).';
     } catch (e) {
       if (box.dataset.seq !== seq) return;

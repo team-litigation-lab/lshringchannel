@@ -172,6 +172,7 @@ export class Switchboard extends DurableObject {
       if (a.status === 'available') cur.status = 'available';
       if (a.hand) { cur.hand = true; cur.handAt = Math.max(cur.handAt, a.handAt || 0); }
       if (a.call) cur.call = a.call;
+      if (a.cms) { cur.cms = true; cur.cmsAt = Math.max(cur.cmsAt || 0, a.cmsAt || 0); }   // 🗂 the CMS is open in one of their tabs
       byId.set(a.id, cur);
     }
     const trainers = all.filter(([, a]) => a.role === 'a').map(([, a]) => ({ name: a.name, ext: a.ext || '', call: a.call }));
@@ -347,6 +348,20 @@ export class Switchboard extends DurableObject {
       case 'hand':
         if (me.role === 't') { this.setAtt(ws, { hand: !!m.up, handAt: m.up ? t : 0 }); this.presence(); }
         return;
+      /* 🗂 A trainee opened (or closed) the CMS, on a call or not: every trainer's console opens the CMS's
+         👁 Watch live on them, and the switchboard shows who has it open. */
+      case 'cms-open': {
+        if (me.role !== 't') return;
+        const was = !!this.att(ws).cms;
+        this.setAtt(ws, { cms: !!m.on, cmsAt: m.on ? (was ? this.att(ws).cmsAt || t : t) : 0 });
+        this.presence();
+        if (m.on && !was) {
+          const prof = this.trainee(me.id) || {};
+          const msg = { t: 'cms-open', trainee: { id: me.id, name: prof.name || me.name, batch: prof.batch || me.batch || '', ext: prof.ext || me.ext || '' }, at: t };
+          for (const w of this.ctx.getWebSockets()) if (w.readyState === OPEN && this.att(w).role === 'a') this.send(w, msg);
+        }
+        return;
+      }
 
       /* ----- 🤖 the trainer sends an AI caller to a trainee's phone -----
          The AI plays the caller (the call picked, or a random one on the line); the trainee's phone rings like any call,

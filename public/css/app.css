@@ -363,7 +363,11 @@ table.list tr.click:hover td { background: #f8fafc; }
 /* 👁 The trainee's CMS beside the trainer's dialer (console.js syncWatch) */
 .dial-col { min-width: 0; display: flex; flex-direction: column; }
 .dial-col, #cmsWatch { scroll-margin-top: 84px; }
-.dial-stage.solo .dial-col { display: none; }
+.dial-stage.solo:not(.has-watch) .dial-col { display: none; }
+/* No call, but a trainee's CMS to watch: the dialer and their CMS side by side */
+.dial-stage.solo.has-watch { grid-template-columns: 360px minmax(0, 1fr); justify-content: stretch; }
+@media (max-width: 1300px) and (min-width: 1101px) { .dial-stage.solo.has-watch { grid-template-columns: 300px minmax(0, 1fr); } }
+@media (max-width: 1100px) { .dial-stage.solo.has-watch { grid-template-columns: minmax(0, 1fr); } }
 .dial-col.watching .dial-side .script-card, .dial-col.watching .dial-side .live-cols { display: none; }
 .dial-col.watching .dial-side > :not(:empty) { margin-bottom: 14px; }
 .dial-col.script-on #cmsWatch { margin-bottom: 16px; }

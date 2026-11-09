@@ -112,6 +112,21 @@ const playCall = async (pg, sid) => {
   await tr.click('.modal [data-out="test-speaker"]');
   await tr.click('.modal [data-x]');
   ok(`🎧 Audio check lists the outputs for the headset and the speaker (${outs} choices) and plays a test tone`);
+  // 👁 A trainee who isn't on a call opens the CMS in its own tab: the trainer's console (free) watches them by itself.
+  await te.context().route(/lshcasemanagementtraining/, (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>CMS</title><h1 id="cms">CMS stand-in</h1>' }));
+  await tr.context().route(/lshcasemanagementtraining/, (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>CMS</title><h1 id="cms">CMS Watch live stand-in</h1>' }));
+  const [cmsTab] = await Promise.all([te.context().waitForEvent('page'), te.evaluate(() => App.openCase(''))]);
+  await tr.waitForSelector('#cmsWatch:not(.hidden) iframe.cms-frame[src*="watch="]', { timeout: 10000 });
+  const offSrc = new URL(await tr.getAttribute('#cmsWatch iframe', 'src'));
+  if (offSrc.searchParams.get('watch') !== 'Jamie Cruz') throw new Error('Off a call, the console should watch the trainee who opened the CMS: ' + offSrc);
+  await tr.waitForSelector('#roster [data-cmswatch]', { state: 'attached' });
+  await tr.waitForFunction(() => /has the CMS open/.test(document.querySelector('#cmsWatch .cms-msg').textContent));
+  await cmsTab.close();
+  await tr.waitForFunction(() => /closed the CMS/.test(document.querySelector('#cmsWatch .cms-msg').textContent), null, { timeout: 10000 });
+  if (await tr.$('#roster [data-cmswatch]')) throw new Error('The switchboard should drop 👁 once the trainee closes the CMS');
+  await tr.click('#cmsWatch [data-cmsw="close"]');
+  await tr.waitForSelector('#cmsWatch.hidden', { state: 'attached' });
+  ok('👁 Off a call, a trainee opened the CMS in its own tab: the free console opened the CMS\'s Watch live on them by itself, 👁 on their switchboard row, and it says when they close it');
   await tr.click('[data-act="ring"]');
   await te.waitForSelector('.lcd.ringing');
   const cid = await te.textContent('.lcd-name');
@@ -264,6 +279,15 @@ const playCall = async (pg, sid) => {
   ok(`Class view plays the call (level ${cvAudio.peak}) and the console goes quiet so the trainer doesn't hear it twice`);
   await te.waitForFunction(() => /class is listening/.test(document.querySelector('#device').textContent), null, { timeout: 5000 });
   ok('The trainee\'s phone reminds them the class is listening in Meet (mute the Meet tab)');
+  // 🔊 Speaker with the Class view on: the console is quiet and the Class view plays the call, so the Class view's sound follows the key.
+  await tr.evaluate(() => { const S = VoIP.Speaker; S._route = S.route; S.route = async () => ({ list: [], headset: 'default', speaker: 'spk-test', headsetName: 'Headset', speakerName: 'Speakers', separate: true }); });
+  await cv.evaluate(() => { window.__sinks = []; const c = ClassAudio.ctx; let cur = c.sinkId || ''; Object.defineProperty(c, 'sinkId', { get: () => cur, configurable: true }); c.setSinkId = async (id) => { cur = id; window.__sinks.push(id); }; });
+  await tr.click('#dialer [data-act="speaker"]');
+  await cv.waitForFunction(() => window.__sinks.includes('spk-test'), null, { timeout: 5000 });
+  await tr.click('#dialer [data-act="speaker"]');
+  await cv.waitForFunction(() => window.__sinks[window.__sinks.length - 1] === '', null, { timeout: 5000 });
+  await tr.evaluate(() => { const S = VoIP.Speaker; S.route = S._route; delete S._route; });
+  ok('🔊 Speaker with the Class view on: the Class view (what Meet shares) moves to the speakers and back with the console\'s key');
   const cvText = await cv.textContent('#cvBody');
   if (!/Jamie Cruz/.test(cvText) || !/Greg Hollis, adjuster at Liberty Crest/.test(cvText) || !/LIBERTY CREST INS/.test(cvText)) throw new Error('Class view content: ' + cvText.slice(0, 300));
   if (/Your offer on Robert Chen|What you know|An Offer With a Deadline/.test(await cv.textContent('body'))) throw new Error('Class view shows the script or the title during the call');

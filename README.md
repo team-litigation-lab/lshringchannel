@@ -191,6 +191,7 @@ On a call from the trainer, the trainee's **Transfer** key opens the other train
 - The setting is kept on that computer.
 - It needs Chrome or Edge (they can choose where sound plays) and the microphone allowed, so the phone can see the outputs' names. If the computer has only one output, the screen says the call already plays there.
 - On speaker, the microphone hears the room: Chrome's echo cancellation removes the call's own sound, but a headset is still best for graded calls.
+- **📺 In a Meet class** the Class view plays the call (your console goes quiet), so it follows your 🔊 Speaker key too: the call, and the ringback, move to the speakers and back with it. On speakers your Meet mic hears the trainee from the room and the class hears them twice, so the console reminds you to keep your headset on for a class in Meet.
 
 ## In a Google Meet class
 
@@ -215,7 +216,11 @@ They never see the caller's script or the goals, and the call's title only shows
 
 This is separate from the platform's own recording: every live call is still recorded on the console and kept with its scorecard.
 
-**👁 Watching the trainee's CMS.** When the trainee on a live call opens the CMS (🔎 Case lookup → 🗂 Open the CMS), your console shows the CMS beside your dialer, in the caller script's place, signed in with your Portal ticket. It opens the CMS's **Master Control → Monitoring**, then 👁 Watch live on the trainee as soon as they're online. Until then, pick them from the Monitoring list. **🎭 Script** brings the script, checklist and note back (the CMS stays loaded), and **👁 THEIR CMS** on your phone's screen goes back to it. **✕ Close** puts it away for the rest of the call, unless the trainee opens the CMS again.
+**👁 Watching the trainee's CMS.** Whenever a trainee opens the CMS from Ring Channel (🔎 Case lookup → 🗂 Open the CMS, or in its own tab), on a call or not, your console shows their CMS beside your dialer: the CMS's own **👁 Watch live** on them (Master Control → Monitoring → Watch) under the dialer, signed in with your Portal ticket (the CMS's `?watch=` link). Their CMS screen shows there about a second behind.
+- On a call, it's the trainee on your call, in the caller script's place: **🎭 Script** brings the script, checklist and note back (the CMS stays loaded), and **👁 THEIR CMS** on your phone's screen goes back to it. While you're on a call with someone else, another trainee opening the CMS doesn't take the panel: you get a note, and **👁** on their switchboard row.
+- Off a call, it follows the latest trainee to open the CMS. **👁** on any switchboard row watches a trainee who has it open.
+- The line over it says when they close the CMS (or leave). **✕ Close** keeps it closed until they open the CMS again. On another page, the Console shows it when you go back.
+- Their phone reports a CMS tab it opened until that tab is closed; a CMS opened some other way (from the Portal) can't be seen from Ring Channel.
 
 **Timings the phone measures for the scorecard:** rings before the answer (the standard is 3), call length, each hold and its length, and each transfer and how it ended.
 
