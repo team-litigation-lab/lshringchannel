@@ -172,7 +172,7 @@ export class Switchboard extends DurableObject {
       if (a.status === 'available') cur.status = 'available';
       if (a.hand) { cur.hand = true; cur.handAt = Math.max(cur.handAt, a.handAt || 0); }
       if (a.call) cur.call = a.call;
-      if (a.cms) { cur.cms = true; cur.cmsAt = Math.max(cur.cmsAt || 0, a.cmsAt || 0); }   // 🗂 the CMS is open in one of their tabs
+      if (a.cms) { cur.cms = true; cur.cmsAt = cur.cmsAt && a.cmsAt ? Math.min(cur.cmsAt, a.cmsAt) : (cur.cmsAt || a.cmsAt || 0); }   // when they first opened it   // 🗂 the CMS is open in one of their tabs
       byId.set(a.id, cur);
     }
     const trainers = all.filter(([, a]) => a.role === 'a').map(([, a]) => ({ name: a.name, ext: a.ext || '', call: a.call }));
@@ -355,9 +355,12 @@ export class Switchboard extends DurableObject {
         const was = !!this.att(ws).cms;
         // Another of their tabs already had it open: not a new opening.
         const other = this.ctx.getWebSockets().some((w) => w !== ws && w.readyState === OPEN && this.att(w).role === 't' && this.att(w).id === me.id && this.att(w).cms);
-        // A phone that reconnected (a network blip, a deploy) says so and keeps when it first opened the CMS.
-        const since = Number(m.since) > 0 && Number(m.since) <= t && t - Number(m.since) < 12 * 3600000 ? Number(m.since) : t;
-        this.setAtt(ws, { cms: !!m.on, cmsAt: m.on ? (was ? this.att(ws).cmsAt || since : since) : 0 });
+        // A phone that reconnected (a network blip, a deploy) says so and keeps when it first opened the CMS; a new
+        // opening is stamped here (another tab of theirs already open: its time), so no two computers' clocks are compared.
+        const earliest = this.ctx.getWebSockets().filter((w) => w !== ws && w.readyState === OPEN && this.att(w).role === 't' && this.att(w).id === me.id && this.att(w).cms && this.att(w).cmsAt).map((w) => this.att(w).cmsAt);
+        const since = earliest.length ? Math.min(...earliest) : m.resend && Number(m.since) > 0 && Number(m.since) <= t && t - Number(m.since) < 12 * 3600000 ? Number(m.since) : t;
+        const at = this.setAtt(ws, { cms: !!m.on, cmsAt: m.on ? (was ? this.att(ws).cmsAt || since : since) : 0 }).cmsAt;
+        if (m.on) this.send(ws, { t: 'cms-at', at });   // the phone keeps the switchboard's time for a reconnect
         // The trainers hear of a new opening before the presence that shows it, so the console announces it.
         if (m.on && !was && !other && !m.resend) {
           const prof = this.trainee(me.id) || {};

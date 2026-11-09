@@ -931,7 +931,7 @@
   const cmsTabOn = () => { const p = shown(); return !!(p && !p.out && p.status !== 'waiting' && p.cmsOpen && U.$('#work [data-pane="lookup"].on')); };
   /* 👁 Whether the trainee has the CMS beside the call now, for the trainers' Watch live (App.cmsOpen): the frame is
      kept loaded between calls so it doesn't reload, but it's only "open" while the call on the phone has it open. */
-  T.cmsShown = () => { const p = shown(), f = U.$('#cmsSplit .cms-frame'); return !!(f && f.getAttribute('src') && p && !p.out && p.status !== 'waiting' && p.cmsOpen); };
+  T.cmsShown = () => { const p = shown(), box = U.$('#cmsSplit'); return !!(box && box.dataset.loaded && p && !p.out && p.status !== 'waiting' && p.cmsOpen); };   // a file reloading in it is still open
   function syncCms() {
     const box = U.$('#cmsSplit'); if (!box) return;
     const on = cmsTabOn(), p = shown();
