@@ -240,6 +240,9 @@ Trainer-facilitated mock calls are graded on the program's **Mock Calls Metrics*
 | Reception | Reception Mock Calls Metrics | 14: Introduction of Law Firm and Name · Authentication (Name, DOL, DOB, Claim No, Case No.) · Customer Service · Assertiveness · Listening Skills · Comprehension · Attention to Details · Resolution · Transfer Procedure · Closing Spiel · Time Management · Dead Air/Fillers · Clarity of Speech · Tone of Voice |
 | Calendar | Calendar Management Mock Calls Metrics | 7: Professional Introduction & Call Control · Client Comprehension & Flow Control · Information Verification & Accuracy · Slot Identification & Scheduling Rule Compliance · Alternative Time Offering · Calendar Creation & Attorney Reminder Setup · Notes, Recap & Call Closing (graded against the Day 6 scheduling rules) |
 | Intake | Intake Mock Calls Metrics | 16: the Reception metrics plus Setting Proper Expectations · Explaining the Process · Answering Client's Inquiries · Commitment |
+| 🛡 Claims | Claims Mock Calls Metrics | 8: the CMS Claims line's own rubric (Opening & Identifiers · Claim Facts & Liability · Protecting the Client · Commitments & Call Log) plus Listening Skills, Dead Air/Fillers, Clarity of Speech and Tone of Voice |
+
+**🛡 Claims Mock Calls** (Standard Training, mirrored from the CMS's line of that name) are calls the trainee places to an insurance carrier: opening a claim, checking liability, updating the adjuster. The trainer (or the AI) plays the carrier who answers. The trainee writes the CMS's **Claim call log**, and the file in 🔎 Case lookup carries its **CLAIMS** paragraph (carriers, claim numbers, adjusters, limits). A graded Claims call counts on the Portal as Standard Training, line Claims Mock Calls (it has no lesson number).
 
 An **open call** (no script) is graded the same way, on the line's metrics; there's no checklist, and the AI works out from the recording who called and what they needed.
 

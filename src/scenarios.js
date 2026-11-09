@@ -193,6 +193,16 @@ for (const [id, d] of Object.entries(CMS.DOCS)) {
 // Every other Training Library file in the CMS (MC-xx, mock-cases.js), so a trainee finds any client the CMS has on file.
 const extOf = (name) => { const d = FIRM.directory.find((x) => x.name === name || x.name.replace(/^Atty\. /, '') === name.replace(/^Atty\. /, '')); return d ? d.ext : ''; };
 for (const mc of LIBRARY.MOCK_CASES || []) if (mc && mc.id && !CASES[mc.id]) CASES[mc.id] = cmsFile(mc, extOf);
+/* 🛡 The CMS's Claims Mock Calls have the trainee phone the file's carrier: the CMS adds the file's CLAIMS paragraph
+   (carriers, claim numbers, adjusters, limits) to the file on that line (call-packs.js docOf). On Ring Channel the
+   file is the one in 🔎 Case lookup, so its CLAIMS paragraph is part of the file there. */
+export const CLAIMS_LINE = 'Claims Mock Calls';
+for (const c of CMS.CALLS) {
+  if (c.line !== CLAIMS_LINE || !c.doc || !CMS.DOCS[c.doc] || !CASES[c.doc]) continue;
+  const full = (CMS.docOf(c) || {}).text || '', base = CMS.DOCS[c.doc].text;
+  const extra = full.startsWith(base) ? full.slice(base.length).replace('\n\n' + CMS.FT_FIRM, '').trim() : '';
+  if (extra && !CASES[c.doc].text.includes(extra)) CASES[c.doc].text += '\n' + extra;
+}
 // The other programs' case summaries (the CMS's CASES: cm, pd, ea), as case files in 🔎 Case lookup.
 const CMS_CASE_NAMES = { cm: ['CMS-CM', 'John Doe', 'MVA v. Apex Delivery Services (Case Management)'], pd: ['CMS-PD', 'Angela Carter', 'Property damage claim, 2022 RAV4 (Property Damage)'], ea: ['CMS-EA', 'Elias Thorne', 'Client profile (EA / PA)'] };
 const CMS_CASE_IDS = {};
@@ -202,6 +212,20 @@ for (const [k, c] of Object.entries(CMS.CASES)) {
 }
 
 // The trainee's note for each kind of call.
+const CLAIMS_CMS = CMS.LINES.find((l) => l.line === CLAIMS_LINE) || {};
+// 🛡 The Claim call log, from the CMS line's own note ("DATE / TIME:\nCASE (MC # / client):\n…"): one field per line.
+function noteFromTemplate(note) {
+  const lines = String((note && note.template) || '').split('\n').map((x) => x.replace(/:\s*$/, '').trim()).filter(Boolean);
+  const long = /PURPOSE|LIABILITY|WHAT THEY NEED|DECLINED|COMMITMENT|FOLLOW-UP/i;
+  const cap = (x) => x.toLowerCase().replace(/^./, (ch) => ch.toUpperCase()).replace(/\bmc\b/g, 'MC').replace(/\bcms\b/g, 'CMS').replace(/\bi\b/g, 'I');
+  const fields = lines.map((label, i) => {
+    const k = 'c' + i + '_' + label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 24);
+    if (i === 0 && /date/i.test(label)) return { k: 'when', label: cap(label), type: 'text', auto: 'now' };
+    if (/initials/i.test(label)) return { k: 'initials', label: cap(label), type: 'text', short: true };
+    return { k, label: cap(label), type: long.test(label) ? 'textarea' : 'text' };
+  });
+  return { title: String((note && note.title) || 'Claim call log').replace(/\s*\(CMS note\)\s*$/i, ''), fields };
+}
 export const NOTE_FORMS = {
   message: { title: 'Message slip / case note', fields: [
     { k: 'when', label: 'Date / time', type: 'text', auto: 'now' },
@@ -250,7 +274,8 @@ export const NOTE_FORMS = {
     { k: 'urgency', label: 'Deadlines / urgency', type: 'textarea' },
     { k: 'next', label: 'Next step / routed to', type: 'textarea' },
     { k: 'initials', label: 'Your initials', type: 'text', short: true }
-  ] }
+  ] },
+  claims: noteFromTemplate(CLAIMS_CMS.note)
 };
 
 // How each kind of call is scored: the program's own Mock Calls Metrics (Training Guide, Day 4 Reception
@@ -273,6 +298,9 @@ const CLOSE_AND_VOICE = [
   M('Clarity of Speech (Articulation, Volume, Enunciation)', 'Speaks clearly, at a good volume and pace; words are easy to understand over the phone.', true),
   M('Tone of Voice', 'Warm, calm, confident and professional; matches the caller\'s emotion appropriately (reassuring with an upset caller, brisk with a busy one).', true)
 ];
+// 🛡 The CMS's Claims rubric ("Opening & Identifiers: Says who they are…") as metrics: the name before the colon.
+const fromRubric = (r) => { const i = String(r).indexOf(':'); return i > 0 ? M(r.slice(0, i).trim(), r.slice(i + 1).trim()) : M(String(r).slice(0, 60), String(r)); };
+const byName = (list, name) => list.find((x) => x.name === name);
 export const TRACKS = {
   reception: {
     label: 'Reception', lineLabel: 'Main Line', icon: '☎', note: 'message', sheet: 'Reception Mock Calls Metrics',
@@ -327,6 +355,16 @@ export const TRACKS = {
       ...CLOSE_AND_VOICE
     ],
     tips: ['Firm name, your name; then let them tell the story.', 'One question at a time: contact details, DOB, date and place of the incident, injuries, treatment, other parties, insurance, evidence.', 'Never answer "Do I have a case?" or "Is it too late?"; route deadlines now.', 'Set expectations, explain the process, commit to a next step, and close.']
+  },
+  // 🛡 Claims: the trainee phones a carrier about a client's claim (the CMS's 🛡 Claims Mock Calls line).
+  claims: {
+    label: 'Claims', lineLabel: 'Main Line', icon: '🛡', note: 'claims', sheet: 'Claims Mock Calls Metrics',
+    rubric: [
+      ...(CLAIMS_CMS.rubric || []).map(fromRubric),
+      byName(COMMON_SOFT, 'Listening Skills'),
+      ...CLOSE_AND_VOICE.filter((m) => m.voice)
+    ],
+    tips: (CLAIMS_CMS.tips || []).slice()
   }
 };
 
@@ -352,12 +390,12 @@ export const DEFAULT_SETTINGS = {
   autoRelease: false,     // AI grades go to trainees without a trainer's approval
   defaultGraded: true,    // new live calls start as graded mock calls
   passMark: null,         // a percentage; null = no pass/fail shown
-  weights: { reception: {}, calendar: {}, intake: {} }
+  weights: { reception: {}, calendar: {}, intake: {}, claims: {} }
 };
 
 const youIntake = 'You are the intake specialist at LSH Training Law Group (fictional). This is a FIRST call to the firm: nothing is on file yet. Take the intake and fill in the Intake note as you go.';
 
-export const LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
+export const LEVELS = ['Starter', 'Beginner', 'Intermediate', 'Advanced'];
 
 /* ---------- The calls: the CMS's own, mirrored ----------
    Every call on Ring Channel is a call of the CMS's Call Simulator (CaseManagementTraining/call-packs.js, copied to
@@ -391,7 +429,7 @@ const RING = {
   ft_in_nicole: { caller: caller('ADAMS NICOLE', '(555) 010-5634'), hideCases: ['MC-13'], reference: 'MC-13' },
   ft_in_retainer: { caller: caller('WIRELESS CALLER', '(555) 010-4520') }
 };
-export const trackOfLine = (line) => (/calendar/i.test(line) ? 'calendar' : /intake/i.test(line) ? 'intake' : 'reception');
+export const trackOfLine = (line) => (line === CLAIMS_LINE ? 'claims' : /calendar/i.test(line) ? 'calendar' : /intake/i.test(line) ? 'intake' : 'reception');
 // A caller ID for a call RING has none for: the same number every time for the same call.
 function anyNumber(id) { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return `(555) 010-${String(7000 + (h % 2999)).padStart(4, '0')}`; }
 // The trainee's brief, said the phone's way: the CMS's "link in your brief" is 🔎 Case lookup here, and a call they
@@ -400,6 +438,7 @@ function ringBrief(c, caseId) {
   const name = caseId && CASES[caseId] ? CASES[caseId].name : '';
   let t = String(c.you || '')
     .replace(/open (the|his|her) case in the CMS Training Library \(link in your brief\) or read the case file below it/g, 'look $1 case up in 🔎 Case lookup (or open it in the CMS Training Library)')
+    .replace(/Open the CMS Training Library case (MC-\d+) \(link in your brief\) or read the case file below/g, 'Look up $1 in 🔎 Case lookup (or open it in the CMS beside the call)')
     .replace(/\(open the case summary in your brief\)/g, name ? `(its case summary is in 🔎 Case lookup: search ${name})` : '(its case summary is in 🔎 Case lookup)')
     .replace(/\bis in your brief\b/g, name ? `is in 🔎 Case lookup (search ${name})` : 'is in 🔎 Case lookup');
   if (c.dir === 'out') t += ' On Ring Channel the call comes to your phone: when you pick up, you are through to the person you phoned, so open the call as the one calling.';
@@ -437,7 +476,9 @@ export const LINES = {
 export const COURSE_LINES = {
   reception: { line: 'Reception Mock Calls', lesson: 4 },
   calendar: { line: 'Calendar Management Mock Calls', lesson: 5 },
-  intake: { line: 'Intake Mock Calls', lesson: 6 }
+  intake: { line: 'Intake Mock Calls', lesson: 6 },
+  // 🛡 Claims: a Standard Training line with no lesson of its own in the course (the CMS's line has no course)
+  claims: { line: CLAIMS_LINE, lesson: null }
 };
 export const PROGRAMS = ['FT', 'CM', 'PD', 'EA'];
 // The programs as the CMS names them (its call-packs.js PROGRAMS), for the pickers' 📘 🗂 🚗 🧑‍💼 tabs.
@@ -449,6 +490,7 @@ export const programOk = (p) => { const x = String(p == null ? '' : p).trim().to
 export function trackFromLink(track, line) {
   const t = String(track == null ? '' : track).trim().toLowerCase(), l = String(line == null ? '' : line).trim().toLowerCase();
   if (TRACKS[t]) return t;
+  if (/claims mock calls/.test(l)) return 'claims';
   if (t === 'calendaring' || /calendar/.test(l)) return 'calendar';
   if (t === 'intake' || /intake/.test(l)) return 'intake';
   if (t === 'reception' || /reception|front desk/.test(l)) return 'reception';

@@ -586,5 +586,5 @@
   };
 
   App.levelBadge = (l) => `<span class="badge lvl-${esc(l)}">${esc(l)}</span>`;
-  App.trackBadge = (t) => { const x = App.cfg.tracks[t]; return x ? `<span class="badge ${t === 'intake' ? 'violet' : t === 'calendar' ? 'blue' : 'orange'}">${x.icon} ${esc(x.label)}</span>` : ''; };
+  App.trackBadge = (t) => { const x = App.cfg.tracks[t]; return x ? `<span class="badge ${t === 'intake' ? 'violet' : t === 'calendar' ? 'blue' : t === 'claims' ? 'green' : 'orange'}">${x.icon} ${esc(x.label)}</span>` : ''; };
 })();

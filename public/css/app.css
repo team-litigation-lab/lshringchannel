@@ -317,7 +317,7 @@ table.list tr.click:hover td { background: #f8fafc; }
 .scen h4 { margin: 0; font-size: 15px; }
 .scen .meta { display: flex; gap: 6px; flex-wrap: wrap; }
 .scen p { margin: 0; font-size: 13px; color: var(--muted); }
-.lvl-Beginner { background: #dcfce7; color: #166534; } .lvl-Intermediate { background: var(--blue-soft); color: #1e40af; } .lvl-Advanced { background: #fee2e2; color: #991b1b; }
+.lvl-Starter { background: #ecfdf5; color: #047857; } .lvl-Beginner { background: #dcfce7; color: #166534; } .lvl-Intermediate { background: var(--blue-soft); color: #1e40af; } .lvl-Advanced { background: #fee2e2; color: #991b1b; }
 
 /* ---------- trainer console ----------
    🎛 Console: ☎ the switchboard joined to the dialer on the left, with how the next call is placed

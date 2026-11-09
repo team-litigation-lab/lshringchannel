@@ -470,6 +470,7 @@
   function linkTrack(link) {
     const t = String(link.track || '').toLowerCase(), l = String(link.line || '').toLowerCase();
     if (App.cfg.tracks[t]) return t;
+    if (/claims mock calls/.test(l)) return 'claims';
     if (t === 'calendaring' || /calendar/.test(l)) return 'calendar';
     if (t === 'intake' || /intake/.test(l)) return 'intake';
     if (t === 'reception' || /reception|front desk/.test(l)) return 'reception';

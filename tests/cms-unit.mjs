@@ -20,7 +20,9 @@ for (const c of CMS.CALLS) {
   if (!TRACKS[s.track] || s.track !== trackOfLine(c.line)) fail(`${c.id}: graded on no Mock Calls Metrics`);
   if (!LINES[lineOf(s.track)]) fail(`${c.id}: rings on no line`);
   // the case file: the Training Library file (FT) or the program's case summary, with the CMS's text
-  if (c.doc && (!CASES[c.doc] || CASES[c.doc].text !== CMS.DOCS[c.doc].text || s.caseId !== c.doc)) fail(`${c.id}: its case file ${c.doc} isn't the CMS's`);
+  if (c.doc && (!CASES[c.doc] || !CASES[c.doc].text.startsWith(CMS.DOCS[c.doc].text) || s.caseId !== c.doc)) fail(`${c.id}: its case file ${c.doc} isn't the CMS's`);
+  // 🛡 a Claims call's file has the CLAIMS paragraph the CMS adds on that line, and the call is graded and noted as Claims
+  if (c.line === 'Claims Mock Calls' && (!/CLAIMS:/.test(CASES[c.doc].text) || s.track !== 'claims')) fail(`${c.id}: a Claims call without its file's CLAIMS paragraph or the Claims track`);
   if (c.case && (!s.caseId || CASES[s.caseId].text !== CMS.CASES[c.case].text)) fail(`${c.id}: its ${c.case} case summary isn't the CMS's`);
   if (/your brief|below it/.test(s.you)) fail(`${c.id}: the trainee's brief still points at the CMS's page: ${s.you}`);
   if (!s.caller.idName || !/^\(555\) 010-\d{4}$/.test(s.caller.number)) fail(`${c.id}: no caller ID`);

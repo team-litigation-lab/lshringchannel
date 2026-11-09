@@ -1158,7 +1158,7 @@ export class Switchboard extends DurableObject {
     const row = this.sql.exec(`SELECT v FROM settings WHERE k = 'grading'`).toArray()[0];
     const v = row ? JSON.parse(row.v) : {};
     const out = Object.assign({}, DEFAULT_SETTINGS, v);
-    out.weights = Object.assign({ reception: {}, calendar: {}, intake: {} }, v.weights || {});
+    out.weights = Object.assign({ reception: {}, calendar: {}, intake: {}, claims: {} }, v.weights || {});
     return out;
   }
   saveSettings(o) {
