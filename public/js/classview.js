@@ -141,6 +141,8 @@
       const b = U.$('#cvBody'); if (b) b.innerHTML = `<div class="cv-idle"><h1>The console was closed</h1><p>Open the Class view again from the console.</p></div>`;
       return;
     }
+    // 🔊 Follow the console's Speaker key, again after the console reloads (a new page, a new Speaker).
+    try { const sp = op.VoIP && op.VoIP.Speaker; if (sp && VoIP.Speaker.lead !== sp) VoIP.Speaker.follow(sp); } catch (e) {}
     let s;
     try { s = op.Console.classState(); } catch (e) { return; }
     // The call's audio: this tab plays it (the class hears what Meet shares from this tab).

@@ -929,6 +929,9 @@
      that's redrawn reloads, so it lives beside #work (not in it) and is only shown or hidden. */
   // The CMS shows under 🔎 Case lookup once it's opened there (on the other tabs it's kept, hidden).
   const cmsTabOn = () => { const p = shown(); return !!(p && !p.out && p.status !== 'waiting' && p.cmsOpen && U.$('#work [data-pane="lookup"].on')); };
+  /* 👁 Whether the trainee has the CMS beside the call now, for the trainers' Watch live (App.cmsOpen): the frame is
+     kept loaded between calls so it doesn't reload, but it's only "open" while the call on the phone has it open. */
+  T.cmsShown = () => { const p = shown(), f = U.$('#cmsSplit .cms-frame'); return !!(f && f.getAttribute('src') && p && !p.out && p.status !== 'waiting' && p.cmsOpen); };
   function syncCms() {
     const box = U.$('#cmsSplit'); if (!box) return;
     const on = cmsTabOn(), p = shown();
@@ -936,6 +939,7 @@
     if (on && !box.dataset.loaded) loadCms(p.cmsCase || p.caseId || '', true);
     // The trainer hears of it once per call, as soon as the call is answered (opened while it rang, or the frame kept from the last call).
     else if (on && !p.cmsTold) tellCms();
+    App.cmsReport();   // a call that ended (or the next one) changes whether it's open
   }
   // The trainer's console watches the trainee's CMS screen once they open it on a call (a classmate's practice call: no).
   function tellCms() {

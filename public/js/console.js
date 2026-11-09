@@ -161,7 +161,7 @@
       case 'cms':
         if (!mine) return;
         if (!t.traineeCms) C.scriptOn = false;   // the script steps aside for their CMS
-        t.traineeCms = true; watchCms(t.trainee);
+        t.traineeCms = true; renderDialBadges(); C.autoWatch(t.trainee, true);   // the toast comes with 'cms-open'
         return;
       case 'transfer':
         if (!mine) return;
@@ -770,7 +770,7 @@
         </div>
       </div>`;
     renderDialer(); renderTransfer(); renderCase(); renderConf(); renderLiveNote();
-    if (t.traineeCms) watchCms(t.trainee, true);   // after a reload: the trainee already has the CMS open
+    if (t.traineeCms) C.autoWatch(t.trainee, true);   // after a reload: the trainee already has the CMS open
   }
 
   /* 👁 Where the trainee's CMS shows: beside the dialer, in the column the call's cards use (#dialCol). On a call
@@ -795,15 +795,22 @@
      trainer's call; otherwise the latest trainee to open the CMS. ✕ Close keeps it closed for that trainee
      until they open the CMS again; 👁 on a trainee's switchboard row watches them by hand. */
   C.watching = null;          // { id, name, batch } of the trainee being watched
-  const dismissed = new Set();   // "id:cmsAt": a CMS opening the trainer closed the watch on
+  const closedFor = new Set();   // trainee ids whose watch the trainer closed: kept closed until they open the CMS again
   const cmsOf = (id) => (App.presence.trainees || []).find((x) => x.id === id && x.cms) || null;
-  const onCallWith = (id) => !!(active(App.t) && App.t.trainee && App.t.trainee.id === id);
+  // On a call: on this tab, or held in another of the trainer's tabs ('elsewhere').
+  const busy = (t) => !!(t && (active(t) || t.status === 'elsewhere'));
+  const onCallWith = (id) => !!(busy(App.t) && App.t.trainee && App.t.trainee.id === id);
   async function watchCms(tr, quiet) {
     const box = U.$('#cmsWatch'); if (!box || !tr || !tr.name) return;
-    const who = tr.name;
-    C.watching = { id: tr.id || '', name: who, batch: tr.batch || '' };
-    if (box.dataset.who === who && U.$('.cms-frame', box)) { cmsNote(); syncWatch(); return; }   // already watching them: keep the frame
-    box.dataset.who = who; box.dataset.tid = tr.id || '';
+    const who = tr.name, tid = tr.id || '';
+    C.watching = { id: tid, name: who, batch: tr.batch || '' };
+    // Already watching them (or opening it): keep the frame, a redrawn frame reloads.
+    if (box.dataset.tid === tid && box.dataset.who === who && (box.dataset.loading || (U.$('.cms-frame', box) && U.$('.cms-frame', box).getAttribute('src')))) {
+      cmsNote(); syncWatch();
+      if (!quiet && !box.dataset.announced) announce(tr);
+      return;
+    }
+    box.dataset.who = who; box.dataset.tid = tid; box.dataset.loading = '1'; delete box.dataset.announced;
     box.innerHTML = `<div class="cms-split-head"><b>👁 ${esc(who)}'s CMS, live</b><span class="small muted cms-msg" style="flex:1">Opening the CMS's Watch live, signed in as you…</span>${App.zoomHTML()}
         <button class="btn btn-sm" data-cmsw="script" title="The caller's script, the checklist and the note (the CMS stays open)">🎭 Script</button><button class="btn btn-sm" data-cmsw="tab" title="Watch in its own browser tab">↗ New tab</button><button class="btn btn-sm" data-cmsw="close">✕ Close</button></div>
       ${App.cmsFrameHTML(who + "'s CMS screen")}`;
@@ -813,8 +820,9 @@
     box.onclick = async (e) => {
       const b = e.target.closest('[data-cmsw]'); if (!b) return;
       if (b.dataset.cmsw === 'close') {
-        const x = cmsOf(box.dataset.tid); if (x) dismissed.add(x.id + ':' + (x.cmsAt || 0));
-        box.innerHTML = ''; delete box.dataset.who; delete box.dataset.tid; C.watching = null; C.scriptOn = false; syncWatch(); renderRoster(); renderDialBadges(); return;
+        if (box.dataset.tid) closedFor.add(box.dataset.tid);
+        box.innerHTML = ''; ['who', 'tid', 'loading', 'announced', 'authed'].forEach((k) => delete box.dataset[k]);
+        C.watching = null; C.scriptOn = false; syncWatch(); renderRoster(); renderDialBadges(); return;
       }
       if (b.dataset.cmsw === 'script') { C.scriptOn = !C.scriptOn; syncWatch(); return; }
       const tab = window.open('', '_blank');
@@ -823,31 +831,42 @@
     try {
       const r = await ask();
       const f = U.$('.cms-frame', box);
-      if (!f || box.dataset.who !== who) return;
+      if (!f || box.dataset.tid !== tid) return;
       f.src = r.url;
+      delete box.dataset.loading;
       box.dataset.authed = r.authed ? '1' : '';
       cmsNote();
-      if (!quiet) U.toast(`👁 ${who} opened the CMS: their screen is beside your dialer${onCallWith(tr.id) ? ' (🎭 Script brings the script back)' : ''}.`);
+      if (!quiet) announce(tr);
       renderDialBadges(); renderRoster();
-      if (!quiet && !onCallWith(tr.id)) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) {
+      if (box.dataset.tid !== tid) return;
       const msg = U.$('.cms-msg', box); if (msg) msg.textContent = 'Couldn\'t open the CMS: ' + err.message;
+      delete box.dataset.loading;   // no link in the frame: the next opening tries again
     }
+  }
+  // Once per opening: a quiet watch (from presence) still gets its toast when the switchboard's 'cms-open' comes.
+  function announce(tr) {
+    const box = U.$('#cmsWatch'); if (box) box.dataset.announced = '1';
+    U.toast(`👁 ${tr.name} opened the CMS: their screen is beside your dialer${onCallWith(tr.id) ? ' (🎭 Script brings the script back)' : ''}.`);
   }
   // The line over the frame: still open, or closed (the CMS's Watch live then shows their last screen).
   function cmsNote() {
-    const box = U.$('#cmsWatch'), msg = box && U.$('.cms-msg', box); if (!msg || !box.dataset.who) return;
+    const box = U.$('#cmsWatch'), msg = box && U.$('.cms-msg', box); if (!msg || !box.dataset.who || box.dataset.loading) return;
     const who = box.dataset.who, open = !box.dataset.tid || !!cmsOf(box.dataset.tid);
     msg.textContent = (open ? `${who} has the CMS open: their screen shows here, about a second behind.` : `${who} closed the CMS (or left Ring Channel). It opens here again when they reopen it.`)
       + (box.dataset.authed ? '' : ' The CMS will ask you to sign in (no Portal secret is set on this site): then Master Control → Monitoring → 👁 Watch live.');
   }
-  /* Watch the trainee who just opened the CMS, unless the trainer is on a call with someone else (their row's 👁 is there for that).
-     quiet: from presence (a reload, or back on the Console), no toast. */
+  /* Watch a trainee who has the CMS open, unless the trainer is on a call with someone else (their row's 👁 is there for that).
+     quiet: from presence or a redraw (a reload, back on the Console): no toast, a closed watch stays closed, and a
+     watch already showing someone stays. Not quiet: the trainee has just opened the CMS (the switchboard's 'cms-open'). */
   C.autoWatch = function (tr, quiet) {
     if (!tr || !tr.id) return;
-    const x = cmsOf(tr.id);
-    if (quiet && x && dismissed.has(x.id + ':' + (x.cmsAt || 0))) return;
-    if (active(App.t) && App.t.trainee && App.t.trainee.id !== tr.id) {
+    if (!quiet) closedFor.delete(tr.id);
+    else {
+      if (closedFor.has(tr.id)) return;
+      const box = U.$('#cmsWatch'); if (box && box.dataset.who && box.dataset.tid !== tr.id) return;
+    }
+    if (busy(App.t) && App.t.trainee && App.t.trainee.id !== tr.id) {
       if (!quiet) U.toast(`👁 ${tr.name} opened the CMS. You're on a call with ${App.t.trainee.name}: 👁 on ${tr.name}'s switchboard row shows their screen.`);
       renderRoster(); return;
     }
@@ -861,9 +880,8 @@
   function cmsPresence() {
     const box = U.$('#cmsWatch'); if (!box) return;
     if (box.dataset.who) { cmsNote(); return; }
-    const t = App.t, open = (App.presence.trainees || []).filter((x) => x.cms);
-    const pick = (t && active(t) && t.trainee && open.find((x) => x.id === t.trainee.id))
-      || (C.watching && open.find((x) => x.id === C.watching.id))
+    const t = App.t, open = (App.presence.trainees || []).filter((x) => x.cms && !closedFor.has(x.id));
+    const pick = (busy(t) && t.trainee && open.find((x) => x.id === t.trainee.id))
       || open.slice().sort((a, b) => (b.cmsAt || 0) - (a.cmsAt || 0))[0];
     if (pick) C.autoWatch(pick, true);
   }
@@ -1183,7 +1201,7 @@
     const jump = e.target.closest('[data-cmsjump]');
     if (jump) { C.scriptOn = false; syncWatch(); const w = U.$('#dialCol'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     const cw = e.target.closest('[data-cmswatch]');
-    if (cw) { const x = cmsOf(cw.dataset.cmswatch); if (x) { C.scriptOn = false; watchCms(x, true); const w = U.$('#dialCol'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' }); } return; }
+    if (cw) { const x = cmsOf(cw.dataset.cmswatch); if (x) { closedFor.delete(x.id); C.scriptOn = false; watchCms(x, true); const w = U.$('#dialCol'); if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' }); } return; }
     // The switchboard is the phone's contact list: a trainee's row puts their extension on the dialer; 📞 also rings.
     const ringBtn = e.target.closest('[data-ring]');
     if (ringBtn) { if (App.t) return; pickTrainee(ringBtn.dataset.ring); ring(); return; }
