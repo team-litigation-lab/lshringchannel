@@ -1,4 +1,4 @@
-/* 🧭 The Ring Channel Blueprint\'s slides (lsh-blueprint.js draws them and makes the PDFs; it\'s the same file on
+/* 🧭 The LSH Voice Blueprint\'s slides (lsh-blueprint.js draws them and makes the PDFs; it\'s the same file on
    every LSH platform). TRAINEE: the trainee\'s phone. TRAINER: the trainer\'s console (trainers only).
    A slide is { icon, title, points: [...], where, tip }. Change the wording here; the page and the PDFs are made
    from it each time, stamped with the deployed version. README → 🧭 Blueprint. */
@@ -7,17 +7,17 @@
   const TRAINEE = {
     sub: 'How to take mock calls on your training phone',
     slides: [
-      { icon: '☎', title: 'What Ring Channel is', points: [
+      { icon: '☎', title: 'What LSH Voice is', points: [
           'A training phone system in your browser for the Receptionist and Intake mock calls.',
           'Your trainer rings your phone and plays the caller over live audio; you handle the call like a real one.',
           'The call is recorded and graded on the program\'s Mock Calls Metrics for its line.',
           'No phone numbers and no phone bills: it all runs in Chrome or Edge.'],
-        where: 'The LSH Training Portal → Training Directory → ☎ LSH Ring Channel.',
+        where: 'The LSH Training Portal → 🎓 LSH Academy Index → ☎ LSH Voice.',
         tip: 'Wear a headset, and use Chrome or Edge on a computer.' },
-      { icon: '🏠', title: 'Opening Ring Channel', points: [
-          'There\'s no separate sign-in: sign in on the LSH Training Portal, then open ☎ LSH Ring Channel from the Training Directory.',
+      { icon: '🏠', title: 'Opening LSH Voice', points: [
+          'There\'s no separate sign-in: sign in on the LSH Training Portal, then open ☎ LSH Voice from 🎓 LSH Academy Index.',
           'You arrive signed in, on your phone, as your Portal name and batch.',
-          'Opening Ring Channel\'s own link only shows the way to the Portal.',
+          'Opening LSH Voice\'s own link only shows the way to the Portal.',
           '🎧 Audio check tests your microphone, headset and speaker before the first call.'],
         where: 'The LSH Training Portal · ☎ Console → 🎧 Audio check.',
         tip: 'Keep the Portal open in its own tab: it\'s your way back in.' },
@@ -37,7 +37,7 @@
       { icon: '🗂', title: 'During the call', points: [
           '📝 Note: the message slip, the calendar entry or the intake note, depending on the line.',
           '🔎 Case lookup: the firm\'s case files, searched by name, phone, date of birth or case number.',
-          '🗂 CMS: the CMS Training Library beside the call, signed in as you (Case lookup\'s "Open in the CMS" opens a file there).',
+          '🗂 LSH CaseWorks: its Training Library beside the call, signed in as you (Case lookup\'s "Open in LSH CaseWorks" opens a file there).',
           '📇 Directory: the firm\'s extensions, with Transfer buttons.',
           '📘 Rules: the front-desk rules and the line\'s reminders.'],
         where: '☎ Console: they come up beside the phone while you\'re on a call.',
@@ -75,7 +75,7 @@
     sub: 'Running live mock calls from the trainer console',
     slides: [
       { icon: '🏠', title: 'Opening the console', points: [
-          'Open ☎ LSH Ring Channel from the LSH Training Portal (Training Directory or Master Control): you arrive on the console, under your Portal name.',
+          'Open ☎ LSH Voice from the LSH Training Portal (🎓 LSH Academy Index or Master Control): you arrive on the console, under your Portal name.',
           'Your top bar has four buttons: 🎛 Console, 🗂 Call Logs & Scenario Picker, 🛡 Admin and 🏠 Main Portal. 🛡 Admin holds Call Logs, 📊 Trainee Monitoring, 📋 Graded Calls, 🤖 AI calls, 🎧 Try practice and ⚙️ Setup.',
           'Trainees open it from the Portal too: no sign-in form, no PINs. The trainer passphrase is only for when the Portal is down.'],
         where: 'The LSH Training Portal · the top bar.',
@@ -146,8 +146,8 @@
     return ver;
   }
   window.LSH_BLUEPRINT = {
-    product: 'Ring Channel',
-    site: 'LSH Ring Channel',
+    product: 'LSH Voice',
+    site: 'LSH Voice',
     file: 'LSH_Ring_Channel',
     logo: 'lsh-logo-dark.png',
     trainee: TRAINEE,

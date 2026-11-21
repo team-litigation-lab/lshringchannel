@@ -1,6 +1,6 @@
 {
-  "name": "LSH Ring Channel",
-  "short_name": "Ring Channel",
+  "name": "LSH Voice",
+  "short_name": "LSH Voice",
   "description": "The LSH training phone: live and AI mock calls for Reception, Calendar and Intake.",
   "id": "/",
   "start_url": "/",

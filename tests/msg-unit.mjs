@@ -101,7 +101,7 @@ if (!MSG_RUBRIC.every((r) => gp.prompt.includes(r.name))) fail('the scorer shoul
 if (!gp.prompt.includes(t0.goals[0])) fail('the scorer should be given the thread\'s checklist');
 
 /* ---------- a graded thread in the trainee's course ----------
-   It goes to the same /api/call-results the Call Simulator posts to, with kind: 'message', so the
+   It goes to the same /api/call-results the Call Sim posts to, with kind: 'message', so the
    Portal files it as its 💬 Client Messaging simulator on the Automated Messaging line. */
 const realFetch = globalThis.fetch;
 let sent = null;

@@ -11,7 +11,7 @@
    and the client's own replies come from the AI (/api/msg/send).
    Ending the thread scores it on the Client Messaging Metrics, and a
    graded thread counts in the trainee's course on the Portal exactly as
-   the CMS's Client Messaging conversations do (src/messaging.js).
+   LSH CaseWorks' Client Messaging conversations do (src/messaging.js).
 
    Two simulators, one engine and one page. 💬 Client Messaging is the
    thread a client (or someone saying they are one) starts on the firm's
@@ -116,7 +116,7 @@
   /* ---------- a trainer's list ---------- */
   function trainerHTML(list) {
     return `<h2>${SIM().icon} ${esc(SIM().name)} threads</h2>
-      <p class="muted">Every trainee's threads on this texting simulator, newest first. A graded thread is scored on the ${esc(cfg().sheet)} when it ends and counts in the trainee's course on the Portal, on the ${esc(SIM().line)} line.</p>
+      <p class="muted">Every trainee's threads on this texting Sim, newest first. A graded thread is scored on the ${esc(cfg().sheet)} when it ends and counts in the trainee's course on the Portal, on the ${esc(SIM().line)} line.</p>
       ${list.length ? `<table class="list"><tr><th>When</th><th>Trainee</th><th>Thread</th><th></th><th>Score</th></tr>
         ${list.map((m) => `<tr class="click" data-open="${esc(m.id)}"><td>${U.when(m.createdAt)}</td><td><b>${esc(m.traineeName)}</b>${m.batch ? `<div class="small muted">${esc(m.batch)}</div>` : ''}</td>
           <td>${esc(m.title)}</td><td>${m.graded ? '<span class="badge orange">Graded</span>' : '<span class="badge">Practice</span>'}</td>
@@ -272,7 +272,7 @@
     // The page is one simulator at a time: switching tabs leaves the other one's thread on the server.
     if (kind !== KIND) { stopPolling(); M = null; KIND = kind; }
     /* A Portal link may ask for one thread (?messages=1&thread=…&mode=graded, or ?messaging=1 for the
-       automation's): it opens straight away, once, the way a Call Simulator link rings a graded call
+       automation's): it opens straight away, once, the way a Call Sim link rings a graded call
        at once (app.js). */
     const link = App.msgLink || {};
     if (link.thread && !link.used) {

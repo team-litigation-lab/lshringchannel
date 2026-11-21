@@ -14,7 +14,7 @@ const lines = (pg) => pg.$$eval('#msgLines .tl', (x) => x.map((e) => e.textConte
   const mk = async () => { const c = await browser.newContext({ viewport: { width: 1360, height: 900 } }); const p = await c.newPage(); p.on('pageerror', (e) => console.log('PAGE ERROR', e.message)); return p; };
 
   /* A Portal messaging link: ?messaging=1&thread=…&mode=graded opens that thread straight away, the way a
-     Call Simulator link rings a graded call at once. */
+     Call Sim link rings a graded call at once. */
   const te = await mk();
   const ticket = Portal.trainee(B, 'Riley Santos', 'B093026');
   await te.goto(ticket + '&messaging=1&thread=am_reminder&program=FT&mode=graded');

@@ -1,5 +1,5 @@
-# 🔁 Keeps Ring Channel's calls the CMS's: copies CaseManagementTraining/call-packs.js and mock-cases.js to src/cms/
-# (scripts/sync-cms-calls.mjs) every hour and on Run workflow, checks Ring Channel still builds its calls from it,
+# 🔁 Keeps LSH Voice's calls the CMS's: copies CaseManagementTraining/call-packs.js and mock-cases.js to src/cms/
+# (scripts/sync-cms-calls.mjs) every hour and on Run workflow, checks LSH Voice still builds its calls from it,
 # and commits the change to main, so a call changed in the CMS is the call the trainers play on the Console.
 # If the CMS's file stops looking the way src/scenarios.js reads it, the run fails and nothing is committed.
 name: Sync CMS calls
@@ -30,7 +30,7 @@ jobs:
           node-version: 22
       - name: Copy the CMS's call-packs.js
         run: node scripts/sync-cms-calls.mjs
-      - name: Ring Channel's calls are the CMS's (tests/cms-unit.mjs)
+      - name: LSH Voice's calls are the CMS's (tests/cms-unit.mjs)
         run: node --no-warnings tests/cms-unit.mjs
       - name: The Worker still builds (wrangler dry run)
         run: |

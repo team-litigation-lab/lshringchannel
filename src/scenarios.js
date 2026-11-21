@@ -1,11 +1,11 @@
 /* =========================================================
-   LSH Ring Channel: the scenario library
+   LSH Voice: the scenario library
    ---------------------------------------------------------
    The firm, its directory and front-desk rules, the case files a
    trainee can look up during a call, the note forms, the rubrics,
    and the mock calls themselves.
 
-   Source: the CMS. The calls are the CMS's Call Simulator calls
+   Source: the CMS. The calls are the CMS's Call Sim calls
    (CaseManagementTraining/call-packs.js, mirrored to src/cms/ by
    scripts/sync-cms-calls.mjs; SCENARIOS below), for every program.
    The case files are the CMS's Training Library cases
@@ -194,7 +194,7 @@ for (const [id, d] of Object.entries(CMS.DOCS)) {
 const extOf = (name) => { const d = FIRM.directory.find((x) => x.name === name || x.name.replace(/^Atty\. /, '') === name.replace(/^Atty\. /, '')); return d ? d.ext : ''; };
 for (const mc of LIBRARY.MOCK_CASES || []) if (mc && mc.id && !CASES[mc.id]) CASES[mc.id] = cmsFile(mc, extOf);
 /* 🛡 The CMS's Claims Mock Calls have the trainee phone the file's carrier: the CMS adds the file's CLAIMS paragraph
-   (carriers, claim numbers, adjusters, limits) to the file on that line (call-packs.js docOf). On Ring Channel the
+   (carriers, claim numbers, adjusters, limits) to the file on that line (call-packs.js docOf). On LSH Voice the
    file is the one in 🔎 Case lookup, so its CLAIMS paragraph is part of the file there. */
 export const CLAIMS_LINE = 'Claims Mock Calls';
 for (const c of CMS.CALLS) {
@@ -398,7 +398,7 @@ const youIntake = 'You are the intake specialist at LSH Training Law Group (fict
 export const LEVELS = ['Starter', 'Beginner', 'Intermediate', 'Advanced'];
 
 /* ---------- The calls: the CMS's own, mirrored ----------
-   Every call on Ring Channel is a call of the CMS's Call Simulator (CaseManagementTraining/call-packs.js, copied to
+   Every call on LSH Voice is a call of the CMS's Call Sim (CaseManagementTraining/call-packs.js, copied to
    src/cms/call-packs.js by scripts/sync-cms-calls.mjs): the same callers, scripts, goals and case files, for the four
    programs (📘 Standard Training, 🗂 Case Management, 🚗 Property Damage, 🧑‍💼 EA / PA), so a trainer's manual mock call
    on the Console and a trainee's call in the CMS are the same call. Change a call in the CMS, not here.
@@ -407,7 +407,7 @@ export const LEVELS = ['Starter', 'Beginner', 'Intermediate', 'Advanced'];
                everything else → reception (the phone skills every line shares)
      program   FT, CM, PD or EA, and cmsLine, the CMS line it's on (where a graded call counts on the Portal)
      caseId    the Training Library file (FT: MC-xx) or the program's case summary (CASES below: CMS-CM …)
-     dir       'out' when the trainee places the call in the CMS: on Ring Channel the trainer rings them and plays the
+     dir       'out' when the trainee places the call in the CMS: on LSH Voice the trainer rings them and plays the
                person they phoned
    What only a phone has (the caller ID, who doesn't pick up a transfer, a first caller hidden from Case lookup) is
    RING below, by the call's id; a call without it shows WIRELESS CALLER (a call the trainee places: the name they phoned). */
@@ -437,18 +437,18 @@ function anyNumber(id) { let h = 0; for (const ch of String(id)) h = (h * 31 + c
 function ringBrief(c, caseId) {
   const name = caseId && CASES[caseId] ? CASES[caseId].name : '';
   let t = String(c.you || '')
-    .replace(/open (the|his|her) case in the CMS Training Library \(link in your brief\) or read the case file below it/g, 'look $1 case up in 🔎 Case lookup (or open it in the CMS Training Library)')
-    .replace(/Open the CMS Training Library case (MC-\d+) \(link in your brief\) or read the case file below/g, 'Look up $1 in 🔎 Case lookup (or open it in the CMS beside the call)')
+    .replace(/open (the|his|her) case in the CMS Training Library \(link in your brief\) or read the case file below it/g, 'look $1 case up in 🔎 Case lookup (or open it in 🗂 LSH CaseWorks)')
+    .replace(/Open the CMS Training Library case (MC-\d+) \(link in your brief\) or read the case file below/g, 'Look up $1 in 🔎 Case lookup (or open it in 🗂 LSH CaseWorks beside the call)')
     .replace(/\(open the case summary in your brief\)/g, name ? `(its case summary is in 🔎 Case lookup: search ${name})` : '(its case summary is in 🔎 Case lookup)')
     .replace(/\bis in your brief\b/g, name ? `is in 🔎 Case lookup (search ${name})` : 'is in 🔎 Case lookup');
-  if (c.dir === 'out') t += ' On Ring Channel the call comes to your phone: when you pick up, you are through to the person you phoned, so open the call as the one calling.';
+  if (c.dir === 'out') t += ' On LSH Voice the call comes to your phone: when you pick up, you are through to the person you phoned, so open the call as the one calling.';
   return t;
 }
 function cmsScenario(c) {
   const r = RING[c.id] || {}, p = PROGRAM_NAMES[c.program] || { label: c.program };
   const caseId = c.doc && CASES[c.doc] ? c.doc : c.case && CASES[CMS_CASE_IDS[c.case]] ? CMS_CASE_IDS[c.case] : null;
   return {
-    id: c.id, source: `The CMS's Call Simulator · ${p.label} · ${c.line}`, program: c.program, cmsLine: c.line, dir: c.dir === 'out' ? 'out' : 'in',
+    id: c.id, source: `LSH CaseWorks' Call Sim · ${p.label} · ${c.line}`, program: c.program, cmsLine: c.line, dir: c.dir === 'out' ? 'out' : 'in',
     track: trackOfLine(c.line), level: LEVELS.includes(c.level) ? c.level : 'Intermediate', title: c.title, caseId,
     hideCases: r.hideCases || [], reference: r.reference || null, unavailable: r.unavailable || [],
     caller: Object.assign({ name: c.name, role: c.role, gender: c.gender === 'm' ? 'm' : 'f' }, r.caller || caller(c.dir === 'out' ? String(c.name).toUpperCase().slice(0, 24) : 'WIRELESS CALLER', anyNumber(c.id))),
@@ -468,7 +468,7 @@ export const LINES = {
 };
 
 /* 📊 Where a graded call counts in the LSH Training Portal's courses.
-   The Call Simulator is Ring Channel's: every graded call taken here is sent to the Portal
+   The Call Sim is LSH Voice's: every graded call taken here is sent to the Portal
    (POST /api/call-results, src/portal.js reportGradedCall), which keeps it on the trainee's Portal
    account and in the course's own store, so the course shows it on their progress. Standard Training
    counts a call by its lesson (Reception 4, Calendar Management 5, Intake 6); the other programs count
@@ -485,7 +485,7 @@ export const PROGRAMS = ['FT', 'CM', 'PD', 'EA'];
 export const PROGRAM_TABS = PROGRAMS.map((k) => Object.assign({ k, label: k, short: k, icon: '📞' }, PROGRAM_NAMES[k] || {}));
 export const programOk = (p) => { const x = String(p == null ? '' : p).trim().toUpperCase(); return PROGRAMS.includes(x) ? x : ''; };
 
-/* The line a Call Simulator link asks for: the Portal sends ?track=, and a course's older link ?flow=
+/* The line a Call Sim link asks for: the Portal sends ?track=, and a course's older link ?flow=
    (standard, cms, reception, intake, calendaring, ea-pa, pd) or ?line= (the line's name). */
 export function trackFromLink(track, line) {
   const t = String(track == null ? '' : track).trim().toLowerCase(), l = String(line == null ? '' : line).trim().toLowerCase();
@@ -499,7 +499,7 @@ export function trackFromLink(track, line) {
 
 // What the Portal is told about a graded call: the program it counts in, its line, and its lesson (Standard Training).
 // cmsLine: the CMS line of the call played (a scenario's line), which is the line the other programs count it on, as the
-// CMS's own Call Simulator does (call-packs.js courseOf).
+// CMS's own Call Sim does (call-packs.js courseOf).
 export function courseCall(track, program, cmsLine) {
   const t = COURSE_LINES[track] ? track : 'reception';
   const p = programOk(program) || 'FT';
@@ -512,7 +512,7 @@ export function courseCall(track, program, cmsLine) {
 export function openCall(track) {
   const t = TRACKS[track] ? track : 'reception';
   return {
-    id: 'open_' + t, open: true, track: t, level: 'Open', title: `Open ${TRACKS[t].label} call (no script)`, source: 'LSH Ring Channel',
+    id: 'open_' + t, open: true, track: t, level: 'Open', title: `Open ${TRACKS[t].label} call (no script)`, source: 'LSH Voice',
     caller: { name: 'The caller', role: 'Played by the trainer, no script', gender: '', idName: 'WIRELESS CALLER', number: '(555) 010-0100' },
     you: t === 'intake' ? youIntake : 'You are the receptionist answering the main line at LSH Training Law Group (fictional). Find out who is calling and why; if they say they\'re a client, look them up in 🔎 Case lookup.',
     facts: 'An open call: no script. The trainer plays a caller of their own choosing.',

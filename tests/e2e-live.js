@@ -34,12 +34,12 @@ const playCall = async (pg, sid) => {
   const mk = async () => { const c = await browser.newContext({ permissions: ['microphone'], viewport: { width: 1360, height: 900 } }); const p = await c.newPage(); p.on('pageerror', (e) => console.log('PAGE ERROR', e.message)); p.on('console', (m) => { if (m.type() === 'error') console.log('console error:', m.text()); }); return p; };
   const tr = await mk(), te = await mk();
 
-  // Both open Ring Channel from the LSH Training Portal: no sign-in form
+  // Both open LSH Voice from the LSH Training Portal: no sign-in form
   await te.goto(Portal.trainee(B, 'Jamie Cruz', 'B093026'));
   await te.waitForSelector('#device .lcd');
-  ok('Trainee opened Ring Channel from the Portal: signed in, phone is showing');
+  ok('Trainee opened LSH Voice from the Portal: signed in, phone is showing');
 
-  // Ring Channel's own link has no sign-in form for anyone to guess at
+  // LSH Voice's own link has no sign-in form for anyone to guess at
   const other = await mk();
   await other.goto(B + '/');
   await other.waitForSelector('#toPortal');
@@ -47,14 +47,14 @@ const playCall = async (pg, sid) => {
   const live = await other.evaluate(async () => (await fetch('/api/auth/trainee', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Jamie Cruz', batch: 'B093026', pin: '0000' }) })).status);
   if (live !== 401 && live !== 404) throw new Error('The old trainee sign-in still answers: ' + live);
   await other.close();
-  ok('Ring Channel\'s own link shows the way to the Portal, with no trainee sign-in form (and the old sign-in is gone)');
+  ok('LSH Voice\'s own link shows the way to the Portal, with no trainee sign-in form (and the old sign-in is gone)');
   await tr.goto(Portal.trainer(B, 'Coach Ana'));
   await tr.waitForSelector('#roster .tr[data-tid]');
   const ext = (await tr.textContent('#roster .tr[data-tid] .bt')).match(/ext (\d+)/);
   if (!ext || ext[1] !== '7001') throw new Error('The trainee should have desk extension 7001: ' + (await tr.textContent('#roster .tr[data-tid] .bt')));
   if (!/ext 7001/.test(await te.textContent('#device .dev-head'))) throw new Error('The trainee\'s phone should show its extension');
   if ((await tr.evaluate(() => App.me.name)) !== 'Coach Ana') throw new Error('The trainer should be signed in under their Portal name');
-  ok('Trainer opened Ring Channel from the Portal (on the Console, as Coach Ana); trainee appears on the switchboard with desk extension 7001 (also on their phone)');
+  ok('Trainer opened LSH Voice from the Portal (on the Console, as Coach Ana); trainee appears on the switchboard with desk extension 7001 (also on their phone)');
 
   /* ⌨ The trainee's phone is built as the trainer's dialer is, keypad and all. A trainee takes calls
      rather than places them, so the number keyed in is looked up in the firm's directory and the big
@@ -120,9 +120,9 @@ const playCall = async (pg, sid) => {
   const offSrc = new URL(await tr.getAttribute('#cmsWatch iframe', 'src'));
   if (offSrc.searchParams.get('watch') !== 'Jamie Cruz') throw new Error('Off a call, the console should watch the trainee who opened the CMS: ' + offSrc);
   await tr.waitForSelector('#roster [data-cmswatch]', { state: 'attached' });
-  await tr.waitForFunction(() => /has the CMS open/.test(document.querySelector('#cmsWatch .cms-msg').textContent));
+  await tr.waitForFunction(() => /has LSH CaseWorks open/.test(document.querySelector('#cmsWatch .cms-msg').textContent));
   await cmsTab.close();
-  await tr.waitForFunction(() => /closed the CMS/.test(document.querySelector('#cmsWatch .cms-msg').textContent), null, { timeout: 10000 });
+  await tr.waitForFunction(() => /closed LSH CaseWorks/.test(document.querySelector('#cmsWatch .cms-msg').textContent), null, { timeout: 10000 });
   if (await tr.$('#roster [data-cmswatch]')) throw new Error('The switchboard should drop 👁 once the trainee closes the CMS');
   await tr.click('#cmsWatch [data-cmsw="close"]');
   await tr.waitForSelector('#cmsWatch.hidden', { state: 'attached' });
@@ -188,7 +188,7 @@ const playCall = async (pg, sid) => {
   ok(`🔎 Case lookup is the first screen on a live call: ${caseId} previewed, chosen as the case file, shown on the trainer's console, and it opens in the CMS (${cms.authed ? 'signed in with a Portal ticket' : 'plain link: no Portal secret on this test site'})`);
 
   // Every Training Library file in the CMS is in Case lookup (not only the ones a call is about): MC-37 and MC-51
-  // are Schuyler Beauchamp's two files. "Open in the CMS" opens the CMS beside the call, in a frame that a redraw keeps.
+  // are Schuyler Beauchamp's two files. "Open in LSH CaseWorks" opens the CMS beside the call, in a frame that a redraw keeps.
   await te.fill('#lkQ', 'schuyler beauchamp');
   await te.waitForFunction(() => document.querySelectorAll('#lkHits [data-case]').length === 2);
   const sb = await te.$$eval('#lkHits [data-case]', (els) => els.map((x) => x.dataset.case).sort().join(' '));
@@ -249,7 +249,7 @@ const playCall = async (pg, sid) => {
   await te.click('[data-tab="lookup"]');
   if (!(await te.isVisible('#cmsSplit iframe[data-kept="1"]'))) throw new Error('The CMS frame should be kept (not reloaded) across tabs');
   if (await te.$('#device .dev-collapse, #device [data-act="meetshare"]')) throw new Error('The phone should have no ◀ Collapse tab and no 📺 Share in Meet');
-  ok('🗂 Case lookup has every CMS Training Library file (Schuyler Beauchamp: MC-37 and MC-51), and "Open in the CMS" opens it beside the call, kept while the trainee switches tabs');
+  ok('🗂 Case lookup has every CMS Training Library file (Schuyler Beauchamp: MC-37 and MC-51), and "Open in LSH CaseWorks" opens it beside the call, kept while the trainee switches tabs');
 
   // Live note
   await te.click('[data-tab="note"]');

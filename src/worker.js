@@ -1,5 +1,5 @@
 /**
- * LSH Ring Channel: a training VOIP phone system for Receptionist and Intake mock calls.
+ * LSH Voice: a training VOIP phone system for Receptionist and Intake mock calls.
  *
  * Cloudflare Worker + one Durable Object (the Switchboard, src/switchboard.js):
  *   /             the app (public/), a softphone for trainees and a console for trainers
@@ -145,20 +145,20 @@ export default {
         const who = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 40) || 'Trainer';
         return json({ token: await makeToken(env, 'a', who, 12), role: 'a', id: who, name: who });
       }
-      // 🏠 Ring Channel opens from the LSH Training Portal: its short-lived ticket signs a trainee in as a trainee and
+      // 🏠 LSH Voice opens from the LSH Training Portal: its short-lived ticket signs a trainee in as a trainee and
       // an administrator in as a trainer (src/portal.js). There's no sign-in form; /api/auth/admin is only the fallback.
       if (path === '/api/auth/portal') {
-        if (!secretOf(env)) return json({ error: 'Ring Channel isn\'t set up yet: add the ADMIN_PASSPHRASE (or SESSION_SECRET) secret in Cloudflare.', code: 'not-configured' }, 501);
+        if (!secretOf(env)) return json({ error: 'LSH Voice isn\'t set up yet: add the ADMIN_PASSPHRASE (or SESSION_SECRET) secret in Cloudflare.', code: 'not-configured' }, 501);
         const { ticket } = await request.json().catch(() => ({}));
         const v = await readPortalTicket(env, ticket);
         if (!v.ok) {
-          const why = { expired: 'This link from the LSH Training Portal has expired. Open Ring Channel from the Portal again.',
+          const why = { expired: 'This link from the LSH Training Portal has expired. Open LSH Voice from the Portal again.',
             unreachable: 'Couldn\'t reach the LSH Training Portal to check your sign-in. Try again in a moment.',
             signature: 'The LSH Training Portal\'s sign-in couldn\'t be verified here (PORTAL_SSO_SECRET differs from the Portal\'s). Please tell your administrator.' }[v.code];
-          return json({ error: why || 'The LSH Training Portal didn\'t confirm this sign-in. Open Ring Channel from the Portal again.', code: v.code }, 401);
+          return json({ error: why || 'The LSH Training Portal didn\'t confirm this sign-in. Open LSH Voice from the Portal again.', code: v.code }, 401);
         }
         if (v.system) return json({ error: 'That ticket isn\'t for a person.', code: 'system' }, 403);
-        if (!(await board(env).claimTicket(v.sig, v.exp))) return json({ error: 'This link from the LSH Training Portal was already used. Open Ring Channel from the Portal again.', code: 'used' }, 401);
+        if (!(await board(env).claimTicket(v.sig, v.exp))) return json({ error: 'This link from the LSH Training Portal was already used. Open LSH Voice from the Portal again.', code: 'used' }, 401);
         if (v.admin) { const who = v.name || 'Trainer'; return json({ token: await makeToken(env, 'a', who, 12), role: 'a', id: who, name: who, portal: true }); }
         const n = `${v.first} ${v.last}`.replace(/\s+/g, ' ').slice(0, 60), b = v.batch.replace(/\s+/g, ' ').slice(0, 30);
         const id = traineeId(n, b);
@@ -216,7 +216,7 @@ export default {
         if (ticket) u.searchParams.set('ticket', ticket);
         return json({ url: u.toString(), authed: !!ticket });
       }
-      // 📅 A trainer watching a trainee's Google Calendar Simulator beside the dialer (📅 Calendaring mode): the Portal's trainer view
+      // 📅 A trainer watching a trainee's Google Calendar Sim beside the dialer (📅 Calendaring mode): the Portal's trainer view
       // of their calendar, signed in as this trainer (src/portal.js calendarLink). Trainers only.
       if (path === '/api/cal-link') {
         if (!admin) return json({ error: 'Not allowed' }, 403);
@@ -379,7 +379,7 @@ export default {
         return json({ msg: m });
       }
       if (path === '/api/msg/start') {
-        if (!hasAI(env)) return json({ error: 'The messaging simulator isn\'t set up on this site yet.' }, 501);
+        if (!hasAI(env)) return json({ error: 'The messaging Sim isn\'t set up on this site yet.' }, 501);
         if (!admin && (await sb.countUsage(me.id, 'msgthread', 3600000)) >= 20) return json({ error: 'That\'s a lot of practice threads this hour. Take a short break and try again.' }, 429);
         const res = await sb.startMsgThread(me, String(body.threadId || ''), String(body.program || ''), !!body.graded);
         if (res.error) return json({ error: res.error }, res.status || 400);
@@ -388,7 +388,7 @@ export default {
       }
       // The trainee's text, and the client's answer to it. The automation's messages arrive here too.
       if (path === '/api/msg/send') {
-        if (!hasAI(env)) return json({ error: 'The messaging simulator isn\'t set up on this site yet.' }, 501);
+        if (!hasAI(env)) return json({ error: 'The messaging Sim isn\'t set up on this site yet.' }, 501);
         if ((await sb.countUsage(me.id, 'msgtext', 3600000)) >= 300) return json({ error: 'Too many messages this hour.' }, 429);
         await sb.logUsage(me.id, 'msgtext');
         const id = String(body.id || '');
