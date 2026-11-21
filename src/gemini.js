@@ -10,6 +10,8 @@
    request, when this Worker has no key of its own — goes to the LSH Training Portal's shared AI gateway
    (<PORTAL_URL>/api/ai-gateway), which answers from the Portal's own Gemini key pool. Text requests and Gemini Live
    tokens go there; scoring a recording (audio) needs a key here, as the gateway takes text only. */
+import { claudeOn, claudeGenerate } from './claude.js';
+
 const POOL = ['GEMINI_API_KEY5', 'GEMINI_API_KEY6', 'GEMINI_API_KEY7', 'GEMINI_API_KEY8', 'GEMINI_API_KEY9'];
 const SPARE = ['GEMINI_API_KEY', 'GEMINI_API_KEY1', 'GEMINI_API_KEY2'];
 export const TEXT_MODELS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'];
@@ -27,7 +29,7 @@ const GATEWAY_URL = 'https://cm-training-activity.pages.dev';
 const gatewayKey = (env) => String((env && env.AI_GATEWAY_SECRET) || '').trim();
 const gatewayUrl = (env) => String((env && env.PORTAL_URL) || GATEWAY_URL).replace(/\/+$/, '') + '/api/ai-gateway';
 export const hasGateway = (env) => !!gatewayKey(env);
-export const hasAI = (env) => keyNames(env).length > 0 || hasGateway(env);
+export const hasAI = (env) => keyNames(env).length > 0 || hasGateway(env) || claudeOn(env);
 
 // One request to the Portal's AI gateway → its JSON answer (or { success: false, error }).
 async function viaGateway(env, body) {
@@ -63,6 +65,7 @@ function keyOrder(env) {
 /* One generateContent request, tried model by model and key by key.
    parts: the user turn's parts ([{text}] or [{inlineData}, {text}]). Returns { text, model } or throws. */
 export async function generate(env, opts) {
+  { const c = await claudeGenerate(env, opts); if (c) return c; }   // 🤖 Claude first (claude.js); null: the Gemini keys, then the gateway
   let own = null;
   if (keyNames(env).length) { try { return await generateHere(env, opts); } catch (e) { own = e; } }
   const messages = hasGateway(env) ? asMessages(opts.contents || [{ role: 'user', parts: opts.parts }]) : null;
