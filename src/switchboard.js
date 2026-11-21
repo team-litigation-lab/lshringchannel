@@ -64,7 +64,7 @@ export class Switchboard extends DurableObject {
     // batch with two trainers on at once sees which line each of them is calling from.
     this.sql.exec(`CREATE TABLE IF NOT EXISTS trainers (name TEXT PRIMARY KEY, ext TEXT, created_at INTEGER, last_seen INTEGER)`);
     this.sql.exec('CREATE UNIQUE INDEX IF NOT EXISTS trainers_by_ext ON trainers (ext)');
-    // Each trainee's PIN (a salted hash) from when Ring Channel had its own sign-in form (no longer used).
+    // Each trainee's PIN (a salted hash) from when LSH Voice had its own sign-in form (no longer used).
     if (!this.sql.exec(`SELECT name FROM pragma_table_info('trainees') WHERE name = 'pin'`).toArray().length) this.sql.exec('ALTER TABLE trainees ADD COLUMN pin TEXT');
     // Each trainee's desk extension (7001, 7002, …), so the trainer can dial them. The firm's own
     // directory uses 100 to 500, so a trainee's extension never clashes with a transfer.
@@ -1109,7 +1109,7 @@ export class Switchboard extends DurableObject {
      reportGradedCall): the Portal keeps it on their Portal account and in the course's own store.
      Sent only when the trainee has a score they can see, once per score (a re-grade or a new review
      sends the new one), and never for a trainer trying 🎧 practice themselves. Best effort: if the
-     Portal can't be reached (or AI_GATEWAY_SECRET isn't set here), the call stays on Ring Channel and
+     Portal can't be reached (or AI_GATEWAY_SECRET isn't set here), the call stays on LSH Voice and
      why is kept on the record (data.reported). */
   async reportCall(id) {
     const r = this.row(id);
@@ -1366,7 +1366,7 @@ export class Switchboard extends DurableObject {
     return this.msgBrief(this.msgRow(id));
   }
   /* 📊 A graded thread to the LSH Training Portal, so it counts in the trainee's course: the same
-     /api/call-results the Call Simulator posts to, with kind: 'message', which files it as the
+     /api/call-results the Call Sim posts to, with kind: 'message', which files it as the
      Portal's 💬 Client Messaging simulator on the thread's own line (lineOfThread, src/portal.js).
      Best effort, as a call's is: why it didn't go is kept on the record (data.reported). */
   async reportMsgThread(id) {

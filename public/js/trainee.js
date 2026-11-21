@@ -465,7 +465,7 @@
   /* =========================================================
      Practice with an AI caller
      ========================================================= */
-  // The line a Call Simulator link asks for: ?track= (reception, calendar, intake), or the line's name
+  // The line a Call Sim link asks for: ?track= (reception, calendar, intake), or the line's name
   // from a course's link (?line=Reception Mock Calls) or an older ?flow= (calendaring → calendar).
   function linkTrack(link) {
     const t = String(link.track || '').toLowerCase(), l = String(link.line || '').toLowerCase();
@@ -480,7 +480,7 @@
   async function startAi(scenarioId, opts) {
     if (App.p && active(App.p)) return U.toast('Finish the call you are on first.', 'error');
     let r;
-    // program and graded: the Call Simulator link the trainee came in on (App.callLink), so the Portal's
+    // program and graded: the Call Sim link the trainee came in on (App.callLink), so the Portal's
     // course counts the call on the right line (src/portal.js reportGradedCall).
     try { r = await API.post('/api/ai/start', { scenarioId, voice: (opts && opts.voice) || '', program: App.callLink.program, graded: !!(opts && opts.graded) }); } catch (e) { return U.toast(e.message, 'error'); }
     const s = r.scenario;
@@ -606,7 +606,7 @@
     const mine = peers.find((x) => x.me);
     const batch = (mine && mine.batch) || (App.me && App.me.batch) || '';
     el.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
-        <div class="sb-sub">Ring Channel · Switchboard</div></div><div class="card roster" id="troster">
+        <div class="sb-sub">LSH Voice · Switchboard</div></div><div class="card roster" id="troster">
       <div class="card-head"><h3>☎ Switchboard</h3><span class="spacer"></span><span class="badge green">${peers.length || 1} online</span>${App.foldKey(FOLD, 'the switchboard')}</div>
       <div class="my-line">
         <div class="small muted">My line</div>
@@ -887,10 +887,10 @@
     }
     const track = p.track;
     const ended = p.status === 'ended';
-    const tabs = [['note', '📝 Note'], ['lookup', p.cmsOpen ? '🔎 Case lookup · 🗂 CMS' : '🔎 Case lookup'], ['dir', '📇 Directory'], ['rules', '📘 Rules']];
+    const tabs = [['note', '📝 Note'], ['lookup', p.cmsOpen ? '🔎 Case lookup · 🗂 LSH CaseWorks' : '🔎 Case lookup'], ['dir', '📇 Directory'], ['rules', '📘 Rules']];
     if (p.mode === 'ai' && (p.showTranscript || ended)) tabs.splice(1, 0, ['tr', p.voice === 'text' ? '💬 Conversation' : '💬 Transcript']);
     // On a live mock call the case file comes first, as at the real front desk: look the caller up,
-    // open the file (in the CMS if you like), then take the note.
+    // open the file (in LSH CaseWorks if you like), then take the note.
     const start = p.mode === 'ai' && p.voice === 'text' && !ended ? 'tr' : p.mode === 'live' && !ended ? 'lookup' : 'note';
     // The pane the trainee last opened stays open: the screen redraws often during a call.
     const first = p.tab && tabs.some(([k]) => k === p.tab) ? p.tab : start;
@@ -913,7 +913,7 @@
       ${trPane.replace('class="pane"', `class="pane ${first === 'tr' ? 'on' : ''}"`)}
       <div class="pane ${first === 'lookup' ? 'on' : ''} ${p.cmsOpen && !p.lkOpen ? 'lk-folded' : ''}" data-pane="lookup">${p.cmsOpen && !p.lkOpen
         ? ''
-        : `${p.cmsOpen ? '' : `<div class="lk-cms"><button type="button" class="btn btn-sm btn-primary" data-act="cmsopen" title="The CMS Training Library beside the call, signed in as you">🗂 Open the CMS</button></div>`}${App.lookupHTML(p)}${p.cmsOpen ? '<div class="row" style="margin-top:8px"><button type="button" class="btn btn-sm" data-act="lkopen">▲ Fold the search</button></div>' : ''}`}</div>
+        : `${p.cmsOpen ? '' : `<div class="lk-cms"><button type="button" class="btn btn-sm btn-primary" data-act="cmsopen" title="LSH CaseWorks beside the call, signed in as you">🗂 Open LSH CaseWorks</button></div>`}${App.lookupHTML(p)}${p.cmsOpen ? '<div class="row" style="margin-top:8px"><button type="button" class="btn btn-sm" data-act="lkopen">▲ Fold the search</button></div>' : ''}`}</div>
       <div class="pane" data-pane="dir">${App.directoryHTML(p.status === 'live')}</div>
       <div class="pane" data-pane="rules">${App.rulesHTML(track)}</div>`;
     App.bindLookup(el, { hide: p.hideCases, live: !ended && p.status !== 'waiting',
@@ -923,13 +923,13 @@
     syncCms();
   }
 
-  /* 🗂 The CMS beside the call: the CMS Training Library in a frame under the workspace tabs, signed in as the trainee
-     (the same Portal ticket 🔎 Case lookup's "Open in the CMS" uses; the CMS keeps its session in a frame, see its
+  /* 🗂 LSH CaseWorks beside the call: LSH CaseWorks in a frame under the workspace tabs, signed in as the trainee
+     (the same Portal ticket 🔎 Case lookup's "Open in LSH CaseWorks" uses; LSH CaseWorks keeps its session in a frame, see its
      functions/_utils.js). The frame is made once and kept: the workspace redraws often during a call, and a frame
      that's redrawn reloads, so it lives beside #work (not in it) and is only shown or hidden. */
-  // The CMS shows under 🔎 Case lookup once it's opened there (on the other tabs it's kept, hidden).
+  // LSH CaseWorks shows under 🔎 Case lookup once it's opened there (on the other tabs it's kept, hidden).
   const cmsTabOn = () => { const p = shown(); return !!(p && !p.out && p.status !== 'waiting' && p.cmsOpen && U.$('#work [data-pane="lookup"].on')); };
-  /* 👁 Whether the trainee has the CMS beside the call now, for the trainers' Watch live (App.cmsOpen): the frame is
+  /* 👁 Whether the trainee has LSH CaseWorks beside the call now, for the trainers' Watch live (App.cmsOpen): the frame is
      kept loaded between calls so it doesn't reload, but it's only "open" while the call on the phone has it open. */
   T.cmsShown = () => { const p = shown(), box = U.$('#cmsSplit'); return !!(box && box.dataset.loaded && p && !p.out && p.status !== 'waiting' && p.cmsOpen); };   // a file reloading in it is still open
   function syncCms() {
@@ -941,23 +941,23 @@
     else if (on && !p.cmsTold) tellCms();
     App.cmsReport();   // a call that ended (or the next one) changes whether it's open
   }
-  // The trainer's console watches the trainee's CMS screen once they open it on a call (a classmate's practice call: no).
+  // The trainer's console watches the trainee's LSH CaseWorks screen once they open it on a call (a classmate's practice call: no).
   function tellCms() {
     const p = shown();
     if (p && p.callId && !p.out && !p.peer && p.mode === 'live' && ['connecting', 'live', 'ended'].includes(p.status)) { App.board.send({ t: 'cms', callId: p.callId }); p.cmsTold = true; }
   }
-  // Open the CMS under Case lookup (the search folds to one bar), on a case file when one is given.
+  // Open LSH CaseWorks under Case lookup (the search folds to one bar), on a case file when one is given.
   function openCmsSplit(caseId) {
     const p = shown(), box = U.$('#cmsSplit'), w = U.$('#work');
     if (!box || !w || !p) { App.openCase(caseId); return; }
     p.cmsOpen = true; p.lkOpen = false; p.tab = 'lookup';
-    // 💻 A laptop: the switchboard folds away the first time the CMS opens, so the CMS has the room (« brings it back).
+    // 💻 A laptop: the switchboard folds away the first time LSH CaseWorks opens, so LSH CaseWorks has the room (« brings it back).
     if (window.innerWidth < 1500 && !T.autoFolded && !App.folded('tside')) { T.autoFolded = true; App.folded('tside', true); renderSide(); }
     if (caseId) p.cmsCase = caseId;   // the file asked for, not the one picked for the note
     const reload = box.dataset.loaded && caseId && box.dataset.case !== caseId;
     renderWork();   // syncCms loads the frame the first time (on p.cmsCase), and tells the trainer
     if (reload) loadCms(caseId);
-    // The workspace tabs stay in sight above the CMS (the lookup's button can sit far down the page).
+    // The workspace tabs stay in sight above LSH CaseWorks (the lookup's button can sit far down the page).
     if (w.getBoundingClientRect().top < 70) window.scrollBy({ top: w.getBoundingClientRect().top - 84 });
   }
   let cmsSeq = 0;
@@ -965,9 +965,9 @@
     const box = U.$('#cmsSplit'); if (!box) return;
     const seq = String(++cmsSeq);   // a later open wins over an earlier one still on its way
     box.dataset.loaded = '1'; box.dataset.case = caseId || ''; box.dataset.seq = seq;
-    box.innerHTML = `<div class="cms-split-head"><b>🗂 CMS Training Library</b>${caseId ? ` <span class="badge">${esc(caseId)}</span>` : ''}<span class="small muted cms-msg" style="flex:1">Opening, signed in as you…</span>${App.zoomHTML()}
-        <button class="btn btn-sm" data-cms="tab" title="Open the CMS in its own browser tab instead">↗ New tab</button><button class="btn btn-sm" data-cms="close" title="Close the CMS beside the call">✕ Close</button></div>
-      ${App.cmsFrameHTML('LSH CMS Training Library')}`;
+    box.innerHTML = `<div class="cms-split-head"><b>🗂 LSH CaseWorks</b>${caseId ? ` <span class="badge">${esc(caseId)}</span>` : ''}<span class="small muted cms-msg" style="flex:1">Opening, signed in as you…</span>${App.zoomHTML()}
+        <button class="btn btn-sm" data-cms="tab" title="Open LSH CaseWorks in its own browser tab instead">↗ New tab</button><button class="btn btn-sm" data-cms="close" title="Close LSH CaseWorks beside the call">✕ Close</button></div>
+      ${App.cmsFrameHTML('LSH CaseWorks')}`;
     App.grip(box);
     box.onclick = (e) => {
       const b = e.target.closest('[data-cms]'); if (!b) return;
@@ -981,11 +981,11 @@
       if (!f) return;
       f.src = r.url;
       tellCms(); App.cmsReport();   // 👁 the trainers' consoles open Watch live on this trainee
-      if (msg) msg.textContent = r.authed ? 'Signed in as you. Search the client the way you would at the front desk.' : 'The CMS will ask you to come in from the LSH Training Portal (no Portal secret is set on this site).';
+      if (msg) msg.textContent = r.authed ? 'Signed in as you. Search the client the way you would at the front desk.' : 'LSH CaseWorks will ask you to come in from the LSH Training Portal (no Portal secret is set on this site).';
     } catch (e) {
       if (box.dataset.seq !== seq) return;
-      const msg = U.$('.cms-msg', box); if (msg) msg.textContent = 'Couldn\'t open the CMS: ' + e.message;
-      if (!quiet) U.toast('Couldn\'t open the CMS: ' + e.message, 'error');
+      const msg = U.$('.cms-msg', box); if (msg) msg.textContent = 'Couldn\'t open LSH CaseWorks: ' + e.message;
+      if (!quiet) U.toast('Couldn\'t open LSH CaseWorks: ' + e.message, 'error');
     }
   }
 
@@ -1047,7 +1047,7 @@
     root.addEventListener('click', (e) => {
       const tab = e.target.closest('[data-tab]');
       if (tab) {
-        // 🔎 Case lookup clicked again with the CMS open: the search opens (or folds away) above the CMS.
+        // 🔎 Case lookup clicked again with LSH CaseWorks open: the search opens (or folds away) above LSH CaseWorks.
         if (tab.dataset.tab === 'lookup' && tab.classList.contains('on') && App.p && App.p.cmsOpen) { App.p.lkOpen = !App.p.lkOpen; renderWork(); return; }
         if (App.p) App.p.tab = tab.dataset.tab;
         const w = U.$('#work');
@@ -1147,13 +1147,13 @@
         app.innerHTML = `<div class="card"><h2>🎧 Practice with an AI caller</h2><p>AI practice callers aren't set up on this site yet${App.trainer() ? ': add the GEMINI_API_KEY5 … secrets (see ⚙️ Setup)' : '. Ask your trainer'}. Live mock calls with your trainer work without it.</p></div>`;
         return;
       }
-      // 📞 The Call Simulator link from the Portal (a course's "Take a graded call", the Simulators page):
+      // 📞 The Call Sim link from the Portal (a course's "Take a graded call", the LSH Sims page):
       // open on its line, and for a graded call ring one straight away, with a caller the trainee doesn't
       // see first (the same as 🎲 Surprise me). Done once, so it doesn't ring again on every render.
       const link = App.callLink;
       if (link.track || link.line) { const t = linkTrack(link); if (t) { T.track = t; } link.track = link.line = ''; }
       const track = T.track || 'reception';
-      // the program: the one the Portal link named (the course they came from), or every program; the calls are the CMS's
+      // the program: the one the Portal link named (the course they came from), or every program; the calls are LSH CaseWorks'
       const progs = App.cfg.programs || [];
       const prog = T.program != null ? T.program : progs.some((p) => p.k === App.callLink.program) ? App.callLink.program : '';
       const list = App.cfg.scenarios.filter((s) => s.track === track && s.ai !== false && (!prog || !s.program || s.program === prog));

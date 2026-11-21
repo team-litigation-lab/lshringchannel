@@ -1,4 +1,4 @@
-/* 🔁 Ring Channel's calls are the CMS's (src/cms/call-packs.js, mirrored by scripts/sync-cms-calls.mjs):
+/* 🔁 LSH Voice's calls are the CMS's (src/cms/call-packs.js, mirrored by scripts/sync-cms-calls.mjs):
    every CMS call is on the Scenario Picker with the same caller, script, goals and case file, and nothing else is. */
 import CMS from '../src/cms/call-packs.js';
 import { SCENARIOS, CASES, TRACKS, LINES, lineOf, trackOfLine, traineeView, courseCall, cleanScenario, PROGRAM_TABS } from '../src/scenarios.js';
@@ -8,10 +8,10 @@ const fails = [];
 const fail = (m) => fails.push(m);
 const byId = Object.fromEntries(SCENARIOS.map((s) => [s.id, s]));
 
-if (SCENARIOS.length !== CMS.CALLS.length) fail(`${SCENARIOS.length} calls on Ring Channel, ${CMS.CALLS.length} in the CMS`);
+if (SCENARIOS.length !== CMS.CALLS.length) fail(`${SCENARIOS.length} calls on LSH Voice, ${CMS.CALLS.length} in the CMS`);
 for (const c of CMS.CALLS) {
   const s = byId[c.id];
-  if (!s) { fail(`the CMS's call ${c.id} (${c.title}) isn't on Ring Channel`); continue; }
+  if (!s) { fail(`the CMS's call ${c.id} (${c.title}) isn't on LSH Voice`); continue; }
   if (s.title !== c.title || s.level !== c.level || s.opening !== c.opening || s.facts !== c.facts) fail(`${c.id}: its title, level, opening or situation isn't the CMS's`);
   if (JSON.stringify(s.goals) !== JSON.stringify(c.goals)) fail(`${c.id}: its goals aren't the CMS's`);
   if (!s.hidden.startsWith(c.hidden)) fail(`${c.id}: the caller's script isn't the CMS's`);
