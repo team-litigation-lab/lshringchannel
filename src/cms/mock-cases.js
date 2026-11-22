@@ -1,6 +1,6 @@
 /* ⚠ MIRRORED FROM THE CMS: do not edit here.
    Source: team-litigation-lab/CaseManagementTraining/mock-cases.js. Change it in the CMS; scripts/sync-cms-calls.mjs (and the
-   Sync CMS calls workflow) copies it here, and Ring Channel shows its files in 🔎 Case lookup (src/cms-files.js). */
+   Sync CMS calls workflow) copies it here, and LSH Voice shows its files in 🔎 Case lookup (src/cms-files.js). */
 /* =========================================================
    LSH CMS — TRAINING LIBRARY: HARDCODED MOCK CASES
    ---------------------------------------------------------
