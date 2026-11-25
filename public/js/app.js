@@ -364,14 +364,33 @@
     const Sp = VoIP.Speaker;
     const m = App.modal({ title: '🎧 Audio check', body: `<p class="small muted">Say a few words: the bar should move. Then test the headset and the speaker.</p>
       <div class="meter"><i id="mcLevel"></i></div><p class="small" id="mcMsg" style="margin-top:10px">Opening the microphone…</p>
-      <div id="mcOut"></div>`, onClose: () => { stopMeter && stopMeter(); if (!busy()) VoIP.Mic.close(); } });
+      <div id="mcIn"></div><div id="mcOut"></div>`, onClose: () => { stopMeter && stopMeter(); offMic && offMic(); if (!busy()) VoIP.Mic.close(); } });
     const busy = () => (App.p && ['connecting', 'live'].includes(App.p.status)) || (App.t && ['ringing', 'connecting', 'live'].includes(App.t.status));
-    let stopMeter = null;
-    try {
-      const s = await VoIP.Mic.open();
+    let stopMeter = null, offMic = null;
+    // 🎤 The microphone in use, its level, and a choice of microphone (a headset's, rather than the laptop's).
+    const showMic = (s) => {
+      stopMeter && stopMeter();
       const label = (s.getAudioTracks()[0] || {}).label || 'microphone';
-      m.el.querySelector('#mcMsg').innerHTML = `✅ Microphone: <b>${esc(label)}</b>.`;
+      const bt = VoIP.Mic.isBluetooth();
+      m.el.querySelector('#mcMsg').innerHTML = `✅ Microphone: <b>${esc(label)}</b>.` + (bt ? '<span class="warn-box small" style="display:block;margin-top:8px">🎧 This is a Bluetooth headset. While its microphone is on, Bluetooth switches it to call mode, which sounds thinner and quieter. The call plays in that headset. A wired or USB headset sounds clearer.</span>' : '');
       stopMeter = VoIP.meter(s, (lv) => { const el = m.el.querySelector('#mcLevel'); if (el) el.style.width = Math.round(lv * 100) + '%'; });
+    };
+    const drawIn = async () => {
+      const box = m.el.querySelector('#mcIn'); if (!box) return;
+      const list = (await VoIP.Mic.inputs()).filter((d) => !['default', 'communications', ''].includes(d.deviceId));
+      if (list.length < 2) { box.innerHTML = ''; return; }
+      const now = VoIP.Mic.settings().deviceId, sel = VoIP.Mic.chosen;
+      box.innerHTML = `<div class="out-row"><label class="f">🎤 Microphone</label><select class="input" data-in="mic"><option value="">Automatic (${esc(VoIP.Mic.label().replace(/^(Default|Communications) - /, '') || 'the computer\'s default')})</option>` +
+        list.map((d) => `<option value="${esc(d.deviceId)}" ${d.deviceId === sel ? 'selected' : ''}>${esc(d.label || 'Microphone')}${!sel && d.deviceId === now ? ' ✓' : ''}</option>`).join('') + '</select></div>';
+    };
+    try {
+      showMic(await VoIP.Mic.open());
+      drawIn();
+      offMic = VoIP.Mic.onChange((next) => { showMic(next); drawIn(); draw(); });
+      m.el.querySelector('#mcIn').addEventListener('change', async (e) => {
+        if (e.target.dataset.in !== 'mic') return;
+        await VoIP.Mic.choose(e.target.value);
+      });
     } catch (e) { m.el.querySelector('#mcMsg').innerHTML = `<span class="err-box" style="display:block">${esc(e.message)}</span>`; }
     // The outputs (their names show once the microphone is allowed).
     const box = m.el.querySelector('#mcOut');
@@ -379,7 +398,7 @@
       const r = await Sp.route();
       const opts = (sel, auto) => (auto ? `<option value="">Automatic (${esc(auto)})</option>` : '') + r.list.filter((d) => d.deviceId !== 'communications').map((d) => `<option value="${esc(d.deviceId)}" ${d.deviceId === sel ? 'selected' : ''}>${esc(d.deviceId === 'default' ? 'The computer\'s default output' + (d.label ? ` (${d.label.replace(/^Default - /, '')})` : '') : d.label || 'Audio output')}</option>`).join('');
       box.innerHTML = !Sp.supported() ? '<p class="small warn-box" style="margin-top:12px">This browser plays every sound on the computer\'s default output, so the 🔊 Speaker key can\'t switch it: use Chrome or Edge. <button class="btn btn-sm" data-out="test-default">🔊 Play a test tone</button></p>'
-        : `<div class="out-row"><label class="f">🎧 Headset <span class="muted">(speaker off)</span></label><select class="input" data-out="headset">${opts(Sp.headset || 'default')}</select><button class="btn btn-sm" data-out="test-headset">▶ Test</button></div>
+        : `<div class="out-row"><label class="f">🎧 Headset <span class="muted">(speaker off)</span></label><select class="input" data-out="headset">${opts(Sp.headset, r.headsetName)}</select><button class="btn btn-sm" data-out="test-headset">▶ Test</button></div>
            <div class="out-row"><label class="f">🔊 Speaker <span class="muted">(speaker on)</span></label><select class="input" data-out="speaker">${opts(Sp.speaker, r.speakerName)}</select><button class="btn btn-sm" data-out="test-speaker">▶ Test</button></div>
            <p class="small muted">${r.separate ? `The 🔊 Speaker key moves the call from <b>${esc(r.headsetName)}</b> to <b>${esc(r.speakerName)}</b>.` : 'The headset and the speaker are the same output here: plug in a headset, or choose the speaker above.'} Speaker is <b>${Sp.on ? 'on' : 'off'}</b>.</p>`;
     };
