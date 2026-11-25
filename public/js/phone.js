@@ -65,22 +65,93 @@
     close() { this.stopped = true; clearTimeout(this.rt); clearInterval(this.ping); if (this.ws) try { this.ws.close(1000); } catch (e) {} this.ws = null; this.up = false; }
   }
 
+  /* 🎤 The microphone. Which one: the trainee's choice in 🎧 Audio check; otherwise the computer's default, unless that is a
+     laptop's built-in microphone while a headset's microphone is plugged in (Windows often leaves the default on the
+     laptop): then the headset's. A headset unplugged, swapped or reconnected mid-call doesn't leave the call silent: the
+     new microphone takes over (swap), and every call, mix, recording and AI caller using the old one moves to it (onChange). */
+  const MIC_KEY = 'mcv_mic';
+  const HEADSET_IN = /headset|headphone|earphone|earbud|airpods|buds|hands-?free|bluetooth|usb|jabra|plantronics|poly\b|logitech|sennheiser|epos|hyperx|razer|corsair|steelseries|yealink|koss|anker|soundcore/i;
+  const BUILTIN_IN = /built-?in|internal|integrated|microphone array|realtek|intel|smart sound|webcam|camera|macbook|imac/i;
+  const BLUETOOTH = /hands-?free|bluetooth|airpods|buds|\bbt\b/i;
   const Mic = {
-    stream: null,
+    stream: null, chosen: '', listeners: new Set(),
+    load() { try { this.chosen = localStorage.getItem(MIC_KEY) || ''; } catch (e) {} return this; },
+    async inputs() {
+      try { return (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput'); } catch (e) { return []; }
+    },
+    // The device to ask for ('' = the computer's default).
+    async pick() {
+      const list = await this.inputs();
+      if (this.chosen && list.some((d) => d.deviceId === this.chosen)) return this.chosen;
+      const def = list.find((d) => d.deviceId === 'default') || null;
+      if (!def || !def.label) return '';   // no names until the microphone is allowed: the default, and pick again once it is
+      const defName = def.label.replace(/^(Default|Communications) - /, '');
+      if (HEADSET_IN.test(defName) || !BUILTIN_IN.test(defName)) return '';
+      const real = list.filter((d) => !['default', 'communications', ''].includes(d.deviceId));
+      const headset = real.find((d) => HEADSET_IN.test(d.label) && !BUILTIN_IN.test(d.label));
+      return headset ? headset.deviceId : '';
+    },
+    async get(id) {
+      const audio = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 };
+      if (id) audio.deviceId = { exact: id };
+      try { return await navigator.mediaDevices.getUserMedia({ audio }); }
+      catch (e) {
+        if (id && e && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError' || e.name === 'NotReadableError')) { delete audio.deviceId; return navigator.mediaDevices.getUserMedia({ audio }); }
+        throw e;
+      }
+    },
     async open() {
       if (this.stream && this.stream.getAudioTracks().some((t) => t.readyState === 'live')) return this.stream;
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw Object.assign(new Error('This browser can\'t use a microphone here. Use Chrome or Edge on a computer, over https.'), { code: 'NO_MIC' });
+      let id = '';
       try {
-        this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+        id = await this.pick();
+        this.stream = await this.get(id);
+        // The first time, the microphone's names were hidden until now: if a headset's microphone should have been used, use it.
+        if (!id) { const better = await this.pick(); if (better && better !== this.settings().deviceId) { const s = await this.get(better).catch(() => null); if (s) { this.stream.getTracks().forEach((t) => t.stop()); this.stream = s; } } }
       } catch (e) {
         const blocked = e && (e.name === 'NotAllowedError' || e.name === 'SecurityError');
         throw Object.assign(new Error(blocked ? 'The microphone is blocked. Click the 🔒 in the address bar, allow the microphone, then try again.' : 'No microphone was found. Plug in a headset, then try again.'), { code: 'NO_MIC' });
       }
+      this.watch();
+      Speaker.apply().catch(() => {});   // the headset's own earpiece (a Bluetooth headset's hands-free output) once its microphone is open
       return this.stream;
     },
-    close() { if (this.stream) this.stream.getTracks().forEach((t) => { try { t.stop(); } catch (e) {} }); this.stream = null; },
-    track() { return this.stream ? this.stream.getAudioTracks()[0] : null; }
-  };
+    close() { if (this.stream) this.stream.getTracks().forEach((t) => { try { t.onended = null; t.stop(); } catch (e) {} }); this.stream = null; },
+    track() { return this.stream ? this.stream.getAudioTracks()[0] : null; },
+    settings() { const t = this.track(); try { return (t && t.getSettings && t.getSettings()) || {}; } catch (e) { return {}; } },
+    label() { const t = this.track(); return t ? t.label || '' : ''; },
+    isBluetooth() { return BLUETOOTH.test(this.label()); },
+    isHeadset() { return HEADSET_IN.test(this.label()) && !BUILTIN_IN.test(this.label()); },
+    watch() { const t = this.track(); if (t) t.onended = () => { if (this.track() === t) this.swap(true).catch(() => {}); }; },
+    // Move to the microphone that should be in use now. force: even if it's the same device (the old one stopped working).
+    async swap(force) {
+      if (!this.stream || this.swapping) return;
+      this.swapping = true;
+      try {
+        const old = this.track(), oldStream = this.stream;
+        const id = await this.pick();
+        const now = this.settings().deviceId;
+        if (!force && old && old.readyState === 'live' && (id ? id === now : true)) return;
+        let next;
+        try { next = await this.get(id); } catch (e) { console.warn('microphone', e && e.message); return; }
+        const t = next.getAudioTracks()[0];
+        if (old && t) t.enabled = old.enabled;   // a muted call stays muted
+        this.stream = next;
+        this.watch();
+        this.listeners.forEach((f) => { try { f(next, old, oldStream); } catch (e) { console.warn('microphone listener', e); } });
+        if (oldStream) oldStream.getTracks().forEach((x) => { try { x.onended = null; x.stop(); } catch (e) {} });
+        await Speaker.apply();
+      } finally { this.swapping = false; }
+    },
+    // 🎧 Audio check: the trainee's choice ('' = automatic). A call in progress moves to it.
+    async choose(id) {
+      this.chosen = id || '';
+      try { if (this.chosen) localStorage.setItem(MIC_KEY, this.chosen); else localStorage.removeItem(MIC_KEY); } catch (e) {}
+      if (this.stream) await this.swap(true);
+    },
+    onChange(f) { this.listeners.add(f); return () => this.listeners.delete(f); }
+  }.load();
 
   let iceCache = null;
   async function ice() {
@@ -116,6 +187,8 @@
       const pc = this.pc = new RTCPeerConnection({ iceServers: o.iceServers, iceCandidatePoolSize: 2 });
       const track = o.stream.getAudioTracks()[0];
       this.sender = pc.addTrack(track, o.stream);
+      // A new microphone mid-call (a headset plugged in, swapped or reconnected): the call sends it, if it was sending the old one.
+      this.offMic = Mic.onChange((next, prev) => { if (!this.closed && this.sender.track === prev) this.setOutgoing(next.getAudioTracks()[0]); });
       pc.ontrack = (e) => { const s = e.streams && e.streams[0] ? e.streams[0] : new MediaStream([e.track]); this.remote = s; o.onRemote && o.onRemote(s); };
       pc.onicecandidate = (e) => { if (e.candidate) this.signal({ candidate: e.candidate.toJSON() }); };
       pc.onconnectionstatechange = () => {
@@ -193,7 +266,7 @@
         } catch (e) { /* closed */ }
       }, 2000);
     }
-    close() { this.closed = true; clearInterval(this.statsTimer); clearTimeout(this.dt); try { this.pc.close(); } catch (e) {} }
+    close() { this.closed = true; if (this.offMic) this.offMic(); clearInterval(this.statsTimer); clearTimeout(this.dt); try { this.pc.close(); } catch (e) {} }
   }
 
   /* 👥 Merge calls (a conference): the trainer's browser is the bridge.
@@ -205,6 +278,7 @@
       const Ctx = window.AudioContext || window.webkitAudioContext;
       this.ctx = new Ctx();
       this.mic = this.ctx.createMediaStreamSource(micStream);
+      this.offMic = Mic.onChange((next, prev, prevStream) => { if (prevStream !== micStream && !micStream.getAudioTracks().includes(prev)) return; micStream = next; try { this.mic.disconnect(); } catch (e) {} this.mic = this.ctx.createMediaStreamSource(next); this.wire(); });
       this.legs = new Map();   // callId → { stream, src, dest }
       this.all = this.ctx.createMediaStreamDestination();   // every trainee's voice in one stream (the Class view plays it)
     }
@@ -241,7 +315,7 @@
     trackFor(id) { const leg = this.legs.get(id); return leg ? leg.dest.stream.getAudioTracks()[0] : null; }
     voices() { return this.all.stream; }   // the trainees on the call, without the trainer's own microphone
     resume() { try { if (this.ctx.state === 'suspended') this.ctx.resume(); } catch (e) {} }
-    close() { try { this.ctx.close(); } catch (e) {} this.legs.clear(); }
+    close() { if (this.offMic) this.offMic(); try { this.ctx.close(); } catch (e) {} this.legs.clear(); }
   }
 
   // Both voices in one file. Chrome needs the remote stream to also play in an <audio> element (it does).
@@ -259,10 +333,13 @@
       this.mr.ondataavailable = (e) => { if (e.data && e.data.size) this.chunks.push(e.data); };
       this.started = Date.now();
       this.mr.start(1000);
+      // the microphone changed mid-call: record the new one too (the old one has gone quiet)
+      this.offMic = Mic.onChange((next, prev, prevStream) => { if ((this.streams || []).includes(prevStream) && this.mr.state !== 'inactive') this.add(next); });
     }
-    add(stream) { try { const src = this.ctx.createMediaStreamSource(stream); src.connect(this.dest); this.sources.push(src); } catch (e) { console.warn('recorder', e); } }
+    add(stream) { try { const src = this.ctx.createMediaStreamSource(stream); src.connect(this.dest); this.sources.push(src); (this.streams || (this.streams = [])).push(stream); } catch (e) { console.warn('recorder', e); } }
     stop() {
       return new Promise((resolve) => {
+        if (this.offMic) this.offMic();
         const done = () => {
           const type = (this.mr.mimeType || 'audio/webm').split(';')[0];
           const blob = new Blob(this.chunks, { type });
@@ -359,7 +436,16 @@
       const real = list.filter((d) => !['default', 'communications', ''].includes(d.deviceId));
       const def = list.find((d) => d.deviceId === 'default') || real[0] || null;
       const has = (id) => id && list.some((d) => d.deviceId === id);
-      const headset = has(this.headset) ? this.headset : 'default';
+      // Speaker off: the output the trainee chose; otherwise, when the microphone in use is a headset's, that headset's own
+      // earpiece (the output in its group: a Bluetooth headset's hands-free output, which is the only one that plays while its
+      // microphone is open, or a USB headset that isn't the computer's default); otherwise the computer's default output.
+      let headset = has(this.headset) ? this.headset : '';
+      if (!headset && Mic.stream && (Mic.isHeadset() || Mic.isBluetooth())) {
+        const g = Mic.settings().groupId;
+        const own = g && real.find((d) => d.groupId === g);
+        if (own) headset = own.deviceId;
+      }
+      if (!headset) headset = 'default';
       let speaker = has(this.speaker) ? list.find((d) => d.deviceId === this.speaker) : null;
       if (!speaker) {
         const other = real.filter((d) => !def || d.groupId !== def.groupId);
@@ -417,7 +503,11 @@
     toggle() { return this.set(!this.on); },
     onChange(f) { this.listeners.add(f); }
   }.load();
-  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => { Speaker.apply().catch(() => {}); });
+  let devTimer = null;
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', () => {
+    clearTimeout(devTimer);
+    devTimer = setTimeout(() => { Mic.swap(false).catch(() => {}).then(() => Speaker.apply()).catch(() => {}); }, 600);
+  });
   document.addEventListener('DOMContentLoaded', () => Speaker.register(document.getElementById('remoteAudio')));
 
   window.VoIP = { Board, Mic, RtcCall, Recorder, Mixer, ice, toWav8k, uploadForGrading, meter, Speaker, iceInfo: () => iceCache };

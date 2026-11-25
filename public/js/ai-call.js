@@ -105,6 +105,13 @@
     };
     call.src.connect(call.node);
     const sink = call.ctx.createGain(); sink.gain.value = 0; call.node.connect(sink); sink.connect(call.ctx.destination);
+    // A new microphone mid-call (a headset plugged in, swapped or reconnected): the caller hears the new one.
+    call.offMic = VoIP.Mic.onChange((next) => {
+      if (C !== call || call.ended || !call.ctx || call.ctx.state === 'closed') return;
+      try { call.src.disconnect(); } catch (e) {}
+      call.mic = next; call.src = call.ctx.createMediaStreamSource(next);
+      call.src.connect(call.node); if (call.recDest) call.src.connect(call.recDest);
+    });
     // Both voices into the recording.
     try {
       call.recDest = call.ctx.createMediaStreamDestination();
@@ -229,6 +236,7 @@
 
   function finish(call) {
     call.ended = true;
+    if (call.offMic) { call.offMic(); call.offMic = null; }
     clearTimeout(call.kick); clearTimeout(call.warn); clearTimeout(call.limit);
     try { if (call.ws && call.ws.readyState <= 1) call.ws.close(1000); } catch (e) {}
     flush(call);
