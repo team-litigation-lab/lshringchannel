@@ -160,8 +160,38 @@
         <option value="cms"${App.mockMode() === 'cms' ? ' selected' : ''}>☎ Reception · Intake (🗂 LSH CaseWorks)</option><option value="calendar"${App.mockMode() === 'calendar' ? ' selected' : ''}>📅 Calendaring (Calendar Sim)</option></select></label>` : '';
     nav.innerHTML = App.navItems().map(([k, l]) => `<a href="#/${k}" class="${here === k ? 'on' : ''}">${l}${k === 'logs' && App.unread ? '<span class="dot"></span>' : ''}</a>`).join('') + mode + portal;
     const install = App.installPrompt && !App.installed() ? '<button type="button" class="hdr-install" onclick="App.install()" title="Install LSH Voice as an app: its own window and icon">⬇ Install</button>' : '';
-    who.innerHTML = `${install}<span class="chip">${App.trainer() ? '🎓 Trainer' : '🎧 Trainee'} · ${esc(App.me.name)}${App.me.batch ? ' · ' + esc(App.me.batch) : ''}</span><button type="button" title="Signed in as ${esc(App.me.name)}" onclick="App.logout()">Log out</button>`;
+    who.innerHTML = `${install}<span class="who-wrap"><button type="button" class="chip who-btn" onclick="App.toggleOnline(event)" aria-haspopup="true" aria-expanded="false" title="Who is online now"><span class="who-me">${App.trainer() ? '🎓 Trainer' : '🎧 Trainee'} · ${esc(App.me.name)}${App.me.batch ? ' · ' + esc(App.me.batch) : ''}</span><span class="who-n" id="whoN">${App.onlineCount()}</span> ▾</button><div class="who-pop hidden" id="whoPop" role="dialog" aria-label="Who is online"></div></span><button type="button" title="Signed in as ${esc(App.me.name)}" onclick="App.logout()">Log out</button>`;
   };
+
+  // 🟢 Who is online: the header's chip opens a list of everyone on LSH Voice now, trainers and trainees apart. It comes from the
+  // switchboard's presence: a trainer sees every trainee who is on; a trainee sees the trainers and their own batch.
+  App.onlineLists = function () {
+    const trainers = (App.desks || []).map((d) => ({ name: d.name, sub: d.ext ? 'ext ' + d.ext : '', call: !!d.call }));
+    const raw = App.trainer() ? ((App.presence && App.presence.trainees) || []) : (App.peers || []);
+    const trainees = raw.map((x) => ({ name: x.name || x.id, sub: [x.batch, x.ext ? 'ext ' + x.ext : ''].filter(Boolean).join(' · '), call: !!x.call, me: !!x.me }))
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    trainers.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    return { trainers, trainees };
+  };
+  App.onlineCount = function () { const l = App.onlineLists(); return '🟢 ' + (l.trainers.length + l.trainees.length) + ' online'; };
+  App.drawOnline = function () {
+    const n = document.getElementById('whoN'); if (n) n.textContent = App.onlineCount();
+    const pop = document.getElementById('whoPop'); if (!pop || pop.classList.contains('hidden')) return;
+    const l = App.onlineLists();
+    const row = (x) => `<li><span class="dot-on${x.call ? ' busy' : ''}" title="${x.call ? 'On a call' : 'Online'}"></span><b>${esc(x.name)}${x.me ? ' (you)' : ''}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}${x.call ? '<em>📞 on a call</em>' : ''}</li>`;
+    const sec = (title, list, none) => `<h4>${title} <span>${list.length}</span></h4>${list.length ? `<ul>${list.map(row).join('')}</ul>` : `<p class="none">${none}</p>`}`;
+    pop.innerHTML = sec('🎓 Trainers', l.trainers, 'No trainer is online.') + sec('🎧 Trainees', l.trainees, App.trainer() ? 'No trainee is online.' : 'No one from your batch is online.');
+  };
+  App.toggleOnline = function (ev) {
+    if (ev) ev.stopPropagation();
+    const pop = document.getElementById('whoPop'), btn = document.querySelector('.who-btn'); if (!pop) return;
+    const open = pop.classList.toggle('hidden') === false;
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) App.drawOnline();
+  };
+  document.addEventListener('click', (e) => { const pop = document.getElementById('whoPop');
+    if (pop && !pop.classList.contains('hidden') && !e.target.closest('.who-wrap')) { pop.classList.add('hidden'); const b = document.querySelector('.who-btn'); if (b) b.setAttribute('aria-expanded', 'false'); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { const pop = document.getElementById('whoPop'); if (pop && !pop.classList.contains('hidden')) App.toggleOnline(); } });
 
   App.go = function () {
     if (!App.me) return App.showLogin();
@@ -243,6 +273,7 @@
       App.desks = m.desks || [];   // the trainers who are on, each with their own extension
       if (App.trainer()) { App.presence = { trainees: m.trainees || [], trainers: m.trainers || [] }; Console.onPresence(); }
       else { App.trainersOnline = m.trainers || 0; App.peers = m.peers || []; Trainee.onPresence(); }
+      App.drawOnline();
     });
     b.on('error', (m) => U.toast(m.msg, 'error'));
     b.on('cms-at', (m) => { if (App.cms.sent && m.at) App.cms.since = m.at; });   // 🗂 when the switchboard says LSH CaseWorks was opened

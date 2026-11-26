@@ -1173,9 +1173,9 @@
           <label class="check small" title="The voice the AI caller speaks with: the same call, a different person on the line">🎚 <select class="input input-sm" id="optVoice">${App.voiceOptions(T.voice)}</select></label>
           <button class="btn btn-orange" id="surprise">🎲 Surprise me</button>
         </div>
-        <div class="scen-grid">${list.map((s) => `<div class="scen" data-id="${esc(s.id)}">
+        <div class="scen-grid practice-grid">${list.map((s) => `<div class="scen" data-id="${esc(s.id)}">
             <div class="meta">${App.levelBadge(s.level)}${s.program && !prog ? `<span class="badge">${esc(((progs.find((p) => p.k === s.program)) || {}).icon || '')} ${esc(s.program)}</span>` : ''}${s.dir === 'out' ? '<span class="badge" title="You place this call: when you pick up, you are through to them">📤 You call out</span>' : ''}${s.caseId ? `<span class="badge">${esc(s.caseId)}</span>` : '<span class="badge">New caller</span>'}${s.custom ? '<span class="badge blue">Trainer-written</span>' : ''}</div>
-            <h4>${esc(s.title)}</h4><p>${esc(s.facts || '')}</p>
+            <h4>${esc(s.title)}</h4><p title="${esc(s.facts || '')}">${esc(s.facts || '')}</p>
             <div><button class="btn btn-primary btn-sm">📞 Take this call</button></div></div>`).join('') || '<div class="empty">No practice calls on this line yet.</div>'}</div>
       </div>`;
       const opts = () => { T.voice = U.$('#optVoice').value; return { transcript: U.$('#optTr').checked, typed: U.$('#optTyped').checked, voice: T.voice }; };
