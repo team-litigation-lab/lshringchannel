@@ -322,8 +322,8 @@ table.list tr.click:hover td { background: #f8fafc; }
 /* 🎭 the practice calls, a screen at a time (Page 1, Page 2 … when a line has more than fit): each card is one compact row, the call's title and
    a 📞 button, with its level as the card's left edge (green Beginner, blue Intermediate, red Advanced). Its level, program, case
    and facts are in the card's tooltip. The page uses the window's full width. */
-.scen-grid.practice-grid { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); grid-auto-rows: 1fr; gap: 6px; }
-.practice-grid > .scen { min-height: 0; flex-direction: row; align-items: center; gap: 6px; padding: 5px 6px 5px 9px; border-left: 4px solid #cbd5e1; border-radius: 9px; }
+.scen-grid.practice-grid { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); grid-auto-rows: 1fr; gap: 10px 12px; }
+.practice-grid > .scen { min-height: 0; flex-direction: row; align-items: center; gap: 8px; padding: 7px 8px 7px 11px; border-left: 4px solid #cbd5e1; border-radius: 9px; }
 .practice-grid > .scen.lv-Starter, .practice-grid > .scen.lv-Beginner { border-left-color: #16a34a; }
 .practice-grid > .scen.lv-Intermediate { border-left-color: #2563eb; }
 .practice-grid > .scen.lv-Advanced { border-left-color: #dc2626; }
