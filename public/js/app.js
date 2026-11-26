@@ -64,7 +64,9 @@
       if (msg.kind) {
         msg.thread = (u.searchParams.get('thread') || '').trim().toLowerCase().slice(0, 40);
         msg.graded = link.graded;
-        if (!location.hash) u.hash = msg.kind === 'client' ? '#/logs/clientmessaging' : msg.thread ? '#/logs/messaging' : location.hash;
+        /* A messaging link always opens its texting Sim, with or without a thread: without one it opens the Sim's
+           picker, not the role's home (the ☎ Console for a trainer, which is what a bare ?messaging=1 used to land on). */
+        if (!location.hash || location.hash === '#/' || location.hash === '#') u.hash = msg.kind === 'client' ? '#/logs/clientmessaging' : '#/logs/messaging';
       }
       const taken = ['ticket', 'admin', 'track', 'flow', 'line', 'program', 'graded', 'mode', 'random', 'messaging', 'messages', 'thread'].filter((k) => u.searchParams.has(k));
       if (taken.length) { taken.forEach((k) => u.searchParams.delete(k)); history.replaceState(history.state, '', u.pathname + u.search + u.hash); }

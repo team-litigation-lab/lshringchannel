@@ -1133,8 +1133,8 @@
     const cards = [...g.children].filter((c) => c.classList.contains('scen'));
     cards.forEach((c) => { c.hidden = false; }); g.style.gridTemplateColumns = ''; pager.innerHTML = '';
     if (innerWidth <= 760 || !cards.length) return;
-    const gap = 6, w = g.clientWidth, rowH = cards[0].getBoundingClientRect().height + gap;
-    const cols = Math.max(1, Math.floor((w + gap) / (190 + gap)));
+    const cs = getComputedStyle(g), rgap = parseFloat(cs.rowGap) || 0, cgap = parseFloat(cs.columnGap) || 0, gap = rgap, w = g.clientWidth, rowH = cards[0].getBoundingClientRect().height + rgap;
+    const cols = Math.max(1, Math.floor((w + cgap) / (190 + cgap)));
     const rows = Math.max(2, Math.floor((innerHeight - g.getBoundingClientRect().top - 44 - 40 + gap) / rowH));   // 40: the pager's own row
     const per = cols * rows, pages = Math.ceil(cards.length / per);
     g.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
