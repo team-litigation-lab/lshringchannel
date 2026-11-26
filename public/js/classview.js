@@ -35,14 +35,14 @@
     trainer: true,
     render() {
       document.body.classList.add('classview');
-      document.title = '📺 Class view · LSH Voice';
+      document.title = '📺 Class view · LSH CommX';
       const app = U.$('#app');
       if (!opener()) {
         app.innerHTML = `<div class="cv"><div class="cv-idle"><div class="cv-big">📺</div><h1>Class view</h1><p>Open it from the trainer console with <b>📺 Class view</b>, so it can play the call.</p></div></div>`;
         return;
       }
       app.innerHTML = `<div class="cv">
-        <div class="cv-top"><span class="logo">☎</span><b>LSH Voice</b><span class="cv-sub">Live mock call</span><span class="spacer"></span>
+        <div class="cv-top"><span class="logo">☎</span><b>LSH CommX</b><span class="cv-sub">Live mock call</span><span class="spacer"></span>
           <span class="cv-audio" id="cvAudioState">🔇 Class audio off</span><span class="cv-meter"><i id="cvLevel"></i></span></div>
         <div class="cv-setup" id="cvSetup">
           <button class="btn btn-orange btn-lg" id="cvStart">🔊 Start class audio</button>

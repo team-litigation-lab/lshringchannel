@@ -1,4 +1,4 @@
-# LSH Voice
+# LSH CommX
 
 A training phone system (VOIP) for the **Receptionist** and **Intake** mock calls in the LSH Foundational Training program, and the home of the LSH **📞 Call Sim**: every program's mock calls are taken on this phone (see *On the LSH Training Portal*).
 
@@ -16,40 +16,40 @@ Everything runs in the browser; there are no phone numbers and no phone bills. I
 
 ## On the LSH Training Portal
 
-LSH Voice opens from the **LSH Training Portal** (`cm-training-activity.pages.dev`, the Training-Portal repo), like 🗂 LSH CaseWorks and 📚 LSH Atlas: **☎ LSH Voice** is on 🎓 LSH Academy Index, on the home page's 🛠 LSH Sims, on **🛠 LSH Sims**, and in the admin menu. Each opens `/api/launch?tool=ringchannel`.
+LSH CommX opens from the **LSH Training Portal** (`cm-training-activity.pages.dev`, the Training-Portal repo), like 🗂 LSH CaseWorX and 📚 LSH Atlas: **☎ LSH CommX** is on 🎓 LSH Academy Index, on the home page's 🛠 LSH Elev8, on **🛠 LSH Elev8**, and in the admin menu. Each opens `/api/launch?tool=ringchannel`.
 
 There's **no sign-in form**: everyone comes in from the Portal, signed in there.
 
 - **Trainees** land on their phone, signed in as their Portal name and batch (the same `name--batch` id as every LSH platform). The Portal sends them with a signed ticket that's good for 5 minutes (`?ticket=…`).
-- **Administrators** land on the console, as trainers, under their Portal name. The Portal makes these admin tickets for LSH Voice only; the other platforms still ask admins for their password.
+- **Administrators** land on the console, as trainers, under their Portal name. The Portal makes these admin tickets for LSH CommX only; the other platforms still ask admins for their password.
 - **Each ticket works once** (the Switchboard keeps the used ones until they expire), and it leaves the address bar at once, so a link from history or another browser is no use.
-- **The ticket check:** with `PORTAL_SSO_SECRET` set on this Worker (the same value as the Portal's), LSH Voice checks the ticket itself. Without it, it asks the Portal (`POST /api/verify-ticket`), as LSH CaseWorks does, so it works with no secret to copy. `PORTAL_URL` changes which Portal it asks (default `https://cm-training-activity.pages.dev`).
-- **📞 The Call Sim is LSH Voice's.** Every Call Sim link on the Portal, in a course and in a program opens this phone, so a mock call is a real call on a real line instead of a panel in another platform: the Portal's `/simulators/call.html` and its 🛠 LSH Sims card go through `/api/launch?tool=ringchannel&to=calls` and land on **🎧 Practice**, signed in. The link may say which line and which course, and LSH Voice opens on it:
+- **The ticket check:** with `PORTAL_SSO_SECRET` set on this Worker (the same value as the Portal's), LSH CommX checks the ticket itself. Without it, it asks the Portal (`POST /api/verify-ticket`), as LSH CaseWorX does, so it works with no secret to copy. `PORTAL_URL` changes which Portal it asks (default `https://cm-training-activity.pages.dev`).
+- **📞 The Call Sim is LSH CommX's.** Every Call Sim link on the Portal, in a course and in a program opens this phone, so a mock call is a real call on a real line instead of a panel in another platform: the Portal's `/simulators/call.html` and its 🛠 LSH Elev8 card go through `/api/launch?tool=ringchannel&to=calls` and land on **🎧 Practice**, signed in. The link may say which line and which course, and LSH CommX opens on it:
   - `?track=reception|calendar|intake` (an older `?flow=calendaring` and `?line=Reception Mock Calls` are read too) → 🎧 Practice opens on that line;
   - `?program=FT|CM|PD|EA` → the course the call counts in;
   - `?graded=1` → a **graded call** rings at once, with a caller the trainee doesn't see first (the same as 🎲 Surprise me), graded on the line's Mock Calls Metrics.
   These leave the address bar with the ticket (`public/js/app.js` `fromPortal`, `App.callLink`).
-- **💬 The Client Messaging Sim is LSH Voice's.** The texting the firm does with its own clients, and the Portal's 💬 Client Messaging card: a client (or someone saying they are one) texts the firm's number first and the trainee answers it from the file in their program's role — a client who lost an appointment card, a "cousin" who isn't on the file, an unknown number, a client in danger, storage fees at the body shop, an offer they want you to decide, a mediation time. No automation is on these threads at all; everything else is the Automated Messaging engine (the firm's texting policy, 🔎 Case lookup, the Client Messaging Metrics, the AI client). Trainees take a thread on **🗂 Call Logs & Scenario Picker → 💬 Client Messaging**; trainers see every trainee's threads on the same tab. A Portal link opens one straight away:
+- **💬 The Client Messaging Sim is LSH CommX's.** The texting the firm does with its own clients, and the Portal's 💬 Client Messaging card: a client (or someone saying they are one) texts the firm's number first and the trainee answers it from the file in their program's role — a client who lost an appointment card, a "cousin" who isn't on the file, an unknown number, a client in danger, storage fees at the body shop, an offer they want you to decide, a mediation time. No automation is on these threads at all; everything else is the Automated Messaging engine (the firm's texting policy, 🔎 Case lookup, the Client Messaging Metrics, the AI client). Trainees take a thread on **🗂 Call Logs & Scenario Picker → 💬 Client Messaging**; trainers see every trainee's threads on the same tab. A Portal link opens one straight away:
   - `?messages=1` → 💬 Client Messaging (`#/logs/clientmessaging`);
   - `&program=reception|intake|cm|md|pd|ea` → the program tab the link opens on (its threads first in the picker; `MESSAGE_ROLES` in `src/messaging.js`), which also decides the course a graded thread counts in (`ROLE_PROGRAM`: reception and intake → FT);
   - `&thread=<id>` → that thread opens at once (`rc_apptcard`, `in_unknown`, `cm_cousin`, `cm_danger`, `pd_storage`, `md_offer`, `ea_mediation`: `CLIENT_THREADS`; anything else is ignored); `&mode=graded` (or `&graded=1`) → a **graded thread**, counted on the course's **Client Messaging** line.
-  **On the Portal side**: **💬 Client Messaging** on 🛠 LSH Sims opens `/api/launch?tool=ringchannel&to=messages`, which passes on only `?program=`, `?thread=` and `?mode=graded` (`messagesQuery` in the Training-Portal repo's `functions/api/launch.js`). It used to point at LSH CaseWorks, which never carried the simulator.
-- **💬 The Automated Messaging Sim is LSH Voice's too.** The texting half of the training phone, joined to the Portal's 💬 messaging Sim: the firm's automation texts a client (an appointment reminder, the intake auto-responder, a records chaser, a settlement-check notice), the client texts back, and the trainee answers the thread under the firm's texting policy. The automation keeps sending on its own schedule whether or not the trainee has replied, which is what makes it automated messaging and not a chat. Trainees take a thread on **🗂 Call Logs & Scenario Picker → 💬 Automated Messaging**; trainers see every trainee's threads on the same tab. A Portal link opens one straight away, reading the parameters the Portal's messaging links already use:
+  **On the Portal side**: **💬 Client Messaging** on 🛠 LSH Elev8 opens `/api/launch?tool=ringchannel&to=messages`, which passes on only `?program=`, `?thread=` and `?mode=graded` (`messagesQuery` in the Training-Portal repo's `functions/api/launch.js`). It used to point at LSH CaseWorX, which never carried the simulator.
+- **💬 The Automated Messaging Sim is LSH CommX's too.** The texting half of the training phone, joined to the Portal's 💬 messaging Sim: the firm's automation texts a client (an appointment reminder, the intake auto-responder, a records chaser, a settlement-check notice), the client texts back, and the trainee answers the thread under the firm's texting policy. The automation keeps sending on its own schedule whether or not the trainee has replied, which is what makes it automated messaging and not a chat. Trainees take a thread on **🗂 Call Logs & Scenario Picker → 💬 Automated Messaging**; trainers see every trainee's threads on the same tab. A Portal link opens one straight away, reading the parameters the Portal's messaging links already use:
   - `?messaging=1` → 💬 Automated Messaging (`#/logs/messaging`);
   - `&thread=<id>` → that thread opens at once (`am_reminder`, `am_intake`, `am_records`, `am_settlement`: `THREADS` in `src/messaging.js`; anything else is ignored);
   - `&program=FT|CM|PD|EA|MD` → the course the thread counts in; `&mode=graded` (or `&graded=1`) → a **graded thread**.
   These leave the address bar with the ticket, like a Call Sim link (`App.msgLink` in `public/js/app.js`). A thread is scored when it is closed, on the **Client Messaging Metrics** (seven metrics: verification, policy and confidentiality, accuracy, responsiveness to the automation, tone, resolution and next step, escalation and logging — `MSG_RUBRIC`), with its own checklist, and the client's replies come from the same Gemini key pool as the AI callers. The threads are kept apart from the calls (their own `msgs` table), so a thread is never a call in the Call Logs, in 📋 Graded calls or in Trainee Monitoring.
-  **On the Portal side** it has its own landing and card (Training-Portal): **🤖 Automated Messaging** on 🛠 LSH Sims opens `/api/launch?tool=ringchannel&to=automessages`, which reads `?thread=`, `?program=` and `?mode=graded` and passes on only those (`autoMessagesQuery` in `functions/api/launch.js`; `to=messages` is 💬 Client Messaging, above). A course or program link can name a thread the same way.
-- **📊 Graded threads count in the trainee's course as messaging conversations.** A graded thread goes to the Portal the way a graded call does: the same `POST <PORTAL_URL>/api/call-results` with **`kind: 'message'`**, which the Portal files as its Client Messaging simulator on the thread's own course line — **Client Messaging** for a thread a client started, **Automated Messaging** for the automation's (`lineOfThread` in `src/messaging.js`, `reportMsgThread` in `src/switchboard.js`). It needs the same `AI_GATEWAY_SECRET`; without it the score stays on LSH Voice, as a call's does. Practice threads are the trainee's own and are never sent.
-- **📊 Graded calls count in the trainee's course.** When the trainee has a score they can see — the AI graded their practice call, or the trainer sent the review — LSH Voice sends the call to the Portal, server to server: `POST <PORTAL_URL>/api/call-results`, header `X-Gateway-Key` = **`AI_GATEWAY_SECRET`** (the Portal's shared gateway secret; `src/portal.js` `reportGradedCall`, `src/switchboard.js` `reportCall`). The Portal keeps it on the trainee's Portal account and in the course's own store, so the course shows it on their progress: Standard Training counts a call by its lesson (Reception 4, Calendar Management 5, Intake 6), the other programs by LSH CaseWorks line of the call played (`courseCall` in `src/scenarios.js`). Each call is sent once per score, never for a trainer's own practice, and if the secret isn't set here (or the Portal can't be reached) the call simply stays on LSH Voice — why is kept on the call record. **⚙️ Setup** shows whether it's configured.
-- **Opening LSH Voice's own link**, or signing out, shows **🏠 Open LSH Voice from the LSH Training Portal** with a button there. Trainers get **🏠 Main Portal**, the last button on the top bar, back to the Portal's LSH Academy Index.
+  **On the Portal side** it has its own landing and card (Training-Portal): **🤖 Automated Messaging** on 🛠 LSH Elev8 opens `/api/launch?tool=ringchannel&to=automessages`, which reads `?thread=`, `?program=` and `?mode=graded` and passes on only those (`autoMessagesQuery` in `functions/api/launch.js`; `to=messages` is 💬 Client Messaging, above). A course or program link can name a thread the same way.
+- **📊 Graded threads count in the trainee's course as messaging conversations.** A graded thread goes to the Portal the way a graded call does: the same `POST <PORTAL_URL>/api/call-results` with **`kind: 'message'`**, which the Portal files as its Client Messaging simulator on the thread's own course line — **Client Messaging** for a thread a client started, **Automated Messaging** for the automation's (`lineOfThread` in `src/messaging.js`, `reportMsgThread` in `src/switchboard.js`). It needs the same `AI_GATEWAY_SECRET`; without it the score stays on LSH CommX, as a call's does. Practice threads are the trainee's own and are never sent.
+- **📊 Graded calls count in the trainee's course.** When the trainee has a score they can see — the AI graded their practice call, or the trainer sent the review — LSH CommX sends the call to the Portal, server to server: `POST <PORTAL_URL>/api/call-results`, header `X-Gateway-Key` = **`AI_GATEWAY_SECRET`** (the Portal's shared gateway secret; `src/portal.js` `reportGradedCall`, `src/switchboard.js` `reportCall`). The Portal keeps it on the trainee's Portal account and in the course's own store, so the course shows it on their progress: Standard Training counts a call by its lesson (Reception 4, Calendar Management 5, Intake 6), the other programs by LSH CaseWorX line of the call played (`courseCall` in `src/scenarios.js`). Each call is sent once per score, never for a trainer's own practice, and if the secret isn't set here (or the Portal can't be reached) the call simply stays on LSH CommX — why is kept on the call record. **⚙️ Setup** shows whether it's configured.
+- **Opening LSH CommX's own link**, or signing out, shows **🏠 Open LSH CommX from the LSH Training Portal** with a button there. Trainers get **🏠 Main Portal**, the last button on the top bar, back to the Portal's LSH Academy Index.
 - **If the Portal is down**, *Trainer: is the Portal down?* (folded away on that page) opens the console with the trainer passphrase (`ADMIN_PASSPHRASE`). Trainees wait for the Portal.
 
 ## As an app (its own window)
 
-LSH Voice installs as an app from Chrome or Edge: its own window with no browser bars, its own icon, and an entry in the Start menu, Dock or taskbar. It's still the same site underneath, so updates arrive by themselves.
-- **⬇ Install** in the top bar (or on the "Open LSH Voice from the LSH Training Portal" page), or the browser menu (⋮) → **Install LSH Voice** (Edge: **Apps → Install this site as an app**).
-- **Opening it** goes straight in while the sign-in lasts (30 days for trainees, 12 hours for trainers). After that, **Go to the LSH Training Portal** opens the Portal in the app window, and opening LSH Voice there comes back signed in.
+LSH CommX installs as an app from Chrome or Edge: its own window with no browser bars, its own icon, and an entry in the Start menu, Dock or taskbar. It's still the same site underneath, so updates arrive by themselves.
+- **⬇ Install** in the top bar (or on the "Open LSH CommX from the LSH Training Portal" page), or the browser menu (⋮) → **Install LSH CommX** (Edge: **Apps → Install this site as an app**).
+- **Opening it** goes straight in while the sign-in lasts (30 days for trainees, 12 hours for trainers). After that, **Go to the LSH Training Portal** opens the Portal in the app window, and opening LSH CommX there comes back signed in.
 - The files: `public/manifest.webmanifest`, `public/sw.js` (no offline caching, since calls need the network; just a "you're offline" page) and `public/icons/`.
 
 ## 🧭 The screens: what the top bar opens
@@ -63,7 +63,7 @@ The top bar is the whole of the platform, and it is short on purpose: the phone 
 | 🎛 **Console** | **☎ The switchboard joined to the dialer**, one piece of equipment, with **how the next call is placed** at the board's foot: 📋 Graded · Record · 🙈 Hide ID · 🤖 AI caller · 🎭 Choose… · **🎭 Call to play** (which opens the Scenario Picker **in a tab of its own**, so the Console is never left behind) · 📺 Class view. Nothing else sits beside them — the calls to play and the call picked are a screen of their own. On a call the dialer is joined by what the trainer needs to play the caller: the script, the live checklist, the trainee's note and the case file they opened. |
 | 🗂 **Call Logs & Scenario Picker** | The next screen, two tabs: **📞 Call Logs** (every call, its recording and its scorecard) and **🎭 Scenario Picker** (every call to play, by line and level: **☎ Play on the Console** puts one on the dialer, and ＋ Write a new call writes your own). |
 | 🛡 **Admin** | **🗂 Call Logs · 📊 Trainee Monitoring · 📋 Graded Calls**, then the trainer's own tools: **🤖 AI calls** (with **🎧 Try one yourself** on it: the trainer takes a practice call the way a trainee does) and **⚙️ Setup**. |
-| 🎛 **Mode** | What shows beside the dialer while the trainer plays the caller: **☎ Reception · Intake (🗂 LSH CaseWorks)**, the trainee's LSH CaseWorks screen live as soon as they open it (as before), or **📅 Calendaring (Calendar Sim)**, the trainee on the call's **Google Calendar Sim** on the Portal — the Portal's trainer view of their calendar as they save it, with its automated check and the Calendar Management Mock Call scorecard to fill in — split-screen beside the dialer, read again every 20 s (⟳ Auto) or on ↻, with 🎭 Script, ↗ New tab and ✕ Close as on LSH CaseWorks watch. Kept per browser. The calendar opens signed in as the trainer (an admin ticket); the trainee's Portal account is found by name and Batch ID from the Portal's `/api/calsim-scorecard`, server to server with `AI_GATEWAY_SECRET` (`/api/cal-link`, `calendarLink` in `src/portal.js`, `watchCal` in `public/js/console.js`). |
+| 🎛 **Mode** | What shows beside the dialer while the trainer plays the caller: **☎ Reception · Intake (🗂 LSH CaseWorX)**, the trainee's LSH CaseWorX screen live as soon as they open it (as before), or **📅 Calendaring (Calendar Sim)**, the trainee on the call's **Google Calendar Sim** on the Portal — the Portal's trainer view of their calendar as they save it, with its automated check and the Calendar Management Mock Call scorecard to fill in — split-screen beside the dialer, read again every 20 s (⟳ Auto) or on ↻, with 🎭 Script, ↗ New tab and ✕ Close as on LSH CaseWorX watch. Kept per browser. The calendar opens signed in as the trainer (an admin ticket); the trainee's Portal account is found by name and Batch ID from the Portal's `/api/calsim-scorecard`, server to server with `AI_GATEWAY_SECRET` (`/api/cal-link`, `calendarLink` in `src/portal.js`, `watchCal` in `public/js/console.js`). |
 | 🏠 **Main Portal** | Back to the LSH Training Portal's LSH Academy Index. |
 
 **Trainee view**
@@ -86,7 +86,7 @@ The top bar is the whole of the platform, and it is short on purpose: the phone 
 - **Live average**: reviewed live calls only (with the Pass / Below badge where a pass mark is set);
 - **Practice**: their own AI practice calls, their average and their time — **kept apart from the live figures**, because a practice call is self-practice, not live work.
 
-Trainees appear here the first time they open LSH Voice from the LSH Training Portal, and this is where they're archived and restored. It's the page that was 👥 Trainees. The figures come from `/api/utilization` (`utilization()` in `src/switchboard.js`): the counts and the time from the call records' own columns, the holds and transfers from each call's metrics.
+Trainees appear here the first time they open LSH CommX from the LSH Training Portal, and this is where they're archived and restored. It's the page that was 👥 Trainees. The figures come from `/api/utilization` (`utilization()` in `src/switchboard.js`): the counts and the time from the call records' own columns, the holds and transfers from each call's metrics.
 
 ## 🤖 AI calls: the AI plays the caller
 
@@ -102,18 +102,18 @@ A trainee can take a call where the AI plays the caller, two ways:
   - **👂 Follow** shows what's being said (both sides, as it's transcribed) and the trainee's note, live. **⏹** ends the call.
   - **The AI reviews it** when the trainee submits the note (from the recording), on the line's Mock Calls Metrics. The trainee sees the scorecard straight away; the trainer can review it too (**📋 Review**) and send their own. With **📋 Graded** on, it's in **📋 Graded calls**.
 - Both need the Gemini keys (`GEMINI_API_KEY5` … `9`); without them, 🎧 Practice and 🤖 AI caller are off.
-- **From the Portal:** the 🛠 LSH Sims link **🤖 Take an AI call** opens LSH Voice on the trainee's Scenario Picker, and **🎛 Send AI callers** opens the console.
+- **From the Portal:** the 🛠 LSH Elev8 link **🤖 Take an AI call** opens LSH CommX on the trainee's Scenario Picker, and **🎛 Send AI callers** opens the console.
 
 ## How a live mock call works
 
 **Trainee** (☎ Console)
-1. Opens **☎ LSH Voice** from the LSH Training Portal and lands on **☎ Console**, their phone, signed in (see *On the LSH Training Portal*). They keep it open with a headset on. **🎧 Audio check** tests the microphone, the headset and the speaker.
-   Each trainee gets a **desk extension** (7001, 7002, … in the order they first open LSH Voice), shown on their phone; it's the number the trainer dials.
+1. Opens **☎ LSH CommX** from the LSH Training Portal and lands on **☎ Console**, their phone, signed in (see *On the LSH Training Portal*). They keep it open with a headset on. **🎧 Audio check** tests the microphone, the headset and the speaker.
+   Each trainee gets a **desk extension** (7001, 7002, … in the order they first open LSH CommX), shown on their phone; it's the number the trainer dials.
    **☎ The switchboard** is joined to the phone, in the same dark case and built as the trainer's console is — one piece of equipment, the two ending on the same line however long the batch is (whichever is shorter stretches to the other). It holds their own line (name, batch, extension, available or away), the trainers who are on with their extensions, and the rest of their batch. **«** folds it away to a rail, and the rail brings it back; it stays as they left it on that computer.
 2. Sets **● Available** (or **◌ Away**). **✋ Ask for a call** raises a hand on the trainer's switchboard.
 3. When the phone rings, it shows the line (Main Line or Intake Line) and the caller ID. The trainee answers within 3 rings.
 4. During the call the panes come up beside the phone (**🔎 Case lookup** opens first on a live call, as at the real front desk: look the caller up, then take the note):
-   - **🔎 Case lookup**: the LSH CaseWorks Training Library case files, searched by name, phone, DOB or MC number (nothing shows until you search, like the real front desk). A hit opens as a **preview** of the file, with **✅ This is the case file** (the trainer sees which file they chose, and the grade says whether it was the right one for the call) and **🗂 Open in LSH CaseWorks ↗**, which opens that case in the LSH CaseWorks Training Library **signed in as them** (a fresh one-use Portal ticket, as the Portal opens LSH CaseWorks; it needs `PORTAL_SSO_SECRET` here, otherwise LSH CaseWorks asks them to come in from the Portal);
+   - **🔎 Case lookup**: the LSH CaseWorX Training Library case files, searched by name, phone, DOB or MC number (nothing shows until you search, like the real front desk). A hit opens as a **preview** of the file, with **✅ This is the case file** (the trainer sees which file they chose, and the grade says whether it was the right one for the call) and **🗂 Open in LSH CaseWorX ↗**, which opens that case in the LSH CaseWorX Training Library **signed in as them** (a fresh one-use Portal ticket, as the Portal opens LSH CaseWorX; it needs `PORTAL_SSO_SECRET` here, otherwise LSH CaseWorX asks them to come in from the Portal);
    - **📝 Note**: the message slip, the calendar entry or the intake note, by line;
    - **📇 Directory**: the firm's extensions, with Transfer buttons;
    - **📘 Rules**: the front-desk rules and the line's reminders.
@@ -122,7 +122,7 @@ A trainee can take a call where the AI plays the caller, two ways:
 6. After the call, the trainee finishes the note and **submits** it. The trainer's review appears in **🗂 Call Logs & Scenario Picker → 📞 Call Logs**.
 
 **Trainer** (🎛 Console)
-1. Opens **☎ LSH Voice** from the Portal (LSH Academy Index or Master Control) and lands on the console, signed in under their Portal name.
+1. Opens **☎ LSH CommX** from the Portal (LSH Academy Index or Master Control) and lands on the console, signed in under their Portal name.
 2. **The console is one desk:** ☎ the switchboard in the same dark case as the dialer, joined to it on the left with nothing between them — one piece of equipment, the board's case reaching down to the foot of the phone however short the batch is and following it when the phone reflows (it never scrolls inside itself). Nothing sits beside them: the calls to play are a screen of their own.
    - **☎ Switchboard** (left, under the LSH mark, part of the dialer and always open): the trainer's own line with **their own extension** (8001, 8002, … one per trainer account, so a batch with two trainers on sees which line each is calling from), the other trainers who are on, and every trainee online by batch with their extension: available, away, on a call, or ✋ asking for a call. It works as the phone's contact list: clicking a trainee puts their extension on the dialer.
    - **🎭 Call to play**, at the foot of the board, opens the **Scenario Picker** (🗂 Call Logs & Scenario Picker) **in a tab of its own**, so a trainer never loses the Console mid-session: the calls on each line, one card each, with **☎ Play on the Console** — the opening line, what the caller knows and how they act, what a good call does and the situation. The call picked comes straight back to the dialer's own screen and its 🎭 key, and **✓ Done** closes the picker's tab. It's one tab, reused and brought to the front, and the two tabs agree because the call picked is kept on that computer (`mcv_play`) and the browser's own storage event tells the Console the moment it changes.
@@ -188,7 +188,7 @@ On a call from the trainer, the trainee's **Transfer** key opens the other train
 **🔊 Speaker**, on the trainer's dialer and on the trainee's phone, works like a desk phone's speaker key: the call moves from the headset to the computer's speakers (so a training room can listen), and back when pressed again.
 - Everything on the phone follows it: the call, the ringing and ringback, the keypad tones, and the AI practice caller. The screen shows 🔊 SPEAKER while it's on.
 - The phone finds the speakers by their name ("Speakers", "Built-in", "Realtek"…). **🎧 Audio check** lists the outputs: choose the headset and the speaker there, and play a test tone on each.
-- **💻 Laptops:** the Console steps down with the screen. Below 1500 px it has less room at the sides and a narrower phone and board; below 1300 px they shrink again. A screen under 820 px tall gets a compact phone. The first time a laptop user opens LSH CaseWorks, the switchboard folds away. LSH CaseWorks frame has **− / +** zoom (click the % to fit it again) and fits itself to its space, never under 70 %. **🎧 Audio check** lists the outputs: choose the headset and the speaker there, and play a test tone on each.
+- **💻 Laptops:** the Console steps down with the screen. Below 1500 px it has less room at the sides and a narrower phone and board; below 1300 px they shrink again. A screen under 820 px tall gets a compact phone. The first time a laptop user opens LSH CaseWorX, the switchboard folds away. LSH CaseWorX frame has **− / +** zoom (click the % to fit it again) and fits itself to its space, never under 70 %. **🎧 Audio check** lists the outputs: choose the headset and the speaker there, and play a test tone on each.
 - The setting is kept on that computer.
 - It needs Chrome or Edge (they can choose where sound plays) and the microphone allowed, so the phone can see the outputs' names. If the computer has only one output, the screen says the call already plays there.
 - On speaker, the microphone hears the room: Chrome's echo cancellation removes the call's own sound, but a headset is still best for graded calls.
@@ -217,11 +217,11 @@ They never see the caller's script or the goals, and the call's title only shows
 
 This is separate from the platform's own recording: every live call is still recorded on the console and kept with its scorecard.
 
-**👁 Watching the trainee's LSH CaseWorks.** Whenever a trainee opens LSH CaseWorks from LSH Voice (🔎 Case lookup → 🗂 Open LSH CaseWorks, or in its own tab), on a call or not, your console shows their LSH CaseWorks beside your dialer: LSH CaseWorks' own **👁 Watch live** on them (Master Control → Monitoring → Watch) under the dialer, signed in with your Portal ticket (LSH CaseWorks' `?watch=` link). Their LSH CaseWorks screen shows there about a second behind.
-- On a call, it's the trainee on your call, in the caller script's place: **🎭 Script** brings the script, checklist and note back (LSH CaseWorks stays loaded), and **👁 THEIR LSH CASEWORKS** on your phone's screen goes back to it. While you're on a call with someone else, another trainee opening LSH CaseWorks doesn't take the panel: you get a note, and **👁** on their switchboard row.
-- Off a call, it follows the latest trainee to open LSH CaseWorks. **👁** on any switchboard row watches a trainee who has it open.
-- The line over it says when they close LSH CaseWorks (or leave). **✕ Close** keeps it closed until they open LSH CaseWorks again. On another page, the Console shows it when you go back.
-- Their phone reports a CMS tab it opened until that tab is closed; a CMS opened some other way (from the Portal) can't be seen from LSH Voice.
+**👁 Watching the trainee's LSH CaseWorX.** Whenever a trainee opens LSH CaseWorX from LSH CommX (🔎 Case lookup → 🗂 Open LSH CaseWorX, or in its own tab), on a call or not, your console shows their LSH CaseWorX beside your dialer: LSH CaseWorX' own **👁 Watch live** on them (Master Control → Monitoring → Watch) under the dialer, signed in with your Portal ticket (LSH CaseWorX' `?watch=` link). Their LSH CaseWorX screen shows there about a second behind.
+- On a call, it's the trainee on your call, in the caller script's place: **🎭 Script** brings the script, checklist and note back (LSH CaseWorX stays loaded), and **👁 THEIR LSH CASEWORX** on your phone's screen goes back to it. While you're on a call with someone else, another trainee opening LSH CaseWorX doesn't take the panel: you get a note, and **👁** on their switchboard row.
+- Off a call, it follows the latest trainee to open LSH CaseWorX. **👁** on any switchboard row watches a trainee who has it open.
+- The line over it says when they close LSH CaseWorX (or leave). **✕ Close** keeps it closed until they open LSH CaseWorX again. On another page, the Console shows it when you go back.
+- Their phone reports a CMS tab it opened until that tab is closed; a CMS opened some other way (from the Portal) can't be seen from LSH CommX.
 
 **Timings the phone measures for the scorecard:** rings before the answer (the standard is 3), call length, each hold and its length, and each transfer and how it ended.
 
@@ -241,9 +241,9 @@ Trainer-facilitated mock calls are graded on the program's **Mock Calls Metrics*
 | Reception | Reception Mock Calls Metrics | 14: Introduction of Law Firm and Name · Authentication (Name, DOL, DOB, Claim No, Case No.) · Customer Service · Assertiveness · Listening Skills · Comprehension · Attention to Details · Resolution · Transfer Procedure · Closing Spiel · Time Management · Dead Air/Fillers · Clarity of Speech · Tone of Voice |
 | Calendar | Calendar Management Mock Calls Metrics | 7: Professional Introduction & Call Control · Client Comprehension & Flow Control · Information Verification & Accuracy · Slot Identification & Scheduling Rule Compliance · Alternative Time Offering · Calendar Creation & Attorney Reminder Setup · Notes, Recap & Call Closing (graded against the Day 6 scheduling rules) |
 | Intake | Intake Mock Calls Metrics | 16: the Reception metrics plus Setting Proper Expectations · Explaining the Process · Answering Client's Inquiries · Commitment |
-| 🛡 Claims | Claims Mock Calls Metrics | 8: LSH CaseWorks Claims line's own rubric (Opening & Identifiers · Claim Facts & Liability · Protecting the Client · Commitments & Call Log) plus Listening Skills, Dead Air/Fillers, Clarity of Speech and Tone of Voice |
+| 🛡 Claims | Claims Mock Calls Metrics | 8: LSH CaseWorX Claims line's own rubric (Opening & Identifiers · Claim Facts & Liability · Protecting the Client · Commitments & Call Log) plus Listening Skills, Dead Air/Fillers, Clarity of Speech and Tone of Voice |
 
-**🛡 Claims Mock Calls** (Standard Training, mirrored from LSH CaseWorks' line of that name) are calls the trainee places to an insurance carrier: opening a claim, checking liability, updating the adjuster. The trainer (or the AI) plays the carrier who answers. The trainee writes LSH CaseWorks' **Claim call log**, and the file in 🔎 Case lookup carries its **CLAIMS** paragraph (carriers, claim numbers, adjusters, limits). A graded Claims call counts on the Portal as Standard Training, line Claims Mock Calls (it has no lesson number).
+**🛡 Claims Mock Calls** (Standard Training, mirrored from LSH CaseWorX' line of that name) are calls the trainee places to an insurance carrier: opening a claim, checking liability, updating the adjuster. The trainer (or the AI) plays the carrier who answers. The trainee writes LSH CaseWorX' **Claim call log**, and the file in 🔎 Case lookup carries its **CLAIMS** paragraph (carriers, claim numbers, adjusters, limits). A graded Claims call counts on the Portal as Standard Training, line Claims Mock Calls (it has no lesson number).
 
 An **open call** (no script) is graded the same way, on the line's metrics; there's no checklist, and the AI works out from the recording who called and what they needed.
 
@@ -291,21 +291,21 @@ The grade is the **weighted average** of the scored metrics (n/a doesn't count),
 
 ## The calls
 
-**The calls are LSH CaseWorks'.** Every call on LSH Voice is a call of LSH CaseWorks' 📞 Call Sim (`CaseManagementTraining/call-packs.js`): the same caller, opening line, script, goals and case file, so a trainer's manual mock call on the Console and a trainee's call in LSH CaseWorks are the same call, on the same case. All four programs' calls are here (87 today):
+**The calls are LSH CaseWorX'.** Every call on LSH CommX is a call of LSH CaseWorX' 📞 Call Sim (`CaseManagementTraining/call-packs.js`): the same caller, opening line, script, goals and case file, so a trainer's manual mock call on the Console and a trainee's call in LSH CaseWorX are the same call, on the same case. All four programs' calls are here (87 today):
 
-- **📘 Standard Training**: Reception, Calendar Management and Intake Mock Calls, on LSH CaseWorks' Training Library files (MC-01 …, `CaseManagementTraining/mock-cases.js`; the text of each file a call is about is LSH CaseWorks' own);
-- **🗂 Case Management** (John Doe v. Apex Delivery Services, and the Nguyen case calls), **🚗 Property Damage** (Angela Carter's claim) and **🧑‍💼 EA / PA** (Elias Thorne): each on the case summary LSH CaseWorks plays it on, which is in **🔎 Case lookup** as `CMS-CM`, `CMS-PD` and `CMS-EA`.
+- **📘 Standard Training**: Reception, Calendar Management and Intake Mock Calls, on LSH CaseWorX' Training Library files (MC-01 …, `CaseManagementTraining/mock-cases.js`; the text of each file a call is about is LSH CaseWorX' own);
+- **🗂 Case Management** (John Doe v. Apex Delivery Services, and the Nguyen case calls), **🚗 Property Damage** (Angela Carter's claim) and **🧑‍💼 EA / PA** (Elias Thorne): each on the case summary LSH CaseWorX plays it on, which is in **🔎 Case lookup** as `CMS-CM`, `CMS-PD` and `CMS-EA`.
 
 How a CMS call plays on the phone:
 
-- **The metrics:** a call on a calendaring line is graded on the Calendar Management Mock Calls Metrics, a call on an intake line on the Intake metrics, every other line on the Reception metrics (the phone skills every line shares). For the other programs the grader also gets what LSH CaseWorks weighs on that line.
-- **📤 Calls the trainee places** (in LSH CaseWorks, the trainee phones an adjuster, a provider, Elias…): the trainer rings the trainee's phone and plays the person they phoned; when the trainee picks up they are through, and open the call as the one calling. The AI caller answers the phone the same way.
-- **Where a graded call counts:** Standard Training by its lesson; the other programs by the call's CMS line, as LSH CaseWorks counts them.
+- **The metrics:** a call on a calendaring line is graded on the Calendar Management Mock Calls Metrics, a call on an intake line on the Intake metrics, every other line on the Reception metrics (the phone skills every line shares). For the other programs the grader also gets what LSH CaseWorX weighs on that line.
+- **📤 Calls the trainee places** (in LSH CaseWorX, the trainee phones an adjuster, a provider, Elias…): the trainer rings the trainee's phone and plays the person they phoned; when the trainee picks up they are through, and open the call as the one calling. The AI caller answers the phone the same way.
+- **Where a graded call counts:** Standard Training by its lesson; the other programs by the call's CMS line, as LSH CaseWorX counts them.
 - **What only a phone has** (the caller ID, who doesn't pick up a transfer, a first caller hidden from Case lookup) is `RING` in `src/scenarios.js`, by the call's id. A call without it rings as WIRELESS CALLER (or, on a call the trainee places, the name of the person they phoned).
 
 On a first intake call nothing is on file, so the case is hidden from **Case lookup**. After the call, the review shows the finished case file to compare with the note.
 
-**🔁 Keeping them the same:** `src/cms/call-packs.js` is LSH CaseWorks' file, copied unchanged by `scripts/sync-cms-calls.mjs`. The **Sync CMS calls** workflow (`.github/workflows/sync-cms-calls.yml`) runs it every hour (and on Run workflow), checks LSH Voice still builds its calls from it (`tests/cms-unit.mjs`, a Worker dry run), and commits the change to main, so a call changed or added in LSH CaseWorks reaches the Console on its own. **Change a call in LSH CaseWorks, never here.** To sync by hand:
+**🔁 Keeping them the same:** `src/cms/call-packs.js` is LSH CaseWorX' file, copied unchanged by `scripts/sync-cms-calls.mjs`. The **Sync CMS calls** workflow (`.github/workflows/sync-cms-calls.yml`) runs it every hour (and on Run workflow), checks LSH CommX still builds its calls from it (`tests/cms-unit.mjs`, a Worker dry run), and commits the change to main, so a call changed or added in LSH CaseWorX reaches the Console on its own. **Change a call in LSH CaseWorX, never here.** To sync by hand:
 
 ```bash
 node scripts/sync-cms-calls.mjs
@@ -337,10 +337,10 @@ node scripts/sync-cms-calls.mjs
 - **Practice scores are self-practice.** The trainee's browser runs the call, so **📊 Trainee Monitoring** shows the practice figures apart from the live ones (the live average counts reviewed live calls only). A typed practice call's conversation is kept on the server.
 
 
-## 🧭 Blueprint (how LSH Voice works, for trainees and for trainers)
+## 🧭 Blueprint (how LSH CommX works, for trainees and for trainers)
 
-The **No Blueprint rule:** LSH Voice shows no 🧭 Blueprint button. The blueprints live on the Main Portal's 🧭 Blueprint page; its "📚 Program blueprints…" menu (admins) opens this full-screen slide deck through `#/blueprint` (a trainee who follows that address gets no deck).
-- **Trainee blueprint** (a cover and 9 slides), for trainees: what LSH Voice is, opening it from the Portal, ☎ the Console, answering a call, the tools during a call, the phone's keys (Mute, Speaker, Hold, Transfer, Hang up), after the call, practice with an AI caller, and when the class is listening.
+The **No Blueprint rule:** LSH CommX shows no 🧭 Blueprint button. The blueprints live on the Main Portal's 🧭 Blueprint page; its "📚 Program blueprints…" menu (admins) opens this full-screen slide deck through `#/blueprint` (a trainee who follows that address gets no deck).
+- **Trainee blueprint** (a cover and 9 slides), for trainees: what LSH CommX is, opening it from the Portal, ☎ the Console, answering a call, the tools during a call, the phone's keys (Mute, Speaker, Hold, Transfer, Hang up), after the call, practice with an AI caller, and when the class is listening.
 - **Trainer blueprint** (trainers only; a cover and 9 slides): opening the console from the Portal, the dialer and the Switchboard, on the call, transfers and coaching time-outs, Class view in Meet, graded calls and autograding, Call Logs and Trainee Monitoring, the Scenario Picker, and Setup and AI practice.
 - A trainer gets both decks as tabs. Neither shows in the 📺 Class view.
 - **Moving around:** ◀ ▶, the ← → keys or the contents strip. Esc closes it.
@@ -359,16 +359,16 @@ The **No Blueprint rule:** LSH Voice shows no 🧭 Blueprint button. The bluepri
    |---|---|
    | `ADMIN_PASSPHRASE` | **Required.** Signs the sign-in tokens, and opens the console when the Portal is down (the trainers' fallback). |
    | `SESSION_SECRET` | Optional. Signs the sign-in tokens instead of `ADMIN_PASSPHRASE` (changing it signs everyone out). |
-   | `PORTAL_SSO_SECRET` | Optional. The LSH Training Portal's sign-in secret: LSH Voice then checks the Portal's tickets itself instead of asking the Portal (see *On the LSH Training Portal*). |
+   | `PORTAL_SSO_SECRET` | Optional. The LSH Training Portal's sign-in secret: LSH CommX then checks the Portal's tickets itself instead of asking the Portal (see *On the LSH Training Portal*). |
    | `TURN_KEY_ID`, `TURN_KEY_API_TOKEN` | **Recommended.** Cloudflare's TURN relay (step 3). |
    | `GEMINI_API_KEY5` … `GEMINI_API_KEY9` | Optional. AI practice callers and autograding. |
-   | `AI_GATEWAY_SECRET` | **Recommended.** The LSH Training Portal's shared gateway secret (the same value as the Portal's): every graded call here is then sent to the Portal's `/api/call-results` and counts in the trainee's course (see *On the LSH Training Portal*), and when the keys here run out the Portal's own Gemini keys take over (see *AI practice callers*). Without it, graded calls stay on LSH Voice. |
+   | `AI_GATEWAY_SECRET` | **Recommended.** The LSH Training Portal's shared gateway secret (the same value as the Portal's): every graded call here is then sent to the Portal's `/api/call-results` and counts in the trainee's course (see *On the LSH Training Portal*), and when the keys here run out the Portal's own Gemini keys take over (see *AI practice callers*). Without it, graded calls stay on LSH CommX. |
 
 3. **Set up the TURN relay:** in Cloudflare, go to **Realtime → TURN Server → Create**, then copy the **Turn Token ID** into `TURN_KEY_ID` and the **API Token** into `TURN_KEY_API_TOKEN`.
    - Without it, most calls still connect directly. Trainees on strict home routers, mobile data or office networks may get no audio: their phone says "Still connecting the audio…".
    - The relay is paid by traffic, with a free monthly allowance; a voice call uses well under 1 MB a minute.
    - **🛡 Admin → ⚙️ Setup → 🌐 Network test** shows whether a computer gets relay candidates.
-4. **Check the setup:** open LSH Voice from the Portal as an administrator and go to **🛡 Admin → ⚙️ Setup**. It shows the TURN relay, recordings, AI keys and the Portal sign-in, plus an audio check and a network test.
+4. **Check the setup:** open LSH CommX from the Portal as an administrator and go to **🛡 Admin → ⚙️ Setup**. It shows the TURN relay, recordings, AI keys and the Portal sign-in, plus an audio check and a network test.
 
 **Browsers:** Chrome or Edge on a computer, with a headset (that's what the tests run on). Other current browsers with WebRTC should work but aren't tested. Pages must be served over https, which Cloudflare does; browsers only allow the microphone on https.
 
@@ -400,7 +400,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
   - 🔊 Speaker on the dialer and on the trainee's phone (the call keeps playing), and the audio check's output choices;
   - the ✋ request, the live note, hold with hold music, a transfer answered "no answer", a coaching time-out;
   - the 📺 Class view: it plays the call (the console goes quiet), the trainee is told the class is listening, it shows the live note and hold but never the script, and closing it brings the audio back to the console;
-  - both open LSH Voice from the Portal (tickets); its own link has no sign-in form;
+  - both open LSH CommX from the Portal (tickets); its own link has no sign-in form;
   - a second trainer tab opened mid-call leaves the call alone;
   - a reload of the trainee's page and of the trainer's console mid-call (both reconnect);
   - a 📋 graded call: hang up, the recording and its grading copy uploaded, the note submitted, then the call autograded from the recording with no clicks (all 14 Reception metrics, the transcript);
@@ -413,7 +413,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 - `e2e-trainee.js`: the trainee's own phone (three trainees and a trainer): a 🤝 practice call dialed from the keypad (audio both ways, hold, a transfer to a firm extension, kept as an ungraded practice call); on a call from the trainer, 👥 Merge from the trainee's phone, a 🗣 warm transfer to another trainee (the two speak privately while the trainer hears hold music: the trainer's microphone is left out of the mix), then 👥 Merge all three, a warm transfer completed, one declined (the caller back on hold until Resume), a ↪ cold transfer keyed in on the keypad, and a warm transfer to a firm extension the trainer answers as the attorney.
 - `gemini-unit.mjs`: the Portal's Gemini keys as the fallback (out of credits here → the Portal answers text and live voice; recordings stay here).
 - `blueprint.cjs`: the 🧭 Blueprint. No 🧭 button for anyone; `#/blueprint` opens it for a trainer only, with both decks; every slide fits on a laptop and on a phone; both PDFs have a page per slide; the numbers match everywhere (Cover, then 1 to n, never n + 1).
-- `e2e-portal.js`: opening LSH Voice from the LSH Training Portal (`mock-gemini.js` stands in for the Portal's `/api/verify-ticket`). It checks that:
+- `e2e-portal.js`: opening LSH CommX from the LSH Training Portal (`mock-gemini.js` stands in for the Portal's `/api/verify-ticket`). It checks that:
   - a trainee's ticket lands them on their phone, and the ticket leaves the address;
   - a used ticket signs nobody in, and expired and forged tickets are refused;
   - signed out, the page shows the way to the Portal, with no sign-in form;
@@ -433,8 +433,8 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `src/worker.js` | The Worker: sign-in, the API, recordings (KV), TURN credentials, AI practice and scoring. |
 | `src/switchboard.js` | The Switchboard Durable Object: every phone's WebSocket (presence, ringing, WebRTC signaling, hold, transfer, notes, coaching), the reconnect grace period and ring timeout (alarms), the call records, trainees, written scenarios, 💬 messaging threads and grading settings (SQLite), and when a call is ready to grade. |
 | `src/grader.js` | The Grader Durable Object: the queue of calls to autograde, one at a time, with retries. |
-| `src/scenarios.js` | The firm (directory, rules), the case files, the note forms, the Mock Calls Metrics, and the calls, built from LSH CaseWorks' (`src/cms/call-packs.js`). |
-| `src/cms/call-packs.js` | LSH CaseWorks' Call Sim calls, mirrored unchanged (`scripts/sync-cms-calls.mjs`, the Sync CMS calls workflow). Don't edit it here. |
+| `src/scenarios.js` | The firm (directory, rules), the case files, the note forms, the Mock Calls Metrics, and the calls, built from LSH CaseWorX' (`src/cms/call-packs.js`). |
+| `src/cms/call-packs.js` | LSH CaseWorX' Call Sim calls, mirrored unchanged (`scripts/sync-cms-calls.mjs`, the Sync CMS calls workflow). Don't edit it here. |
 | `src/prompts.js` | The AI caller's instructions and the grader's (the metrics, the facilitator's voice). |
 | `src/gemini.js` | The Gemini key pool, text and audio scoring, and Gemini Live tokens. |
 | `src/messaging.js` | 💬 The Client Messaging and Automated Messaging Sims: their threads (the automation's own sequence, who texts back), the firm's texting policy, the Client Messaging Metrics, and the AI's instructions for the client and the scorer. |
@@ -443,7 +443,7 @@ npm test        # or: cd tests && npm install && npx playwright install chromium
 | `public/index.html`, `public/css/app.css` | The app shell and its look (LSH navy and orange, IBM Plex). |
 | `public/_headers` | Response headers for the app's files (microphone allowed on this site only, no caching of the page). |
 | `public/js/phone.js` | The VOIP engine: the Switchboard connection, the WebRTC call (with ICE restart and a clear Opus voice), the call recorder, the mic, and the 🔊 speaker key (which audio output the call plays on). |
-| `public/manifest.webmanifest`, `public/sw.js`, `public/icons/` | LSH Voice as an installable app (its own window and icon). |
+| `public/manifest.webmanifest`, `public/sw.js`, `public/icons/` | LSH CommX as an installable app (its own window and icon). |
 | `public/js/sounds.js` | Ringing, ringback, the keypad tones, the hang-up tone and hold music, all synthesized. |
 | `public/js/ai-call.js` | The AI practice caller (Gemini Live voice, or typed). |
 | `public/js/app.js` | Sign-in, pages, the phone screen, the note form, case lookup, the directory. |
