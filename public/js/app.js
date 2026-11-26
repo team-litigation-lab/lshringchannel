@@ -1,5 +1,5 @@
 /* =========================================================
-   LSH Voice: the app shell
+   LSH CommX: the app shell
    Sign-in, routes, the Switchboard connection, and the parts both
    the trainee's phone and the trainer's console use: the phone's
    screen, the note form, case lookup, the firm directory, dialogs.
@@ -31,11 +31,11 @@
   // while a second tab only offers to move the call to itself.
   App.ownCall = (id) => { try { if (id === undefined) return sessionStorage.getItem('mcv_call'); if (id) sessionStorage.setItem('mcv_call', id); else sessionStorage.removeItem('mcv_call'); } catch (e) { return null; } };
 
-  // 🏠 LSH Voice opens from the LSH Training Portal: ?ticket=… signs a trainee in on their phone and an administrator in
+  // 🏠 LSH CommX opens from the LSH Training Portal: ?ticket=… signs a trainee in on their phone and an administrator in
   // on the console (the Worker checks it, src/portal.js). ?admin=1 (an older Portal) opens the trainers' fallback sign-in.
   // Both leave the address at once.
   //
-  // 📞 The Call Sim is LSH Voice's: the Portal's LSH Sims page, the courses and the programs all open it here
+  // 📞 The Call Sim is LSH CommX's: the Portal's LSH Elev8 page, the courses and the programs all open it here
   // (/api/launch?tool=ringchannel&to=calls → ?track=&line=&program=&graded=1#/practice). Those are kept in App.callLink and
   // leave the address too: 🎧 Practice opens on that line, with the program the call counts in, and a graded call rings at
   // once with a caller the trainee doesn't see first (trainee.js).
@@ -74,16 +74,16 @@
     return { ticket, admin };
   }
 
-  /* ⬇ Install: LSH Voice as its own app (Chrome and Edge): its own window, icon, and Start menu / Dock / taskbar
+  /* ⬇ Install: LSH CommX as its own app (Chrome and Edge): its own window, icon, and Start menu / Dock / taskbar
      entry, no browser bars. The browser offers it once the page qualifies (manifest.webmanifest, sw.js). */
   App.installed = () => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };
   App.installPrompt = null;
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); App.installPrompt = e; App.header(); const g = document.getElementById('gateInstall'); if (g) g.classList.remove('hidden'); });
-  window.addEventListener('appinstalled', () => { App.installPrompt = null; App.header(); U.toast('Installed: open LSH Voice from your Start menu, Dock or taskbar.', 'ok'); });
+  window.addEventListener('appinstalled', () => { App.installPrompt = null; App.header(); U.toast('Installed: open LSH CommX from your Start menu, Dock or taskbar.', 'ok'); });
   if ('serviceWorker' in navigator && location.protocol !== 'file:') window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   App.install = async function () {
     const e = App.installPrompt;
-    if (!e) return U.toast('In Chrome or Edge, open the browser menu (⋮) → "Install LSH Voice" (or "Apps → Install this site as an app").');
+    if (!e) return U.toast('In Chrome or Edge, open the browser menu (⋮) → "Install LSH CommX" (or "Apps → Install this site as an app").');
     e.prompt();
     try { await e.userChoice; } catch (err) { /* closed */ }
     App.installPrompt = null; App.header();
@@ -141,13 +141,13 @@
   App.ALIAS = { calls: 'logs/calls', scenarios: 'logs/scenarios', messaging: 'logs/messaging', clientmessaging: 'logs/clientmessaging', graded: 'admin/graded', trainees: 'admin/monitoring', monitoring: 'admin/monitoring', aicalls: 'admin/aicalls', setup: 'admin/setup' };
 
   /* 🎛 The mock call mode (trainers, on the top bar): what shows beside the dialer while they play the caller.
-       ☎ Reception · Intake   the trainee's LSH CaseWorks screen, live, as soon as they open it (console.js watchCms)
+       ☎ Reception · Intake   the trainee's LSH CaseWorX screen, live, as soon as they open it (console.js watchCms)
        📅 Calendaring         the trainee's Google Calendar Sim on the Portal (console.js watchCal), the trainee on the call
      Kept on this browser (rc_mock_mode). */
   App.mockMode = () => { try { return localStorage.getItem('rc_mock_mode') === 'calendar' ? 'calendar' : 'cms'; } catch (e) { return 'cms'; } };
   App.setMockMode = function (v) {
     try { localStorage.setItem('rc_mock_mode', v === 'calendar' ? 'calendar' : 'cms'); } catch (e) {}
-    U.toast(v === 'calendar' ? '📅 Calendaring: the trainee\'s Google Calendar Sim shows beside your dialer on a call.' : '☎ Reception · Intake: the trainee\'s LSH CaseWorks shows beside your dialer when they open it.');
+    U.toast(v === 'calendar' ? '📅 Calendaring: the trainee\'s Google Calendar Sim shows beside your dialer on a call.' : '☎ Reception · Intake: the trainee\'s LSH CaseWorX shows beside your dialer when they open it.');
     if (window.Console && typeof Console.modeChanged === 'function') Console.modeChanged();
   };
   App.header = function () {
@@ -157,13 +157,13 @@
     const portal = App.trainer() && App.cfg && App.cfg.portal
       ? `<a href="${esc(App.cfg.portal)}" title="The LSH Training Portal: its 🎓 LSH Academy Index">🏠 Main Portal</a>` : '';
     const mode = App.trainer() ? `<label class="hdr-mode" title="What shows beside your dialer while you play the caller">Mode <select onchange="App.setMockMode(this.value)" aria-label="Mock call mode">
-        <option value="cms"${App.mockMode() === 'cms' ? ' selected' : ''}>☎ Reception · Intake (🗂 LSH CaseWorks)</option><option value="calendar"${App.mockMode() === 'calendar' ? ' selected' : ''}>📅 Calendaring (Calendar Sim)</option></select></label>` : '';
+        <option value="cms"${App.mockMode() === 'cms' ? ' selected' : ''}>☎ Reception · Intake (🗂 LSH CaseWorX)</option><option value="calendar"${App.mockMode() === 'calendar' ? ' selected' : ''}>📅 Calendaring (Calendar Sim)</option></select></label>` : '';
     nav.innerHTML = App.navItems().map(([k, l]) => `<a href="#/${k}" class="${here === k ? 'on' : ''}">${l}${k === 'logs' && App.unread ? '<span class="dot"></span>' : ''}</a>`).join('') + mode + portal;
-    const install = App.installPrompt && !App.installed() ? '<button type="button" class="hdr-install" onclick="App.install()" title="Install LSH Voice as an app: its own window and icon">⬇ Install</button>' : '';
+    const install = App.installPrompt && !App.installed() ? '<button type="button" class="hdr-install" onclick="App.install()" title="Install LSH CommX as an app: its own window and icon">⬇ Install</button>' : '';
     who.innerHTML = `${install}<span class="who-wrap"><button type="button" class="chip who-btn" onclick="App.toggleOnline(event)" aria-haspopup="true" aria-expanded="false" title="Who is online now"><span class="who-me">${App.trainer() ? '🎓 Trainer' : '🎧 Trainee'} · ${esc(App.me.name)}${App.me.batch ? ' · ' + esc(App.me.batch) : ''}</span><span class="who-n" id="whoN">${App.onlineCount()}</span> ▾</button><div class="who-pop hidden" id="whoPop" role="dialog" aria-label="Who is online"></div></span><button type="button" title="Signed in as ${esc(App.me.name)}" onclick="App.logout()">Log out</button>`;
   };
 
-  // 🟢 Who is online: the header's chip opens a list of everyone on LSH Voice now, trainers and trainees apart. It comes from the
+  // 🟢 Who is online: the header's chip opens a list of everyone on LSH CommX now, trainers and trainees apart. It comes from the
   // switchboard's presence: a trainer sees every trainee who is on; a trainee sees the trainers and their own batch.
   App.onlineLists = function () {
     const trainers = (App.desks || []).map((d) => ({ name: d.name, sub: d.ext ? 'ext ' + d.ext : '', call: !!d.call }));
@@ -222,7 +222,7 @@
   };
 
   /* ---------- sign-in ---------- */
-  // Not signed in: LSH Voice has no sign-in form. It opens from the LSH Training Portal (signed in there), so this
+  // Not signed in: LSH CommX has no sign-in form. It opens from the LSH Training Portal (signed in there), so this
   // shows the way to the Portal, with the trainers' passphrase folded away for when the Portal is down.
   App.showLogin = async function (opts) {
     opts = opts || {};
@@ -232,15 +232,15 @@
     try { st = await API.post('/api/auth/status'); } catch (e) { st = {}; }
     const portal = st.portal || 'https://cm-training-activity.pages.dev/programs.html';
     app.innerHTML = `<div class="login gate">
-      <div class="login-hero"><div class="big">☎</div><h1>LSH Voice</h1>
+      <div class="login-hero"><div class="big">☎</div><h1>LSH CommX</h1>
         <p>The training phone for Reception, Calendar and Intake mock calls: your trainer rings, you answer, handle the call and take the note, and the call is recorded and graded.</p></div>
       ${opts.notice ? `<div class="${opts.error ? 'err-box' : 'note-box'}" id="loginNotice" style="margin-bottom:16px">${esc(opts.notice)}</div>` : ''}
-      ${st.configured === false ? '<div class="warn-box" style="margin-bottom:16px">LSH Voice isn\'t set up yet: add the <b>ADMIN_PASSPHRASE</b> secret in Cloudflare (see the README).</div>' : ''}
+      ${st.configured === false ? '<div class="warn-box" style="margin-bottom:16px">LSH CommX isn\'t set up yet: add the <b>ADMIN_PASSPHRASE</b> secret in Cloudflare (see the README).</div>' : ''}
       <div class="card gate-card">
-        <h2>🏠 Open LSH Voice from the LSH Training Portal</h2>
-        <p>There's no separate sign-in. Sign in on the Portal, then open <b>☎ LSH Voice</b> from 🎓 LSH Academy Index (trainers: also from Master Control). You arrive signed in: trainees on their phone, trainers on the console.</p>
+        <h2>🏠 Open LSH CommX from the LSH Training Portal</h2>
+        <p>There's no separate sign-in. Sign in on the Portal, then open <b>☎ LSH CommX</b> from 🎓 LSH Academy Index (trainers: also from Master Control). You arrive signed in: trainees on their phone, trainers on the console.</p>
         <a class="btn btn-orange btn-lg" id="toPortal" href="${esc(portal)}">Go to the LSH Training Portal →</a>
-        <p class="small ${App.installPrompt && !App.installed() ? '' : 'hidden'}" id="gateInstall" style="margin:14px auto 0"><button type="button" class="btn btn-sm" onclick="App.install()">⬇ Install LSH Voice as an app</button> its own window and icon, like a desktop phone app.</p>
+        <p class="small ${App.installPrompt && !App.installed() ? '' : 'hidden'}" id="gateInstall" style="margin:14px auto 0"><button type="button" class="btn btn-sm" onclick="App.install()">⬇ Install LSH CommX as an app</button> its own window and icon, like a desktop phone app.</p>
         <details class="gate-fallback" ${opts.trainer ? 'open' : ''}><summary>Trainer: is the Portal down?</summary>
           <form id="fTrainer" style="margin-top:10px">
             <div class="field"><label class="f" for="an">Your name (trainees see it)</label><input class="input" id="an" autocomplete="name" placeholder="e.g. Coach Ana" required></div>
@@ -276,15 +276,15 @@
       App.drawOnline();
     });
     b.on('error', (m) => U.toast(m.msg, 'error'));
-    b.on('cms-at', (m) => { if (App.cms.sent && m.at) App.cms.since = m.at; });   // 🗂 when the switchboard says LSH CaseWorks was opened
+    b.on('cms-at', (m) => { if (App.cms.sent && m.at) App.cms.since = m.at; });   // 🗂 when the switchboard says LSH CaseWorX was opened
     b.on('trouble', () => { API.post('/api/me').catch(() => {}); });
     b.on('*', (m) => { if (!['hello', 'presence', 'error', 'cms-at'].includes(m.t)) (App.trainer() ? Console : Trainee).onBoard(m); });
     b.on('graded', (m) => { if (App.gradedHook) App.gradedHook(m); });
     b.connect();
   };
 
-  /* 🗂 Whether this trainee has LSH CaseWorks open: beside the call (#cmsSplit's frame) or in a tab opened from here
-     (watched until it's closed). The switchboard tells the trainers, and their console opens LSH CaseWorks'
+  /* 🗂 Whether this trainee has LSH CaseWorX open: beside the call (#cmsSplit's frame) or in a tab opened from here
+     (watched until it's closed). The switchboard tells the trainers, and their console opens LSH CaseWorX'
      👁 Watch live on this trainee. A CMS tab opened some other way (the Portal) can't be seen from here. */
   App.cms = { tabs: new Set(), sent: null, since: 0, resend: false };
   App.cmsOpen = function () {
@@ -337,20 +337,20 @@
   // The thin rail a folded panel leaves behind: click it to bring the panel back.
   App.railHTML = (key, label, icon) => `<button type="button" class="rail" data-fold="${esc(key)}" title="Maximize ${esc(label)}" aria-label="Maximize ${esc(label)}" aria-expanded="false"><span class="rail-ic">${icon}</span><span class="rail-label">${esc(label)}</span><span class="rail-max">» Maximize</span></button>`;
 
-  /* 🗂 A CMS frame (the trainee's LSH CaseWorks beside the call, the trainer's watch of it), sized for any screen:
-     − / + zoom it (LSH CaseWorks is laid out for a wide screen: on a laptop it fits at 80–90%), and the bar under it
+  /* 🗂 A CMS frame (the trainee's LSH CaseWorX beside the call, the trainer's watch of it), sized for any screen:
+     − / + zoom it (LSH CaseWorX is laid out for a wide screen: on a laptop it fits at 80–90%), and the bar under it
      sets its height (double-click: back to the window's). Until someone zooms, it fits itself to the room it
      has. Both kept on this computer. */
   App.cmsFrameHTML = (title) => `<div class="cms-vp"><iframe class="cms-frame" title="${esc(title)}" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
-    <div class="cms-grip" title="Drag to make LSH CaseWorks taller or shorter (double-click: back to the window's height)" role="separator" aria-orientation="horizontal"><span></span></div>`;
-  App.zoomHTML = () => '<span class="cms-zoom" title="Zoom LSH CaseWorks: smaller fits more of it on a laptop"><button type="button" data-z="-" aria-label="Zoom out">−</button><b class="z-val">100%</b><button type="button" data-z="+" aria-label="Zoom in">+</button></span>';
+    <div class="cms-grip" title="Drag to make LSH CaseWorX taller or shorter (double-click: back to the window's height)" role="separator" aria-orientation="horizontal"><span></span></div>`;
+  App.zoomHTML = () => '<span class="cms-zoom" title="Zoom LSH CaseWorX: smaller fits more of it on a laptop"><button type="button" data-z="-" aria-label="Zoom out">−</button><b class="z-val">100%</b><button type="button" data-z="+" aria-label="Zoom in">+</button></span>';
   App.grip = function (box, key) {
     const vp = box.querySelector('.cms-vp'), f = box.querySelector('.cms-frame'), g = box.querySelector('.cms-grip'); if (!vp || !f || !g) return;
     const K = 'mcv_cms_h_' + (key || 'trainee'), Z = 'mcv_cms_z_' + (key || 'trainee');
     const get = (k) => { try { return Number(localStorage.getItem(k)) || 0; } catch (e) { return 0; } };
     const put = (k, v) => { try { if (v) localStorage.setItem(k, String(v)); else localStorage.removeItem(k); } catch (e) {} };
     const h = get(K); if (h >= 300) vp.style.height = h + 'px';
-    // Zoom: the one chosen, else a fit (LSH CaseWorks reads well from about 1100 px across; never under 70 %).
+    // Zoom: the one chosen, else a fit (LSH CaseWorX reads well from about 1100 px across; never under 70 %).
     const fit = () => Math.max(0.7, Math.min(1, Math.floor((vp.clientWidth || 1100) / 1100 * 20) / 20));
     const setZ = (z) => {
       z = Math.max(0.5, Math.min(1.25, Math.round(z * 20) / 20));
@@ -364,7 +364,7 @@
       z = setZ(z + (b.dataset.z === '+' ? 0.05 : -0.05)); put(Z, z);
     });
     const v = box.querySelector('.z-val');
-    if (v) { v.style.cursor = 'pointer'; v.title = 'Click: fit LSH CaseWorks to this space'; v.onclick = () => { put(Z, 0); z = setZ(fit()); }; }
+    if (v) { v.style.cursor = 'pointer'; v.title = 'Click: fit LSH CaseWorX to this space'; v.onclick = () => { put(Z, 0); z = setZ(fit()); }; }
     if (window.ResizeObserver) new ResizeObserver(() => { if (!get(Z)) z = setZ(fit()); }).observe(vp);
     g.ondblclick = () => { vp.style.height = ''; put(K, 0); };
     g.onpointerdown = (e) => {
@@ -534,7 +534,7 @@
   /* 🔎 Case lookup: the front desk's search of the firm's case files. On a live call it's the first
      thing on screen: the trainee searches, previews the file, marks the one the call is about (their
      trainer sees which file they picked, and the grade says whether it was the right one) and can open
-     it in LSH CaseWorks signed in as themselves. */
+     it in LSH CaseWorX signed in as themselves. */
   App.lookupHTML = function (p) {
     const picked = p && p.caseId ? App.cfg.cases[p.caseId] : null;
     return `<p class="small muted">Search the firm's case files the way the front desk does: by the caller's name, a phone number, a date of birth or a case number (MC-xx). Nothing shows until you search.</p>
@@ -543,19 +543,19 @@
   };
   const pickedHTML = (c) => `<div class="ok-box small" style="margin:10px 0">📁 Working from <b>${esc(c.id)} · ${esc(c.name)}</b> — your trainer can see the file you chose. <button class="btn btn-sm" data-case-clear="1">Choose another</button></div>`;
 
-  // Opens a case file in LSH CaseWorks, signed in (a fresh Portal ticket; see src/portal.js).
+  // Opens a case file in LSH CaseWorX, signed in (a fresh Portal ticket; see src/portal.js).
   App.openCase = async function (caseId, btn) {
     const label = btn ? btn.textContent : '';
-    if (btn) { btn.disabled = true; btn.textContent = 'Opening LSH CaseWorks…'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Opening LSH CaseWorX…'; }
     // The tab is opened first, so the browser doesn't treat it as a pop-up once the link comes back.
     const tab = window.open('', '_blank');
     try {
       const r = await API.post('/api/cms-link', { caseId });
       if (tab) { tab.location = r.url; if (!App.trainer()) { App.cms.tabs.add(tab); App.cmsReport(); } } else window.open(r.url, '_blank', 'noopener');
-      if (!r.authed) U.toast('LSH CaseWorks will ask you to come in from the LSH Training Portal (no Portal secret is set on this site).');
+      if (!r.authed) U.toast('LSH CaseWorX will ask you to come in from the LSH Training Portal (no Portal secret is set on this site).');
     } catch (e) {
       if (tab) tab.close();
-      U.toast('Couldn\'t open the case file in LSH CaseWorks: ' + e.message, 'error');
+      U.toast('Couldn\'t open the case file in LSH CaseWorX: ' + e.message, 'error');
     }
     if (btn) { btn.disabled = false; btn.textContent = label; }
   };
@@ -591,7 +591,7 @@
       hit.classList.add('open');
       hit.insertAdjacentHTML('beforeend', `<div class="case-body"><div class="case-head small muted">📁 Preview · case file ${esc(c.id)}</div><pre class="case">${esc(c.text)}</pre>
         <div class="row">${live ? `<button class="btn btn-sm btn-green" data-case-use="${esc(c.id)}">✅ This is the case file</button>` : ''}
-        <button class="btn btn-sm" data-case-open="${esc(c.id)}" title="Opens ${esc(c.id)} in LSH CaseWorks, signed in as you${onOpen ? ', beside the call' : ''}">🗂 Open ${esc(c.id)} in LSH CaseWorks${onOpen ? '' : ' ↗'}</button></div></div>`);
+        <button class="btn btn-sm" data-case-open="${esc(c.id)}" title="Opens ${esc(c.id)} in LSH CaseWorX, signed in as you${onOpen ? ', beside the call' : ''}">🗂 Open ${esc(c.id)} in LSH CaseWorX${onOpen ? '' : ' ↗'}</button></div></div>`);
     };
   };
 
@@ -626,9 +626,9 @@
   let titleFlash = null;
   App.flashTitle = function (on, text) {
     clearInterval(titleFlash);
-    if (!on) { document.title = 'LSH Voice'; return; }
+    if (!on) { document.title = 'LSH CommX'; return; }
     let f = false;
-    titleFlash = setInterval(() => { document.title = (f = !f) ? text : 'LSH Voice'; }, 900);
+    titleFlash = setInterval(() => { document.title = (f = !f) ? text : 'LSH CommX'; }, 900);
   };
 
   // The grade: the weighted average of the scored metrics (1 to 5) and as a percentage (as src/scenarios.js weightedScore).

@@ -1,8 +1,8 @@
 /* =========================================================
-   🏠 Opening LSH Voice from the LSH Training Portal
+   🏠 Opening LSH CommX from the LSH Training Portal
    ---------------------------------------------------------
    The Portal (cm-training-activity.pages.dev) signs a trainee in once and
-   opens LSH Voice through /api/launch?tool=ringchannel, which sends them
+   opens LSH CommX through /api/launch?tool=ringchannel, which sends them
    here with a short-lived ticket: ?ticket=<payload>.<signature>.
      payload   = base64url(JSON { first, last, b: batch, exp })   (an admin's is { r: 'a', exp })
      signature = base64url(HMAC-SHA256("portal-sso:" + PORTAL_SSO_SECRET, payload))
@@ -10,10 +10,10 @@
      • with PORTAL_SSO_SECRET, when it's set on this Worker (the same secret as the Portal's);
      • otherwise by asking the Portal itself (POST /api/verify-ticket), as the CMS does, so it
        works with no secret to copy.
-   A trainee's ticket signs them in as a trainee (their LSH Voice id is name--batch, as on
+   A trainee's ticket signs them in as a trainee (their LSH CommX id is name--batch, as on
    every LSH platform); an administrator's signs them in as a trainer, under their Portal name
-   ({ r: 'a', n: name }: the Portal makes those for LSH Voice only). There's no sign-in form:
-   LSH Voice opens from the Portal. Each ticket works once (the Switchboard keeps the used ones).
+   ({ r: 'a', n: name }: the Portal makes those for LSH CommX only). There's no sign-in form:
+   LSH CommX opens from the Portal. Each ticket works once (the Switchboard keeps the used ones).
    ========================================================= */
 export const PORTAL_URL = 'https://cm-training-activity.pages.dev';
 const MAX_AHEAD_MS = 10 * 60 * 1000;
@@ -70,7 +70,7 @@ function expOf(payload) {
    Returns { url, authed } or throws with what's missing. */
 export async function calendarLink(env, trainer, name, batch) {
   const key = String((env && env.AI_GATEWAY_SECRET) || '').trim();
-  if (!key) throw new Error('AI_GATEWAY_SECRET isn\'t set on LSH Voice, so the trainee\'s Portal account can\'t be looked up.');
+  if (!key) throw new Error('AI_GATEWAY_SECRET isn\'t set on LSH CommX, so the trainee\'s Portal account can\'t be looked up.');
   const base = portalUrl(env);
   let username = '';
   try {
@@ -117,7 +117,7 @@ export async function readPortalTicket(env, ticket) {
 }
 
 /* 📊 A graded call to the LSH Training Portal, so it counts in the trainee's course.
-   The Call Sim is LSH Voice's: when a trainee can see their score (the AI graded their
+   The Call Sim is LSH CommX's: when a trainee can see their score (the AI graded their
    practice call, or the trainer sent the review), the call goes to the Portal server to server:
 
      POST <PORTAL_URL>/api/call-results   header X-Gateway-Key: AI_GATEWAY_SECRET

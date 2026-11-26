@@ -1,4 +1,4 @@
-// End-to-end: LSH Voice opens from the LSH Training Portal, with no sign-in form (?ticket=…). mock-gemini.js stands in for
+// End-to-end: LSH CommX opens from the LSH Training Portal, with no sign-in form (?ticket=…). mock-gemini.js stands in for
 // the Portal's /api/verify-ticket (PORTAL_URL points at it, and this Worker has no PORTAL_SSO_SECRET), as on the live site.
 const { chromium } = require('playwright');
 const Portal = require('./portal-ticket');
@@ -16,7 +16,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   });
   const mk = async () => { const c = await browser.newContext({ permissions: ['microphone'], viewport: { width: 1360, height: 900 } }); const p = await c.newPage(); p.on('pageerror', (e) => console.log('PAGE ERROR', e.message)); return p; };
 
-  // A trainee opens LSH Voice from the Portal's LSH Academy Index: straight onto their phone, the ticket gone from the address
+  // A trainee opens LSH CommX from the Portal's LSH Academy Index: straight onto their phone, the ticket gone from the address
   const te = await mk();
   const link = Portal.trainee(B, 'Riley Santos', 'B100626');
   await te.goto(link);
@@ -41,7 +41,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   if (await te.$('#fTrainee, #tn, #tp')) throw new Error('There is still a trainee sign-in form');
   if (await te.isVisible('#fTrainer')) throw new Error('The trainers\' fallback should stay folded away');
   await te.screenshot({ path: OUT + '/17-open-from-portal.png' });
-  ok('Signed out, LSH Voice shows the way to the Portal: no sign-in form (the trainers\' fallback is folded away)');
+  ok('Signed out, LSH CommX shows the way to the Portal: no sign-in form (the trainers\' fallback is folded away)');
 
   // Expired and forged tickets are refused, with a reason
   await te.goto(`${B}/?ticket=${Portal.ticket({ first: 'Riley', last: 'Santos', b: 'B100626', exp: Date.now() - 1000 })}`);

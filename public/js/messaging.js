@@ -11,7 +11,7 @@
    and the client's own replies come from the AI (/api/msg/send).
    Ending the thread scores it on the Client Messaging Metrics, and a
    graded thread counts in the trainee's course on the Portal exactly as
-   LSH CaseWorks' Client Messaging conversations do (src/messaging.js).
+   LSH CaseWorX' Client Messaging conversations do (src/messaging.js).
 
    Two simulators, one engine and one page. 💬 Client Messaging is the
    thread a client (or someone saying they are one) starts on the firm's

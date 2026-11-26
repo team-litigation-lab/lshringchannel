@@ -1,5 +1,5 @@
 // The LSH Training Portal's ticket, checked with the shared secret (src/portal.js verifyLocal), and the graded calls
-// LSH Voice sends back to the Portal's course (reportGradedCall, the Call Sim integration): run by tests/run.sh.
+// LSH CommX sends back to the Portal's course (reportGradedCall, the Call Sim integration): run by tests/run.sh.
 import { createHmac } from 'node:crypto';
 import { verifyLocal, reportGradedCall, splitName, calendarLink } from '../src/portal.js';
 import { courseCall, trackFromLink, programOk } from '../src/scenarios.js';
@@ -27,7 +27,7 @@ for (const [what, t, okay] of cases) {
 if (bad) process.exit(1);
 console.log(`✅ Portal tickets with the shared secret: ${cases.length} cases (trainee, admin, wrong secret, expired, too long, tampered, none)`);
 
-/* 📞 The Call Sim is LSH Voice's: a graded call counts in the trainee's course, so it goes to the Portal's
+/* 📞 The Call Sim is LSH CommX's: a graded call counts in the trainee's course, so it goes to the Portal's
    /api/call-results with the program, the line and (Standard Training) the lesson the course counts it in. */
 const line = (t, l) => trackFromLink(t, l);
 const lineCases = [

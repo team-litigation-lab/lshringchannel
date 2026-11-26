@@ -1,4 +1,4 @@
-// Opens LSH Voice the way the LSH Training Portal does (tests only): a signed ticket that mock-gemini.js's stand-in for the
+// Opens LSH CommX the way the LSH Training Portal does (tests only): a signed ticket that mock-gemini.js's stand-in for the
 // Portal's /api/verify-ticket accepts. Each ticket works once, so make a new one each time.
 const { createHmac } = require('crypto');
 const SECRET = 'portal-test-secret';

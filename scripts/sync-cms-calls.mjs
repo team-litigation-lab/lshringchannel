@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-/* 🔁 Mirror the CMS's Call Simulator calls and Training Library files onto LSH Voice.
+/* 🔁 Mirror the CMS's Call Simulator calls and Training Library files onto LSH CommX.
    The CMS (CaseManagementTraining) keeps every mock call in call-packs.js (the callers, their scripts, the goals and
    the case files they're about, for Standard Training, Case Management, Property Damage and EA / PA) and every
-   Training Library file in mock-cases.js (MC-01 … : the clients the front desk looks up). LSH Voice plays the same
+   Training Library file in mock-cases.js (MC-01 … : the clients the front desk looks up). LSH CommX plays the same
    calls (src/scenarios.js builds its Scenario Picker from them) and shows the same files in 🔎 Case lookup
    (src/cms-files.js), so this copies both files, unchanged, to src/cms/ with a header saying where they came from.
 
      node scripts/sync-cms-calls.mjs              copy the CMS's files from GitHub (main)
      node scripts/sync-cms-calls.mjs --from <dir> copy them from a checkout of the CMS instead
-     node scripts/sync-cms-calls.mjs --check      exit 1 if LSH Voice's copies are behind the CMS's
+     node scripts/sync-cms-calls.mjs --check      exit 1 if LSH CommX's copies are behind the CMS's
 
    The Sync CMS calls workflow (.github/workflows/sync-cms-calls.yml) runs it on a schedule and commits the change. */
 import { readFile, writeFile } from 'node:fs/promises';
@@ -19,7 +19,7 @@ const REPO = 'team-litigation-lab/CaseManagementTraining';
 const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'cms');
 // What src/scenarios.js (and src/cms-files.js) read from each file.
 const FILES = [
-  { name: 'call-packs.js', what: 'turns it into LSH Voice\'s calls', need: ['const CALLS = [', 'const LINES = [', 'const DOCS = {', 'const CASES = {', 'const PROGRAMS = [', 'module.exports = API'] },
+  { name: 'call-packs.js', what: 'turns it into LSH CommX\'s calls', need: ['const CALLS = [', 'const LINES = [', 'const DOCS = {', 'const CASES = {', 'const PROGRAMS = [', 'module.exports = API'] },
   { name: 'mock-cases.js', what: 'shows its files in 🔎 Case lookup (src/cms-files.js)', need: ['const MOCK_CASES = [', 'module.exports = { MOCK_CASES'] }
 ];
 
@@ -44,7 +44,7 @@ for (const f of FILES) {
     if (!text.includes(need)) throw new Error(`The CMS's ${f.name} no longer has "${need}": update src/scenarios.js / src/cms-files.js before syncing.`);
   const head = `/* ⚠ MIRRORED FROM THE CMS: do not edit here.
    Source: ${REPO}/${f.name}. Change it in the CMS; scripts/sync-cms-calls.mjs (and the
-   Sync CMS calls workflow) copies it here, and LSH Voice ${f.what}. */
+   Sync CMS calls workflow) copies it here, and LSH CommX ${f.what}. */
 `;
   const out = path.join(DIR, f.name);
   const next = head + text;

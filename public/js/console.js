@@ -155,14 +155,14 @@
         renderDialer();
         return;
       case 'mute': if (mine) { t.traineeMuted = !!m.on; renderDialer(); } return;
-      // 👁 A trainee opened LSH CaseWorks (on a call or not): watch their LSH CaseWorks screen here.
+      // 👁 A trainee opened LSH CaseWorX (on a call or not): watch their LSH CaseWorX screen here.
       case 'cms-open': C.autoWatch(m.trainee); return;
-      // 🗂 The trainee opened LSH CaseWorks: watch their LSH CaseWorks screen here.
+      // 🗂 The trainee opened LSH CaseWorX: watch their LSH CaseWorX screen here.
       case 'cms':
         if (!mine) return;
-        if (!t.traineeCms) C.scriptOn = false;   // the script steps aside for their LSH CaseWorks
+        if (!t.traineeCms) C.scriptOn = false;   // the script steps aside for their LSH CaseWorX
         t.traineeCms = true; renderDialBadges();
-        // The trainee on this call opened it: their LSH CaseWorks replaces any other watch, even one closed earlier (the toast comes with 'cms-open').
+        // The trainee on this call opened it: their LSH CaseWorX replaces any other watch, even one closed earlier (the toast comes with 'cms-open').
         closedFor.delete(t.trainee.id); watchCms(t.trainee, true); syncWatch();
         return;
       case 'transfer':
@@ -392,7 +392,7 @@
     if (pick.traineeId) return null;
     const d = dialed();
     return !d ? 'Dial the trainee\'s extension, or pick them on the switchboard.'
-      : d.kind === 'offline' ? `${d.t.name}'s phone isn't open: they open ☎ LSH Voice from the Portal to take calls.`
+      : d.kind === 'offline' ? `${d.t.name}'s phone isn't open: they open ☎ LSH CommX from the Portal to take calls.`
         : d.kind === 'trainer' ? `Ext ${pick.dial} is ${d.desk.name}'s trainer line. Trainers ring trainees, not each other.`
           : d.kind === 'dir' ? `Ext ${pick.dial} is ${d.dir.name}, in the firm's directory. Trainees' desks are 7001 and up.`
             : `No trainee answers at ext ${pick.dial}.`;
@@ -638,7 +638,7 @@
     const side = U.$('#sideL'); if (!side) return;
     if (!U.$('#roster', side)) {
       side.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
-        <div class="sb-sub">LSH Voice · Switchboard</div></div><div class="card roster" id="roster"></div>`;
+        <div class="sb-sub">LSH CommX · Switchboard</div></div><div class="card roster" id="roster"></div>`;
     }
     const el = U.$('#roster', side); if (!el) return;
     const all = (App.presence.trainees || []).slice();
@@ -658,7 +658,7 @@
       ${shown.map((x) => `<div class="tr ${x.id === pick.traineeId ? 'sel' : ''}" data-tid="${esc(x.id)}">
           <span class="led ${x.call ? 'ringing' : x.status}"></span>
           <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)} ${x.hand ? '<span class="hand-wave" title="Asked for a mock call">✋</span>' : ''}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''} · ${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}${x.tabs > 1 ? ` · ${x.tabs} tabs` : ''}</div></div>
-          ${x.cms ? `<button class="btn btn-sm ${C.watching && C.watching.id === x.id ? 'btn-orange' : ''}" data-cmswatch="${esc(x.id)}" title="${esc(x.name)} has LSH CaseWorks open: watch their screen under the dialer">👁</button>` : ''}
+          ${x.cms ? `<button class="btn btn-sm ${C.watching && C.watching.id === x.id ? 'btn-orange' : ''}" data-cmswatch="${esc(x.id)}" title="${esc(x.name)} has LSH CaseWorX open: watch their screen under the dialer">👁</button>` : ''}
           <button class="btn btn-sm ${x.call ? '' : 'btn-green'}" data-ring="${esc(x.id)}" ${x.call || active(App.t) ? 'disabled' : ''}>📞</button></div>`).join('') || '<div class="empty small">Nobody is online. Trainees open <b>📞 My phone</b> to take calls.</div>'}
       ${offline.length ? `<details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">${offline.length} offline</summary>${offline.map((x) => `<div class="tr" style="cursor:default"><span class="led"></span><div><div class="nm" style="font-weight:500">${esc(x.name)}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''}${x.last_seen ? ' · seen ' + U.when(x.last_seen) : ''}</div></div></div>`).join('')}</details>` : ''}
       ${optionsHTML()}`;
@@ -727,8 +727,8 @@
         <button class="btn btn-green" data-act="takehere">📞 Take the call here</button></div>`;
       return;
     }
-    /* Built once and kept (the trainee's LSH CaseWorks frame in it would reload if it were redrawn): the dialer, and
-       beside it a column with the call's cards (#dialSide, redrawn) and the trainee's LSH CaseWorks (#cmsWatch, kept). */
+    /* Built once and kept (the trainee's LSH CaseWorX frame in it would reload if it were redrawn): the dialer, and
+       beside it a column with the call's cards (#dialSide, redrawn) and the trainee's LSH CaseWorX (#cmsWatch, kept). */
     if (!U.$('#dialSide', el) || !U.$('#cmsWatch', el)) {
       el.innerHTML = `<div class="dial-stage" id="dialStage"><div class="device dialer" id="dialer"></div><div class="dial-col" id="dialCol"><div class="dial-side" id="dialSide"></div><div class="cms-split card hidden" id="cmsWatch"></div></div></div>`;
     }
@@ -753,7 +753,7 @@
         <div class="muted small">${esc(s.caller.role)} · caller ID the trainee sees: <b class="mono">${esc(t.callerId.name)} ${esc(t.callerId.number)}</b> on the ${esc(t.lineLabel)}</div>
         <div class="small muted" style="margin-top:10px">Open with:</div>
         <div class="opening">${esc(s.opening)}</div>
-        ${s.dir === 'out' ? '<p class="note-box small">📤 In LSH CaseWorks the trainee places this call: you are the person they phoned. When they pick up, answer with the line above and let them say why they called.</p>' : ''}
+        ${s.dir === 'out' ? '<p class="note-box small">📤 In LSH CaseWorX the trainee places this call: you are the person they phoned. When they pick up, answer with the line above and let them say why they called.</p>' : ''}
         <h4>What you know and how you act</h4>
         <div class="persona">${esc(s.hidden)}</div>
         <h4 style="margin-top:12px">The situation</h4>
@@ -773,13 +773,13 @@
       </div>`;
     renderDialer(); renderTransfer(); renderCase(); renderConf(); renderLiveNote();
     if (App.mockMode() === 'calendar') { if (t.trainee && t.status !== 'ended') watchCal(t.trainee, true); }   // 📅 Calendaring: their calendar beside the dialer
-    else if (t.traineeCms) C.autoWatch(t.trainee, true);   // after a reload: the trainee already has LSH CaseWorks open
+    else if (t.traineeCms) C.autoWatch(t.trainee, true);   // after a reload: the trainee already has LSH CaseWorX open
   }
 
-  /* 👁 Where the trainee's LSH CaseWorks shows: beside the dialer, in the column the call's cards use (#dialCol). On a call
+  /* 👁 Where the trainee's LSH CaseWorX shows: beside the dialer, in the column the call's cards use (#dialCol). On a call
      the caller's script and the checklist and note step aside for it (a transfer waiting for the trainer, and the
-     case file the trainee chose, stay on top); 🎭 Script brings them back with LSH CaseWorks folded to its bar, still
-     loaded, and 👁 Their LSH CaseWorks goes back to it. With no call the dialer and LSH CaseWorks stand side by side. */
+     case file the trainee chose, stay on top); 🎭 Script brings them back with LSH CaseWorX folded to its bar, still
+     loaded, and 👁 Their LSH CaseWorX goes back to it. With no call the dialer and LSH CaseWorX stand side by side. */
   function syncWatch() {
     const stage = U.$('#dialStage'), col = U.$('#dialCol'), box = U.$('#cmsWatch'); if (!stage || !col || !box) return;
     const t = App.t, watching = !!box.dataset.who, call = !!(t && t.status !== 'elsewhere');
@@ -788,19 +788,19 @@
     col.classList.toggle('watching', watching && call && !C.scriptOn);
     col.classList.toggle('script-on', watching && call && !!C.scriptOn);
     const b = U.$('[data-cmsw="script"]', box);
-    if (b) { b.classList.toggle('hidden', !call); b.innerHTML = C.scriptOn ? '👁 Their LSH CaseWorks' : '🎭 Script'; }
+    if (b) { b.classList.toggle('hidden', !call); b.innerHTML = C.scriptOn ? '👁 Their LSH CaseWorX' : '🎭 Script'; }
     const bc = U.$('[data-calw="script"]', box);
     if (bc) { bc.classList.toggle('hidden', !call); bc.innerHTML = C.scriptOn ? '📅 Their calendar' : '🎭 Script'; }
   }
 
-  /* 👁 A trainee's LSH CaseWorks screen, live, beside the dialer: LSH CaseWorks' own 👁 Watch live (Master Control → Monitoring,
+  /* 👁 A trainee's LSH CaseWorX screen, live, beside the dialer: LSH CaseWorX' own 👁 Watch live (Master Control → Monitoring,
      its live-view.js), opened by a link (?watch=) signed in with this trainer's Portal ticket, as soon as a trainee
-     opens LSH CaseWorks (beside their call, in its own tab, on a call or not; their phone tells the switchboard).
+     opens LSH CaseWorX (beside their call, in its own tab, on a call or not; their phone tells the switchboard).
      A frame kept beside #stage (the stage redraws, and a redrawn frame reloads). It follows the trainee on the
-     trainer's call; otherwise the latest trainee to open LSH CaseWorks. ✕ Close keeps it closed for that trainee
-     until they open LSH CaseWorks again; 👁 on a trainee's switchboard row watches them by hand. */
+     trainer's call; otherwise the latest trainee to open LSH CaseWorX. ✕ Close keeps it closed for that trainee
+     until they open LSH CaseWorX again; 👁 on a trainee's switchboard row watches them by hand. */
   C.watching = null;          // { id, name, batch } of the trainee being watched
-  const closedFor = new Set();   // trainee ids whose watch the trainer closed: kept closed until they open LSH CaseWorks again
+  const closedFor = new Set();   // trainee ids whose watch the trainer closed: kept closed until they open LSH CaseWorX again
   const cmsOf = (id) => (App.presence.trainees || []).find((x) => x.id === id && x.cms) || null;
   // On a call: on this tab, or held in another of the trainer's tabs ('elsewhere').
   const busy = (t) => !!(t && (active(t) || t.status === 'elsewhere'));
@@ -818,9 +818,9 @@
     }
     clearInterval(calTimer); delete box.dataset.kind; delete box.dataset.clean;
     box.dataset.who = who; box.dataset.tid = tid; box.dataset.loading = '1'; delete box.dataset.announced;
-    box.innerHTML = `<div class="cms-split-head"><b>👁 ${esc(who)}'s LSH CaseWorks, live</b><span class="small muted cms-msg" style="flex:1">Opening LSH CaseWorks' Watch live, signed in as you…</span>${App.zoomHTML()}
-        <button class="btn btn-sm" data-cmsw="script" title="The caller's script, the checklist and the note (LSH CaseWorks stays open)">🎭 Script</button><button class="btn btn-sm" data-cmsw="tab" title="Watch in its own browser tab">↗ New tab</button><button class="btn btn-sm" data-cmsw="close">✕ Close</button></div>
-      ${App.cmsFrameHTML(who + "'s LSH CaseWorks screen")}`;
+    box.innerHTML = `<div class="cms-split-head"><b>👁 ${esc(who)}'s LSH CaseWorX, live</b><span class="small muted cms-msg" style="flex:1">Opening LSH CaseWorX' Watch live, signed in as you…</span>${App.zoomHTML()}
+        <button class="btn btn-sm" data-cmsw="script" title="The caller's script, the checklist and the note (LSH CaseWorX stays open)">🎭 Script</button><button class="btn btn-sm" data-cmsw="tab" title="Watch in its own browser tab">↗ New tab</button><button class="btn btn-sm" data-cmsw="close">✕ Close</button></div>
+      ${App.cmsFrameHTML(who + "'s LSH CaseWorX screen")}`;
     App.grip(box, 'trainer');
     syncWatch();
     const ask = () => API.post('/api/cms-link', { watch: who, watchBatch: tr.batch || '' });
@@ -847,14 +847,14 @@
       renderDialBadges(); renderRoster();
     } catch (err) {
       if (box.dataset.tid !== tid) return;
-      const msg = U.$('.cms-msg', box); if (msg) msg.textContent = 'Couldn\'t open LSH CaseWorks: ' + err.message;
+      const msg = U.$('.cms-msg', box); if (msg) msg.textContent = 'Couldn\'t open LSH CaseWorX: ' + err.message;
       delete box.dataset.loading;   // no link in the frame: the next opening tries again
     }
   }
   /* 📅 Calendaring mode (the top bar's Mode): the trainee on the call, their Google Calendar Sim on the Portal beside the
      dialer — the Portal's trainer view of their calendar (as they save it, with the automated check and the CALENDAR MANAGEMENT
      MOCK CALL scorecard to fill in), signed in as this trainer (/api/cal-link, src/portal.js calendarLink). It reads their
-     calendar again every 20 s (⟳ Auto, on by default) and on ↻; 🎭 Script, ↗ New tab and ✕ Close as on the LSH CaseWorks watch. */
+     calendar again every 20 s (⟳ Auto, on by default) and on ↻; 🎭 Script, ↗ New tab and ✕ Close as on the LSH CaseWorX watch. */
   let calTimer = null;
   async function watchCal(tr, quiet) {
     const box = U.$('#cmsWatch'); if (!box || !tr || !tr.name) return;
@@ -913,18 +913,18 @@
   // Once per opening: a quiet watch (from presence) still gets its toast when the switchboard's 'cms-open' comes.
   function announce(tr) {
     const box = U.$('#cmsWatch'); if (box) box.dataset.announced = '1';
-    U.toast(`👁 ${tr.name} opened LSH CaseWorks: their screen is beside your dialer${onCallWith(tr.id) ? ' (🎭 Script brings the script back)' : ''}.`);
+    U.toast(`👁 ${tr.name} opened LSH CaseWorX: their screen is beside your dialer${onCallWith(tr.id) ? ' (🎭 Script brings the script back)' : ''}.`);
   }
-  // The line over the frame: still open, or closed (LSH CaseWorks' Watch live then shows their last screen).
+  // The line over the frame: still open, or closed (LSH CaseWorX' Watch live then shows their last screen).
   function cmsNote() {
     const box = U.$('#cmsWatch'), msg = box && U.$('.cms-msg', box); if (!msg || !box.dataset.who || box.dataset.loading || box.dataset.kind === 'cal') return;
     const who = box.dataset.who, open = !box.dataset.tid || !!cmsOf(box.dataset.tid);
-    msg.textContent = (open ? `${who} has LSH CaseWorks open: their screen shows here, about a second behind.` : `${who} closed LSH CaseWorks (or left LSH Voice). It opens here again when they reopen it.`)
-      + (box.dataset.authed ? '' : ' LSH CaseWorks will ask you to sign in (no Portal secret is set on this site): then Master Control → Monitoring → 👁 Watch live.');
+    msg.textContent = (open ? `${who} has LSH CaseWorX open: their screen shows here, about a second behind.` : `${who} closed LSH CaseWorX (or left LSH CommX). It opens here again when they reopen it.`)
+      + (box.dataset.authed ? '' : ' LSH CaseWorX will ask you to sign in (no Portal secret is set on this site): then Master Control → Monitoring → 👁 Watch live.');
   }
-  /* Watch a trainee who has LSH CaseWorks open, unless the trainer is on a call with someone else (their row's 👁 is there for that).
+  /* Watch a trainee who has LSH CaseWorX open, unless the trainer is on a call with someone else (their row's 👁 is there for that).
      quiet: from presence or a redraw (a reload, back on the Console): no toast, a closed watch stays closed, and a
-     watch already showing someone stays. Not quiet: the trainee has just opened LSH CaseWorks (the switchboard's 'cms-open'). */
+     watch already showing someone stays. Not quiet: the trainee has just opened LSH CaseWorX (the switchboard's 'cms-open'). */
   C.autoWatch = function (tr, quiet) {
     if (!tr || !tr.id) return;
     if (!quiet) closedFor.delete(tr.id);
@@ -933,16 +933,16 @@
       const box = U.$('#cmsWatch'); if (box && box.dataset.who && box.dataset.tid !== tr.id) return;
     }
     if (busy(App.t) && App.t.trainee && App.t.trainee.id !== tr.id) {
-      if (!quiet) U.toast(`👁 ${tr.name} opened LSH CaseWorks. You're on a call with ${App.t.trainee.name}: 👁 on ${tr.name}'s switchboard row shows their screen.`);
+      if (!quiet) U.toast(`👁 ${tr.name} opened LSH CaseWorX. You're on a call with ${App.t.trainee.name}: 👁 on ${tr.name}'s switchboard row shows their screen.`);
       renderRoster(); return;
     }
     if (!U.$('#cmsWatch')) {   // on another page: the Console shows it when the trainer goes back
-      if (!quiet) U.toast(`👁 ${tr.name} opened LSH CaseWorks: ☎ Console shows their screen.`);
+      if (!quiet) U.toast(`👁 ${tr.name} opened LSH CaseWorX: ☎ Console shows their screen.`);
       return;
     }
     watchCms(tr, quiet);
   };
-  // From the switchboard's presence: who has LSH CaseWorks open now. Opens the watch on a fresh Console, notes a closed LSH CaseWorks.
+  // From the switchboard's presence: who has LSH CaseWorX open now. Opens the watch on a fresh Console, notes a closed LSH CaseWorX.
   function cmsPresence() {
     const box = U.$('#cmsWatch'); if (!box) return;
     if (box.dataset.who) { cmsNote(); return; }
@@ -990,7 +990,7 @@
         if (t.traineeMuted) f.push('<span class="lb mute">TRAINEE MUTED</span>');
         if (t.muted) f.push('<span class="lb mute">YOU\'RE MUTED</span>');
         if (t.coaching) f.push('<span class="lb coach">⏸ COACHING</span>');
-        if (t.traineeCms) f.push('<span class="lb coach" data-cmsjump="1" style="cursor:pointer" title="The trainee has LSH CaseWorks open: click to see their screen beside your phone.">👁 THEIR LSH CASEWORKS</span>');
+        if (t.traineeCms) f.push('<span class="lb coach" data-cmsjump="1" style="cursor:pointer" title="The trainee has LSH CaseWorX open: click to see their screen beside your phone.">👁 THEIR LSH CASEWORX</span>');
         if (confCount()) f.push(`<span class="lb conf">👥 CONFERENCE · ${confCount() + 1}</span>`);
         if (t.peerLost) f.push('<span class="lb warn">TRAINEE RECONNECTING</span>');
         if (t.quality) f.push(`<span class="lb" title="${t.quality.rtt != null ? t.quality.rtt + ' ms round trip' : ''}${t.quality.loss ? ' · ' + t.quality.loss + '% loss' : ''}${t.quality.relay ? ' · via TURN relay' : ''}"><span class="bars q${t.quality.bars}"><i></i><i></i><i></i><i></i></span>${t.quality.relay ? ' RELAY' : ''}</span>`);
@@ -1258,7 +1258,7 @@
       document.addEventListener('keydown', onKey);
       loadPick();   // the call the picker's tab left for it
       render();
-      cmsPresence();   // 👁 back on the Console: the trainee who has LSH CaseWorks open shows under the dialer
+      cmsPresence();   // 👁 back on the Console: the trainee who has LSH CaseWorX open shows under the dialer
       try { C.roster = (await API.post('/api/trainees')).trainees; renderRoster(); if (!App.t) { syncDial(); renderDialer(); } } catch (e) {}
     }
   });

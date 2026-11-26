@@ -2,7 +2,7 @@
   "name": "lshringchannel",
   "version": "1.0.0",
   "private": true,
-  "description": "LSH Voice: a training VOIP phone system for Receptionist and Intake mock calls (Cloudflare Worker + Durable Object + WebRTC).",
+  "description": "LSH CommX: a training VOIP phone system for Receptionist and Intake mock calls (Cloudflare Worker + Durable Object + WebRTC).",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
