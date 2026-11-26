@@ -75,8 +75,8 @@ const lines = (pg) => pg.$$eval('#msgLines .tl', (x) => x.map((e) => e.textConte
   await tr.goto(Portal.trainer(B, 'Coach Ana'));
   await tr.waitForSelector('#dialer .dialpad');
   await tr.goto(B + '/#/logs/messaging');
-  await tr.waitForSelector('table.list tr');
-  const row = await tr.textContent('table.list tr:nth-child(2)');
+  await tr.waitForSelector('.mt-list .mt-card');
+  const row = await tr.textContent('.mt-list .mt-card:first-child');
   if (!/Riley Santos/.test(row)) throw new Error('The trainer should see the trainee\'s thread: ' + row);
   if (!/Graded/.test(row)) throw new Error('The thread should show as graded: ' + row);
   ok('A trainer sees the trainee\'s graded thread on 🤖 Automated Messaging');
