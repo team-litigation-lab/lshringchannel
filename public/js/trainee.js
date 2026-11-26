@@ -605,7 +605,8 @@
     const desks = App.desks || [];
     const mine = peers.find((x) => x.me);
     const batch = (mine && mine.batch) || (App.me && App.me.batch) || '';
-    el.innerHTML = `<div class="card roster" id="troster">
+    el.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
+        <div class="sb-sub">LSH CommX · Switchboard</div></div><div class="card roster" id="troster">
       <div class="card-head"><h3>☎ Switchboard</h3><span class="spacer"></span><span class="badge green">${peers.length || 1} online</span>${App.foldKey(FOLD, 'the switchboard')}</div>
       <div class="my-line">
         <div class="small muted">My line</div>
@@ -718,7 +719,7 @@
   });
 
   function fitBoard() {
-    const card = U.$('#troster'), dev = U.$('#device');
+    const card = U.$('#troster'), dev = U.$('#device'), brand = U.$('#tside .side-brand');
     if (!card || !dev || fitting) return;
     fitting = true;
     try {
@@ -730,14 +731,16 @@
          together rather than ending on different lines. */
       const grid = dev.parentElement;
       if (grid) grid.classList.toggle('tall-phone', phone > window.innerHeight - 96);
-      const board = card.getBoundingClientRect().height;
+      const brandH = brand ? brand.getBoundingClientRect().height : 0;
+      const board = card.getBoundingClientRect().height + brandH;
       if (board > phone + 1) dev.style.minHeight = Math.round(board) + 'px';
-      else if (phone > board + 1) card.style.minHeight = Math.round(phone) + 'px';
+      else if (phone > board + 1) card.style.minHeight = Math.round(phone - brandH) + 'px';
     } finally { fitting = false; }
     if (!window.ResizeObserver) return;
     if (deckWatch) deckWatch.disconnect();
     deckWatch = new ResizeObserver(() => { if (!fitting) fitBoard(); });
     deckWatch.observe(dev);
+    if (brand) deckWatch.observe(brand);
     deckWatch.observe(card);
   }
   window.addEventListener('resize', () => { if (App.at('phone')) fitBoard(); });

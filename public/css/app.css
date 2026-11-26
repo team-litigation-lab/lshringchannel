@@ -197,6 +197,7 @@ table.list tr.click:hover td { background: #f8fafc; }
   .phone-layout.with-side, .phone-layout.with-side.side-folded { grid-template-columns: var(--ph, 360px) minmax(0, 1fr); column-gap: 18px; row-gap: 18px; }
   .tside { grid-column: 1 / -1; position: static; max-height: none; }
   .phone-layout.with-side .work-col { margin-left: 0; }
+  .tside .side-brand { margin-bottom: 14px; border-radius: 16px; }
   .tside .roster { border-radius: var(--radius); }
   .phone-layout.with-side:not(.side-folded) .device { border-radius: 26px; }
 }
@@ -357,11 +358,17 @@ table.list tr.click:hover td { background: #f8fafc; }
    with no gradient seam or shadow where they meet, so they read as a single piece of equipment.
    The shadow falls down and to the right only, away from the join. */
 .console { --deck: #0e1f42; }
+.console-side .side-brand, .tside .side-brand { background: var(--deck); box-shadow: none; margin-bottom: 0; border-radius: 18px 0 0 0; padding-bottom: 16px; }
 .console-side .roster, .tside .roster {
   background: var(--deck); color: #cbd5e1; border: 0;
-  border-radius: 18px 0 0 18px; box-shadow: -10px 22px 44px -20px rgba(8, 18, 38, .5);   /* (the top-left corner too: no logo card over the board) */
-  padding: 12px 14px 16px; display: flex; flex-direction: column;
+  border-radius: 0 0 0 18px; box-shadow: -10px 22px 44px -20px rgba(8, 18, 38, .5);
+  padding: 4px 14px 16px; display: flex; flex-direction: column;
 }
+/* ▸ N offline pops out over the board like a menu: the board never grows (or splits from the dialer) when it opens */
+.roster details.off-pop { position: relative; margin-top: 10px; }
+.roster details.off-pop > .off-list { position: absolute; left: -6px; right: -6px; top: calc(100% + 6px); z-index: 40;
+  max-height: min(360px, 60vh); overflow-y: auto; padding: 6px; border-radius: 12px;
+  background: #0a1530; border: 1px solid #22386a; box-shadow: 0 18px 40px -10px rgba(0, 0, 0, .6); }
 .dial-stage > .dialer { background: var(--deck); box-shadow: 10px 22px 44px -16px rgba(8, 18, 38, .5); }
 /* nothing scrolls inside the board: it runs as long as the batch does, and the keys follow it */
 .console-side .roster h3, .console-side .roster .nm, .tside .roster h3, .tside .roster .nm { color: #e2e8f0; }
@@ -379,6 +386,7 @@ table.list tr.click:hover td { background: #f8fafc; }
 /* the phone's left side is open where the board meets it */
 .dial-stage > .dialer { border-top-left-radius: 0; border-bottom-left-radius: 0; }
 @media (max-width: 1140px) {
+  .console-side .side-brand { margin-bottom: 14px; border-radius: 16px; }
   .console-side .roster { border-radius: var(--radius); }
   .dial-stage > .dialer { border-radius: 26px; }
 }
@@ -417,6 +425,9 @@ table.list tr.click:hover td { background: #f8fafc; }
 .rail .rail-ic { font-size: 20px; }
 .rail .rail-label { writing-mode: vertical-rl; font-size: 12px; font-weight: 700; letter-spacing: .4px; color: var(--muted); }
 @media (max-width: 1140px) { .rail .rail-label { writing-mode: horizontal-tb; } .rail { flex-direction: row; justify-content: center; } }
+.side-brand { background: linear-gradient(160deg, #13254d, #0a1530 70%); border-radius: 16px; padding: 14px 16px; margin-bottom: 14px; text-align: center; }
+.side-brand img { width: 160px; max-width: 100%; height: auto; display: block; margin: 0 auto 8px; background: #fff; border-radius: 12px; padding: 10px 14px; box-sizing: border-box; }
+.side-brand .sb-sub { font-size: 11.5px; letter-spacing: .5px; text-transform: uppercase; color: #94a3b8; font-weight: 700; }
 .my-line { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; background: #f8fafc; }
 .my-line .nm { font-weight: 700; font-size: 14px; }
 .my-line .bt { font-size: 12px; color: var(--muted); }
@@ -683,7 +694,7 @@ table.graded td.gcell.fail b { color: var(--red); }
   .key { padding: 8px 6px; border-radius: 12px; }
   .key .ic { font-size: 17px; }
   .dev-foot { margin-top: 8px; }
-  .dev-hint { display: none; }
+  .dev-hint, .side-brand .sb-sub { display: none; }
   .cms-vp { height: calc(100vh - 120px); min-height: 360px; }
 }
 

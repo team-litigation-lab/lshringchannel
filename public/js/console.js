@@ -637,7 +637,8 @@
   function renderRoster() {
     const side = U.$('#sideL'); if (!side) return;
     if (!U.$('#roster', side)) {
-      side.innerHTML = `<div class="card roster" id="roster"></div>`;   // (no logo card over the board: LSH CommX is in the top bar)
+      side.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
+        <div class="sb-sub">LSH CommX · Switchboard</div></div><div class="card roster" id="roster"></div>`;
     }
     const el = U.$('#roster', side); if (!el) return;
     const all = (App.presence.trainees || []).slice();
@@ -659,8 +660,10 @@
           <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)} ${x.hand ? '<span class="hand-wave" title="Asked for a mock call">✋</span>' : ''}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''} · ${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}${x.tabs > 1 ? ` · ${x.tabs} tabs` : ''}</div></div>
           ${x.cms ? `<button class="btn btn-sm ${C.watching && C.watching.id === x.id ? 'btn-orange' : ''}" data-cmswatch="${esc(x.id)}" title="${esc(x.name)} has LSH CaseWorX open: watch their screen under the dialer">👁</button>` : ''}
           <button class="btn btn-sm ${x.call ? '' : 'btn-green'}" data-ring="${esc(x.id)}" ${x.call || active(App.t) ? 'disabled' : ''}>📞</button></div>`).join('') || '<div class="empty small">Nobody is online. Trainees open <b>📞 My phone</b> to take calls.</div>'}
-      ${offline.length ? `<details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">${offline.length} offline</summary>${offline.map((x) => `<div class="tr" style="cursor:default"><span class="led"></span><div><div class="nm" style="font-weight:500">${esc(x.name)}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''}${x.last_seen ? ' · seen ' + U.when(x.last_seen) : ''}</div></div></div>`).join('')}</details>` : ''}
+      ${offline.length ? `<details class="off-pop" id="offPop" ${C.offOpen ? 'open' : ''}><summary class="small muted" style="cursor:pointer">${offline.length} offline</summary><div class="off-list">${offline.map((x) => `<div class="tr" style="cursor:default"><span class="led"></span><div><div class="nm" style="font-weight:500">${esc(x.name)}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''}${x.last_seen ? ' · seen ' + U.when(x.last_seen) : ''}</div></div></div>`).join('')}</div></details>` : ''}
       ${optionsHTML()}`;
+    const off = U.$('#offPop', el);
+    if (off) off.addEventListener('toggle', () => { C.offOpen = off.open; });
     matchHeights();
   }
 
@@ -693,24 +696,28 @@
      and rewrapping its text, the window resizing, a key appearing or going), so it follows the dialer. */
   let deckWatch = null;
   function fitBoard() {
-    const card = U.$('#sideL .roster'), dialer = U.$('#dialer');
+    const card = U.$('#sideL .roster'), dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
     if (!card || !dialer) return;
     if (window.innerWidth <= 1140) { card.style.minHeight = ''; return; }
-    const want = dialer.getBoundingClientRect().height;
+    const want = dialer.getBoundingClientRect().height - (brand ? brand.getBoundingClientRect().height : 0);
     const h = Math.max(Math.round(want), 420) + 'px';
     if (card.style.minHeight !== h) card.style.minHeight = h;
   }
   function matchHeights() {
     requestAnimationFrame(() => {
       fitBoard();
-      const dialer = U.$('#dialer');
+      const dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
       if (!dialer || !window.ResizeObserver) return;
       if (deckWatch) deckWatch.disconnect();
       deckWatch = new ResizeObserver(() => fitBoard());
       deckWatch.observe(dialer);
+      if (brand) deckWatch.observe(brand);
     });
   }
   window.addEventListener('resize', () => { if (App.route.name === 'console') fitBoard(); });
+  // the offline pop-out closes like a menu: a click anywhere else, or Esc
+  document.addEventListener('click', (e) => { const o = document.getElementById('offPop'); if (o && o.open && !o.contains(e.target)) { o.open = false; C.offOpen = false; } });
+  document.addEventListener('keydown', (e) => { const o = document.getElementById('offPop'); if (e.key === 'Escape' && o && o.open) { o.open = false; C.offOpen = false; } });
   try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (App.route.name === 'console') fitBoard(); }); } catch (e) {}
 
   /* The stage. Before a call the main screen is ☎ the dialer and nothing else: the call to play is on the
