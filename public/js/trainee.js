@@ -1128,6 +1128,31 @@
   /* 🎭 The Scenario Picker's practice calls (a tab of 🗂 Call Logs & Scenario Picker for a trainee,
      🎧 Try practice under 🛡 Admin for a trainer). A trainee's practice call then runs on ☎ their
      Console, the one phone they take every call on; a trainer's runs here. */
+  // 🎭 A line's practice calls, a screen at a time: the cards keep a readable size (no narrower than 190px, two-line titles), and as
+  // many as fit between the grid's top and the window's bottom make a page; when there are more, Page 1, Page 2 … buttons
+  // (and ‹ ›) move between them. Phones keep the whole list, scrolling.
+  function fitPractice() {
+    const g = document.querySelector('.practice-grid'), pager = document.getElementById('practicePager'); if (!g || !pager) return;
+    const cards = [...g.children].filter((c) => c.classList.contains('scen'));
+    cards.forEach((c) => { c.hidden = false; }); g.style.gridTemplateColumns = ''; pager.innerHTML = '';
+    if (innerWidth <= 760 || !cards.length) return;
+    const gap = 6, w = g.clientWidth, rowH = cards[0].getBoundingClientRect().height + gap;
+    const cols = Math.max(1, Math.floor((w + gap) / (190 + gap)));
+    const rows = Math.max(2, Math.floor((innerHeight - g.getBoundingClientRect().top - 44 - 40 + gap) / rowH));   // 40: the pager's own row
+    const per = cols * rows, pages = Math.ceil(cards.length / per);
+    g.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+    if (pages <= 1) { T.page = 0; return; }
+    T.page = Math.min(Math.max(0, T.page || 0), pages - 1);
+    cards.forEach((c, i) => { c.hidden = Math.floor(i / per) !== T.page; });
+    const btn = (p, label, aria, dis) => `<button type="button" class="btn btn-sm${p === T.page && !aria ? ' on' : ''}" data-page="${p}"${dis ? ' disabled' : ''}${aria ? ` aria-label="${aria}"` : ''}>${label}</button>`;
+    pager.innerHTML = btn(T.page - 1, '‹', 'Previous page', T.page === 0)
+      + Array.from({ length: pages }, (_, p) => btn(p, 'Page ' + (p + 1))).join('')
+      + btn(T.page + 1, '›', 'Next page', T.page === pages - 1)
+      + `<span class="muted small">${T.page * per + 1}–${Math.min(cards.length, (T.page + 1) * per)} of ${cards.length}</span>`;
+    pager.onclick = (e) => { const b = e.target.closest('[data-page]'); if (b && !b.disabled) { T.page = +b.dataset.page; fitPractice(); } };
+  }
+  window.addEventListener('resize', () => { clearTimeout(T.fitT); T.fitT = setTimeout(fitPractice, 120); });
+
   App.register('practice', {
     render() {
       const app = App.host();
@@ -1163,7 +1188,7 @@
       }
       app.innerHTML = `<div class="card">
         <div class="card-head"><h2>🎭 ${App.trainer() ? 'Try a practice call' : 'Practice with an AI caller'}</h2>${App.trainer() ? '<span class="spacer"></span><a class="btn btn-sm" href="#/admin/aicalls">← 🤖 AI calls</a>' : ''}</div>
-        <p class="muted">An AI caller rings your practice phone and talks with you out loud, like a real caller (use a headset). Handle the call, take the note, and the AI scores it with the same rubric your trainer uses. Calls last up to ${App.cfg.features.aiMinutes} minutes.</p>
+        <p class="muted practice-intro" title="An AI caller rings your practice phone and talks with you out loud, like a real caller (use a headset). Handle the call, take the note, and the AI scores it with the same rubric your trainer uses.">An AI caller rings your practice phone and talks with you out loud, like a real caller (use a headset). Handle the call, take the note, and the AI scores it with the same rubric your trainer uses. Calls last up to ${App.cfg.features.aiMinutes} minutes.</p>
         <div class="row" style="margin:12px 0 16px">
           <div class="pill-tabs" id="tpg">${[{ k: '', icon: '🗂', short: 'Every program' }].concat(progs).map((p) => `<button data-prog="${p.k}" class="${p.k === prog ? 'on' : ''}">${p.icon} ${esc(p.short)}</button>`).join('')}</div>
           <div class="pill-tabs" id="trk">${Object.entries(App.cfg.tracks).map(([k, t]) => `<button data-track="${k}" class="${k === track ? 'on' : ''}">${t.icon} ${esc(t.label)}</button>`).join('')}</div>
@@ -1173,16 +1198,19 @@
           <label class="check small" title="The voice the AI caller speaks with: the same call, a different person on the line">🎚 <select class="input input-sm" id="optVoice">${App.voiceOptions(T.voice)}</select></label>
           <button class="btn btn-orange" id="surprise">🎲 Surprise me</button>
         </div>
-        <div class="scen-grid practice-grid">${list.map((s) => `<div class="scen" data-id="${esc(s.id)}">
+        <div class="practice-legend"><span><i style="background:#16a34a"></i>Beginner</span><span><i style="background:#2563eb"></i>Intermediate</span><span><i style="background:#dc2626"></i>Advanced</span><span>· Point at a call for its details · ${list.length} call${list.length === 1 ? '' : 's'}</span></div>
+        <div class="scen-grid practice-grid">${list.map((s) => `<div class="scen lv-${esc(s.level || '')}" data-id="${esc(s.id)}" title="${esc([s.title, [s.level, s.program && ((progs.find((p) => p.k === s.program)) || {}).label, s.dir === 'out' ? 'You call out' : '', s.caseId || 'New caller'].filter(Boolean).join(' · '), s.facts || ''].filter(Boolean).join('\n'))}">
             <div class="meta">${App.levelBadge(s.level)}${s.program && !prog ? `<span class="badge">${esc(((progs.find((p) => p.k === s.program)) || {}).icon || '')} ${esc(s.program)}</span>` : ''}${s.dir === 'out' ? '<span class="badge" title="You place this call: when you pick up, you are through to them">📤 You call out</span>' : ''}${s.caseId ? `<span class="badge">${esc(s.caseId)}</span>` : '<span class="badge">New caller</span>'}${s.custom ? '<span class="badge blue">Trainer-written</span>' : ''}</div>
-            <h4>${esc(s.title)}</h4><p title="${esc(s.facts || '')}">${esc(s.facts || '')}</p>
-            <div><button class="btn btn-primary btn-sm">📞 Take this call</button></div></div>`).join('') || '<div class="empty">No practice calls on this line yet.</div>'}</div>
+            <h4>${esc(s.title)}</h4><p>${esc(s.facts || '')}</p>
+            <div><button class="btn btn-primary btn-sm" aria-label="Take this call: ${esc(s.title)}"><span aria-hidden="true">📞</span><span class="take-tx"> Take this call</span></button></div></div>`).join('') || '<div class="empty">No practice calls on this line yet.</div>'}</div>
+        <div class="practice-pager" id="practicePager"></div>
       </div>`;
       const opts = () => { T.voice = U.$('#optVoice').value; return { transcript: U.$('#optTr').checked, typed: U.$('#optTyped').checked, voice: T.voice }; };
-      U.$('#tpg').onclick = (e) => { const b = e.target.closest('[data-prog]'); if (b) { T.program = b.dataset.prog; App.views.practice.render(); } };
-      U.$('#trk').onclick = (e) => { const b = e.target.closest('[data-track]'); if (b) { T.track = b.dataset.track; App.views.practice.render(); } };
+      U.$('#tpg').onclick = (e) => { const b = e.target.closest('[data-prog]'); if (b) { T.program = b.dataset.prog; T.page = 0; App.views.practice.render(); } };
+      U.$('#trk').onclick = (e) => { const b = e.target.closest('[data-track]'); if (b) { T.track = b.dataset.track; T.page = 0; App.views.practice.render(); } };
       app.querySelector('.scen-grid').onclick = (e) => { const c = e.target.closest('[data-id]'); if (c) startAi(c.dataset.id, opts()); };
       U.$('#surprise').onclick = () => { if (!list.length) return; const s = list[Math.floor(Math.random() * list.length)]; startAi(s.id, Object.assign(opts(), { surprise: true })); };
+      fitPractice(); requestAnimationFrame(fitPractice);
     }
   });
 })();
