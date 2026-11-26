@@ -355,7 +355,7 @@ const playCall = async (pg, sid) => {
   });
   if (tdeck.gap > 2) throw new Error('The trainee board should sit against the phone, with no gap: ' + JSON.stringify(tdeck));
   if (tdeck.ends > 2) throw new Error('The trainee board and phone should end on the same line: ' + JSON.stringify(tdeck));
-  if (!tdeck.brand) throw new Error('The trainee board should carry the LSH mark, as the console does: ' + JSON.stringify(tdeck));
+  if (tdeck.brand) throw new Error('The trainee board has no logo card over it (LSH CommX is in the top bar): ' + JSON.stringify(tdeck));
   if (tdeck.deck !== tdeck.phoneDeck) throw new Error('The trainee board and phone should be the same case: ' + JSON.stringify(tdeck));
   if (tdeck.openSide !== '0px') throw new Error("The phone's left side should be open where the board meets it: " + JSON.stringify(tdeck));
   if (!/Riley Santos|Jamie Cruz/.test(await te.textContent('#tside'))) throw new Error('The trainee switchboard should list their batch');

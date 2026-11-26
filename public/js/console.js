@@ -637,8 +637,7 @@
   function renderRoster() {
     const side = U.$('#sideL'); if (!side) return;
     if (!U.$('#roster', side)) {
-      side.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
-        <div class="sb-sub">LSH CommX · Switchboard</div></div><div class="card roster" id="roster"></div>`;
+      side.innerHTML = `<div class="card roster" id="roster"></div>`;   // (no logo card over the board: LSH CommX is in the top bar)
     }
     const el = U.$('#roster', side); if (!el) return;
     const all = (App.presence.trainees || []).slice();
@@ -694,22 +693,21 @@
      and rewrapping its text, the window resizing, a key appearing or going), so it follows the dialer. */
   let deckWatch = null;
   function fitBoard() {
-    const card = U.$('#sideL .roster'), dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
+    const card = U.$('#sideL .roster'), dialer = U.$('#dialer');
     if (!card || !dialer) return;
     if (window.innerWidth <= 1140) { card.style.minHeight = ''; return; }
-    const want = dialer.getBoundingClientRect().height - (brand ? brand.getBoundingClientRect().height : 0);
+    const want = dialer.getBoundingClientRect().height;
     const h = Math.max(Math.round(want), 420) + 'px';
     if (card.style.minHeight !== h) card.style.minHeight = h;
   }
   function matchHeights() {
     requestAnimationFrame(() => {
       fitBoard();
-      const dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
+      const dialer = U.$('#dialer');
       if (!dialer || !window.ResizeObserver) return;
       if (deckWatch) deckWatch.disconnect();
       deckWatch = new ResizeObserver(() => fitBoard());
       deckWatch.observe(dialer);
-      if (brand) deckWatch.observe(brand);
     });
   }
   window.addEventListener('resize', () => { if (App.route.name === 'console') fitBoard(); });
