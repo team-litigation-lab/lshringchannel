@@ -57,6 +57,23 @@ p { margin: 0 0 .7em; }
 @media (max-width: 1400px) { .nav a .long { display: none; } }
 .who { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 13px; color: #cbd5e1; white-space: nowrap; }
 .who .chip { background: rgba(255, 255, 255, .08); padding: 5px 10px; border-radius: 99px; }
+/* 🟢 the chip opens who is online: trainers and trainees apart */
+.who-wrap { position: relative; }
+.who button.who-btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid rgba(255, 255, 255, .14); border-radius: 99px; padding: 5px 12px; background: rgba(255, 255, 255, .08); color: #e2e8f0; font: inherit; }
+.who button.who-btn:hover, .who button.who-btn[aria-expanded="true"] { background: rgba(255, 255, 255, .14); }
+.who .who-me { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.who .who-n { font-weight: 700; color: #bbf7d0; }
+.who-pop { position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: 300px; max-height: min(70vh, 520px); overflow-y: auto; background: #fff; color: #0f172a; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 18px 40px -16px rgba(2, 6, 23, .55); padding: 10px 12px; white-space: normal; }
+.who-pop h4 { margin: 6px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #475569; display: flex; justify-content: space-between; }
+.who-pop h4 span { background: #f1f5f9; border-radius: 99px; padding: 0 8px; color: #0f172a; }
+.who-pop ul { list-style: none; margin: 0 0 6px; padding: 0; }
+.who-pop li { display: grid; grid-template-columns: 10px 1fr; column-gap: 8px; align-items: center; padding: 5px 4px; border-radius: 8px; font-size: 13.5px; }
+.who-pop li:hover { background: #f8fafc; }
+.who-pop li small, .who-pop li em { grid-column: 2; font-size: 12px; color: #64748b; font-style: normal; }
+.who-pop li em { color: #b45309; }
+.who-pop .dot-on { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+.who-pop .dot-on.busy { background: #f59e0b; }
+.who-pop .none { margin: 0 0 6px; font-size: 13px; color: #64748b; }
 .who button { background: transparent; border: 1px solid rgba(255, 255, 255, .25); color: #e2e8f0; border-radius: 8px; padding: 5px 10px; cursor: pointer; }
 .who .hdr-btn { border: 1px solid rgba(255, 255, 255, .25); color: #e2e8f0; border-radius: 8px; padding: 4px 9px; text-decoration: none; line-height: 1.3; }
 .who .hdr-btn:hover { background: rgba(255, 255, 255, .08); }
@@ -66,8 +83,8 @@ p { margin: 0 0 .7em; }
 .oncall-bar { position: sticky; top: 58px; z-index: 29; background: var(--green); color: #fff; padding: 8px 20px; display: flex; gap: 12px; align-items: center; font-weight: 600; }
 .oncall-bar a { color: #fff; }
 /* The trainer's top bar is full: give the tabs room as the window narrows, then a row of their own. */
-@media (max-width: 1600px) { .brand small { display: none; } .who .chip { max-width: 170px; overflow: hidden; text-overflow: ellipsis; } }
-@media (max-width: 1440px) { .top { gap: 12px; } .nav a { padding: 7px 9px; } .who .chip { display: none; } }
+@media (max-width: 1600px) { .brand small { display: none; } .who .who-me { max-width: 170px; } }
+@media (max-width: 1440px) { .top { gap: 12px; } .nav a { padding: 7px 9px; } .who .who-me { max-width: 110px; } }
 @media (max-width: 1320px) and (min-width: 761px) {
   .top { flex-wrap: wrap; height: auto; gap: 4px 12px; padding: 8px 20px 6px; }
   .nav { order: 3; width: 100%; }
@@ -75,7 +92,7 @@ p { margin: 0 0 .7em; }
   .top { position: static; }
 }
 @media (max-width: 760px) {
-  .brand small, .who .chip { display: none; }
+  .brand small, .who .who-me { display: none; }
   .top { position: static; flex-wrap: wrap; height: auto; gap: 8px 10px; padding: 8px 12px; }
   .nav { order: 3; width: 100%; }
   .oncall-bar { top: 0; }
@@ -83,8 +100,8 @@ p { margin: 0 0 .7em; }
 
 main { max-width: 1320px; margin: 0 auto; padding: 22px 20px 60px; }
 /* ☎ The Consoles use the whole screen, with about half an inch each side. */
-main:has(#phoneGrid), main:has(#consoleGrid) { max-width: none; padding: 16px 48px 40px; }
-@media (max-width: 760px) { main:has(#phoneGrid), main:has(#consoleGrid) { padding: 16px 12px 40px; } }
+main:has(#phoneGrid), main:has(#consoleGrid), main:has(.practice-grid) { max-width: none; padding: 16px 48px 40px; }
+@media (max-width: 760px) { main:has(#phoneGrid), main:has(#consoleGrid), main:has(.practice-grid) { padding: 16px 12px 40px; } }
 @media (max-width: 600px) { main { padding: 16px 12px 60px; } }
 
 /* ---------- cards, buttons, forms ---------- */
@@ -311,6 +328,12 @@ table.list tr.click:hover td { background: #f8fafc; }
 
 /* ---------- practice picker, scenario cards ---------- */
 .scen-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+/* 🎭 the practice calls: every card in a row the same height, its description cut to two lines (the whole of it on hover) and
+   📞 Take this call on its bottom edge, so the cards line up; the page uses the window's full width, so more fit on one screen. */
+.scen-grid.practice-grid { grid-template-columns: repeat(auto-fill, minmax(225px, 1fr)); grid-auto-rows: 1fr; gap: 10px; }
+.practice-grid > .scen { min-height: 0; gap: 6px; padding: 12px 14px; }
+.practice-grid > .scen p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.practice-grid > .scen > div:last-child { margin-top: auto; }
 .scen { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: #fff; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: border-color .12s, box-shadow .12s; }
 .scen:hover { border-color: #93c5fd; box-shadow: 0 4px 14px rgba(37, 99, 235, .08); }
 .scen.sel { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(249, 115, 22, .18); }
