@@ -115,12 +115,44 @@
 
   /* ---------- a trainer's list ---------- */
   function trainerHTML(list) {
-    return `<h2>${SIM().icon} ${esc(SIM().name)} threads</h2>
-      <p class="muted">Every trainee's threads on this texting Sim, newest first. A graded thread is scored on the ${esc(cfg().sheet)} when it ends and counts in the trainee's course on the Portal, on the ${esc(SIM().line)} line.</p>
-      ${list.length ? `<table class="list"><tr><th>When</th><th>Trainee</th><th>Thread</th><th></th><th>Score</th></tr>
-        ${list.map((m) => `<tr class="click" data-open="${esc(m.id)}"><td>${U.when(m.createdAt)}</td><td><b>${esc(m.traineeName)}</b>${m.batch ? `<div class="small muted">${esc(m.batch)}</div>` : ''}</td>
-          <td>${esc(m.title)}</td><td>${m.graded ? '<span class="badge orange">Graded</span>' : '<span class="badge">Practice</span>'}</td>
-          <td>${m.score != null ? `<b>${m.score}%</b>` : m.status === 'live' ? '<span class="badge amber">Open</span>' : '<span class="badge">—</span>'}</td></tr>`).join('')}</table>`
+    const initials = (n) => String(n || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
+    const hue = (n) => { let h = 0; for (const ch of String(n || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return (h * 137) % 360; };
+    const state = (m) => m.status === 'live' ? 'open' : m.score != null ? 'scored' : 'ended';
+    const scored = list.filter((m) => m.score != null);
+    const avg = scored.length ? Math.round(scored.reduce((t, m) => t + m.score, 0) / scored.length) : null;
+    const people = new Set(list.map((m) => m.traineeName)).size;
+    const tone = (v) => v >= 85 ? 'good' : v >= 70 ? 'ok' : 'low';
+    const stat = (icon, val, label, cls) => `<div class="mt-stat ${cls || ''}"><span class="mt-ic">${icon}</span><div><b>${val}</b><small>${label}</small></div></div>`;
+    const chip = (k, label, n) => `<button type="button" class="mt-chip${k === 'all' ? ' on' : ''}" data-msgf="${k}">${label} <span>${n}</span></button>`;
+    const card = (m) => {
+      const st = state(m);
+      const right = m.score != null
+        ? `<div class="mt-score ${tone(m.score)}" style="--p:${m.score}"><b>${m.score}%</b></div>`
+        : st === 'open' ? '<span class="mt-pill open"><i></i>Live now</span>' : '<span class="mt-pill ended">Ended</span>';
+      return `<button type="button" class="mt-card st-${st}" data-open="${esc(m.id)}" data-kind="${m.graded ? 'graded' : 'practice'}" data-state="${st}">
+        <span class="mt-av" style="--h:${hue(m.traineeName)}">${esc(initials(m.traineeName))}</span>
+        <span class="mt-main">
+          <span class="mt-title">${esc(m.title)}</span>
+          <span class="mt-sub"><b>${esc(m.traineeName)}</b>${m.batch ? ` · ${esc(m.batch)}` : ''} · ${U.when(m.createdAt)}</span>
+        </span>
+        <span class="mt-tag ${m.graded ? 'graded' : ''}">${m.graded ? '🎯 Graded' : '🧪 Practice'}</span>
+        ${right}
+        <span class="mt-go" aria-hidden="true">›</span></button>`;
+    };
+    return `<div class="mt-hero">
+        <div><h2>${SIM().icon} ${esc(SIM().name)} threads</h2>
+        <p>Every trainee's threads on this texting Sim, newest first. A graded thread is scored on the ${esc(cfg().sheet)} when it ends and counts in the trainee's course on the Portal, on the ${esc(SIM().line)} line.</p></div>
+      </div>
+      <div class="mt-stats">
+        ${stat('💬', list.length, 'Threads')}
+        ${stat('🟢', list.filter((m) => m.status === 'live').length, 'Live now', 'live')}
+        ${stat('🎯', list.filter((m) => m.graded).length, 'Graded')}
+        ${stat('👥', people, 'Trainees')}
+        ${stat('⭐', avg != null ? avg + '%' : '—', 'Average score', avg != null ? 't-' + tone(avg) : '')}
+      </div>
+      ${list.length ? `<div class="mt-chips">${chip('all', 'All', list.length)}${chip('open', 'Live', list.filter((m) => state(m) === 'open').length)}${chip('graded', 'Graded', list.filter((m) => m.graded).length)}${chip('practice', 'Practice', list.filter((m) => !m.graded).length)}${chip('scored', 'Scored', scored.length)}</div>
+        <div class="mt-list">${list.map(card).join('')}</div>
+        <div class="empty mt-none" hidden>No threads match this filter.</div>`
         : `<div class="empty">No threads yet. Trainees take them on ${SIM().icon} ${esc(SIM().name)}.</div>`}`;
   }
 
@@ -294,6 +326,14 @@
     if (!App.at('messaging') && !App.at('clientmessaging')) return;
     const start = e.target.closest('[data-start]');
     if (start) return startThread(start.dataset.start, start.dataset.graded === '1');
+    const f = e.target.closest('[data-msgf]');
+    if (f) {
+      const k = f.dataset.msgf; let shown = 0;
+      document.querySelectorAll('.mt-chip').forEach((c) => c.classList.toggle('on', c === f));
+      document.querySelectorAll('.mt-card').forEach((c) => { const ok = k === 'all' || c.dataset.kind === k || c.dataset.state === k; c.hidden = !ok; if (ok) shown++; });
+      const none = document.querySelector('.mt-none'); if (none) none.hidden = !!shown;
+      return;
+    }
     const open = e.target.closest('[data-open]');
     if (open) return openThread(open.dataset.open);
     const tab = e.target.closest('.work-tabs [data-tab]');
