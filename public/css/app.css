@@ -90,6 +90,12 @@ p { margin: 0 0 .7em; }
   .oncall-bar { top: 0; }
 }
 
+/* the footer sits on the foot of the window when a page is short */
+body { display: flex; flex-direction: column; }
+body > main { flex: 1 0 auto; width: 100%; }
+.site-foot { flex: none; background: var(--navy-deep); color: #cbd5e1; border-top: 3px solid var(--orange); padding: 12px 20px; text-align: center; font-size: 13px; font-weight: 600; line-height: 1.5; }
+.site-foot b { color: #fff; font-weight: 800; font-size: 14px; }
+.site-foot .mono { color: #94a3b8; font-weight: 500; }
 main { max-width: 1320px; margin: 0 auto; padding: 22px 20px 60px; }
 /* ☎ The Consoles use the whole screen, with about half an inch each side. */
 main:has(#phoneGrid), main:has(#consoleGrid), main:has(.practice-grid) { max-width: none; padding: 16px 48px 40px; }
@@ -607,7 +613,7 @@ audio.rec { width: 100%; margin-top: 6px; }
 
 /* ---------- 📺 the Class view (presented in Google Meet: large, high contrast, 16:9) ---------- */
 body.classview { background: var(--navy-deep); color: #e2e8f0; }
-body.classview .top, body.classview #netbar, body.classview #oncall { display: none !important; }
+body.classview .top, body.classview #netbar, body.classview #oncall, body.classview .site-foot { display: none !important; }
 body.classview main { max-width: none; padding: 0; }
 .cv { min-height: 100vh; display: flex; flex-direction: column; padding: 22px 28px; gap: 18px; }
 .cv-top { display: flex; align-items: center; gap: 12px; font-size: 18px; }
