@@ -382,9 +382,9 @@
   };
 
   /* ---------- dialogs ---------- */
-  App.modal = function ({ title, body, foot, wide, onClose }) {
+  App.modal = function ({ title, body, foot, wide, onClose, deck }) {
     const back = document.createElement('div');
-    back.className = 'modal-back';
+    back.className = 'modal-back' + (deck ? ' deck' : '');   // deck: the switchboard's navy case, for what opens from the phone
     back.innerHTML = `<div class="modal" role="dialog" aria-modal="true" style="${wide ? 'width:min(900px,100%)' : ''}"><div class="modal-head"><h3>${title}</h3><button class="btn btn-ghost btn-sm" data-x aria-label="Close">✕</button></div><div class="modal-body">${body}</div>${foot ? `<div class="modal-foot">${foot}</div>` : ''}</div>`;
     document.body.appendChild(back);
     const close = () => { back.remove(); document.removeEventListener('keydown', key); onClose && onClose(); };
@@ -397,7 +397,7 @@
   // 🎧 Audio check: the microphone's level, and where the call plays (headset, or the speaker key's speakers), each with a test tone.
   App.micCheck = async function () {
     const Sp = VoIP.Speaker;
-    const m = App.modal({ title: '🎧 Audio check', body: `<p class="small muted">Say a few words: the bar should move. Then test the headset and the speaker.</p>
+    const m = App.modal({ deck: true, title: '🎧 Audio check', body: `<p class="small muted">Say a few words: the bar should move. Then test the headset and the speaker.</p>
       <div class="meter"><i id="mcLevel"></i></div><p class="small" id="mcMsg" style="margin-top:10px">Opening the microphone…</p>
       <div id="mcIn"></div><div id="mcOut"></div>`, onClose: () => { stopMeter && stopMeter(); offMic && offMic(); if (!busy()) VoIP.Mic.close(); } });
     const busy = () => (App.p && ['connecting', 'live'].includes(App.p.status)) || (App.t && ['ringing', 'connecting', 'live'].includes(App.t.status));
@@ -612,7 +612,7 @@
 
   // Pick where to transfer the caller.
   App.pickTransfer = function (cb) {
-    const m = App.modal({ title: '↪ Transfer the call', body: `<p class="small muted">The caller hears hold music while the extension rings. Tell the caller before you transfer them.</p>${App.directoryHTML(true)}` });
+    const m = App.modal({ deck: true, title: '↪ Transfer the call', body: `<p class="small muted">The caller hears hold music while the extension rings. Tell the caller before you transfer them.</p>${App.directoryHTML(true)}` });
     m.el.addEventListener('click', (e) => { const b = e.target.closest('[data-act="transfer-to"]'); if (!b) return; m.close(); cb(b.dataset.ext); });
   };
   App.dirEntry = (ext) => App.cfg.firm.directory.find((d) => d.ext === ext);

@@ -210,7 +210,7 @@
     const on = (t.legs || []).map((l) => l.trainee.id);
     if (over && on.length) return U.toast('Drop the merged trainees before you transfer the caller on.', 'error');
     const list = (App.presence.trainees || []).filter((x) => !x.call && x.id !== t.trainee.id && !on.includes(x.id));
-    const m = App.modal({ title: over ? '↪ Transfer the caller to another trainee' : '👥 Merge another trainee into this call',
+    const m = App.modal({ deck: true, title: over ? '↪ Transfer the caller to another trainee' : '👥 Merge another trainee into this call',
       body: `<p class="small muted">${over
         ? `Their phone rings like any call. When they answer, <b>${esc(t.trainee.name)}</b>'s call ends and you carry on with them, still as the same caller — so you can see whether the call was handed over properly. ${esc(t.trainee.name)}'s call is scored as it stands.`
         : `Their phone rings like any call. Once they answer, everyone on the call hears everyone: you (the caller), ${esc(t.trainee.name)}${(t.legs || []).length ? ', ' + (t.legs || []).map((l) => esc(l.trainee.name)).join(', ') : ''} and them. Up to two more trainees.`}</p>
@@ -441,7 +441,7 @@
           <span class="spacer"></span><label class="check small"><input type="checkbox" id="asGraded" ${gradedPick() ? 'checked' : ''}> 📋 Graded mock calls</label></div>
       </div>`;
     };
-    const m = App.modal({ title: '🎭 Send AI callers', wide: true, body: body(),
+    const m = App.modal({ deck: true, title: '🎭 Send AI callers', wide: true, body: body(),
       foot: '<button class="btn btn-primary" data-assend="1">🤖 Ring them</button><button class="btn" data-x>Cancel</button>' });
     const redraw = () => { U.$('.modal-body', m.el).innerHTML = body(); };
     m.el.addEventListener('change', (e) => {
@@ -503,7 +503,7 @@
   }
   function aiFollow(id) {
     C.follow = id;
-    const m = App.modal({ title: '👂 Following an AI call', wide: true, body: '<div id="aiFollow"></div>', onClose: () => { C.follow = null; } });
+    const m = App.modal({ deck: true, title: '👂 Following an AI call', wide: true, body: '<div id="aiFollow"></div>', onClose: () => { C.follow = null; } });
     m.el.addEventListener('click', (e) => { if (e.target.closest('a[href^="#/call/"]')) m.close(); });
     renderFollow();
   }
@@ -637,7 +637,8 @@
   function renderRoster() {
     const side = U.$('#sideL'); if (!side) return;
     if (!U.$('#roster', side)) {
-      side.innerHTML = `<div class="card roster" id="roster"></div>`;   // (no logo card over the board: LSH CommX is in the top bar)
+      side.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
+        <div class="sb-sub">LSH CommX · Switchboard</div></div><div class="card roster" id="roster"></div>`;
     }
     const el = U.$('#roster', side); if (!el) return;
     const all = (App.presence.trainees || []).slice();
@@ -659,8 +660,10 @@
           <div style="flex:1;min-width:0"><div class="nm">${esc(x.name)} ${x.hand ? '<span class="hand-wave" title="Asked for a mock call">✋</span>' : ''}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''} · ${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}${x.tabs > 1 ? ` · ${x.tabs} tabs` : ''}</div></div>
           ${x.cms ? `<button class="btn btn-sm ${C.watching && C.watching.id === x.id ? 'btn-orange' : ''}" data-cmswatch="${esc(x.id)}" title="${esc(x.name)} has LSH CaseWorX open: watch their screen under the dialer">👁</button>` : ''}
           <button class="btn btn-sm ${x.call ? '' : 'btn-green'}" data-ring="${esc(x.id)}" ${x.call || active(App.t) ? 'disabled' : ''}>📞</button></div>`).join('') || '<div class="empty small">Nobody is online. Trainees open <b>📞 My phone</b> to take calls.</div>'}
-      ${offline.length ? `<details style="margin-top:10px"><summary class="small muted" style="cursor:pointer">${offline.length} offline</summary>${offline.map((x) => `<div class="tr" style="cursor:default"><span class="led"></span><div><div class="nm" style="font-weight:500">${esc(x.name)}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''}${x.last_seen ? ' · seen ' + U.when(x.last_seen) : ''}</div></div></div>`).join('')}</details>` : ''}
+      ${offline.length ? `<details class="off-pop" id="offPop" ${C.offOpen ? 'open' : ''}><summary class="small muted" style="cursor:pointer">${offline.length} offline</summary><div class="off-list">${offline.map((x) => `<div class="tr" style="cursor:default"><span class="led"></span><div><div class="nm" style="font-weight:500">${esc(x.name)}</div><div class="bt">${esc(x.batch)}${x.ext ? ` · ext <span class="mono">${esc(x.ext)}</span>` : ''}${x.last_seen ? ' · seen ' + U.when(x.last_seen) : ''}</div></div></div>`).join('')}</div></details>` : ''}
       ${optionsHTML()}`;
+    const off = U.$('#offPop', el);
+    if (off) off.addEventListener('toggle', () => { C.offOpen = off.open; });
     matchHeights();
   }
 
@@ -693,24 +696,28 @@
      and rewrapping its text, the window resizing, a key appearing or going), so it follows the dialer. */
   let deckWatch = null;
   function fitBoard() {
-    const card = U.$('#sideL .roster'), dialer = U.$('#dialer');
+    const card = U.$('#sideL .roster'), dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
     if (!card || !dialer) return;
     if (window.innerWidth <= 1140) { card.style.minHeight = ''; return; }
-    const want = dialer.getBoundingClientRect().height;
+    const want = dialer.getBoundingClientRect().height - (brand ? brand.getBoundingClientRect().height : 0);
     const h = Math.max(Math.round(want), 420) + 'px';
     if (card.style.minHeight !== h) card.style.minHeight = h;
   }
   function matchHeights() {
     requestAnimationFrame(() => {
       fitBoard();
-      const dialer = U.$('#dialer');
+      const dialer = U.$('#dialer'), brand = U.$('#sideL .side-brand');
       if (!dialer || !window.ResizeObserver) return;
       if (deckWatch) deckWatch.disconnect();
       deckWatch = new ResizeObserver(() => fitBoard());
       deckWatch.observe(dialer);
+      if (brand) deckWatch.observe(brand);
     });
   }
   window.addEventListener('resize', () => { if (App.route.name === 'console') fitBoard(); });
+  // the offline pop-out closes like a menu: a click anywhere else, or Esc
+  document.addEventListener('click', (e) => { const o = document.getElementById('offPop'); if (o && o.open && !o.contains(e.target)) { o.open = false; C.offOpen = false; } });
+  document.addEventListener('keydown', (e) => { const o = document.getElementById('offPop'); if (e.key === 'Escape' && o && o.open) { o.open = false; C.offOpen = false; } });
   try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (App.route.name === 'console') fitBoard(); }); } catch (e) {}
 
   /* The stage. Before a call the main screen is ☎ the dialer and nothing else: the call to play is on the
