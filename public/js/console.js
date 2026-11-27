@@ -210,7 +210,7 @@
     const on = (t.legs || []).map((l) => l.trainee.id);
     if (over && on.length) return U.toast('Drop the merged trainees before you transfer the caller on.', 'error');
     const list = (App.presence.trainees || []).filter((x) => !x.call && x.id !== t.trainee.id && !on.includes(x.id));
-    const m = App.modal({ title: over ? '↪ Transfer the caller to another trainee' : '👥 Merge another trainee into this call',
+    const m = App.modal({ deck: true, title: over ? '↪ Transfer the caller to another trainee' : '👥 Merge another trainee into this call',
       body: `<p class="small muted">${over
         ? `Their phone rings like any call. When they answer, <b>${esc(t.trainee.name)}</b>'s call ends and you carry on with them, still as the same caller — so you can see whether the call was handed over properly. ${esc(t.trainee.name)}'s call is scored as it stands.`
         : `Their phone rings like any call. Once they answer, everyone on the call hears everyone: you (the caller), ${esc(t.trainee.name)}${(t.legs || []).length ? ', ' + (t.legs || []).map((l) => esc(l.trainee.name)).join(', ') : ''} and them. Up to two more trainees.`}</p>
@@ -441,7 +441,7 @@
           <span class="spacer"></span><label class="check small"><input type="checkbox" id="asGraded" ${gradedPick() ? 'checked' : ''}> 📋 Graded mock calls</label></div>
       </div>`;
     };
-    const m = App.modal({ title: '🎭 Send AI callers', wide: true, body: body(),
+    const m = App.modal({ deck: true, title: '🎭 Send AI callers', wide: true, body: body(),
       foot: '<button class="btn btn-primary" data-assend="1">🤖 Ring them</button><button class="btn" data-x>Cancel</button>' });
     const redraw = () => { U.$('.modal-body', m.el).innerHTML = body(); };
     m.el.addEventListener('change', (e) => {
@@ -503,7 +503,7 @@
   }
   function aiFollow(id) {
     C.follow = id;
-    const m = App.modal({ title: '👂 Following an AI call', wide: true, body: '<div id="aiFollow"></div>', onClose: () => { C.follow = null; } });
+    const m = App.modal({ deck: true, title: '👂 Following an AI call', wide: true, body: '<div id="aiFollow"></div>', onClose: () => { C.follow = null; } });
     m.el.addEventListener('click', (e) => { if (e.target.closest('a[href^="#/call/"]')) m.close(); });
     renderFollow();
   }

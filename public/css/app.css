@@ -161,6 +161,40 @@ table.list tr.click:hover td { background: #f8fafc; }
 .modal-head h3 { margin: 0; flex: 1; }
 .modal-body { padding: 16px 18px; }
 .modal-foot { padding: 12px 18px; border-top: 1px solid var(--line); display: flex; gap: 8px; justify-content: flex-end; position: sticky; bottom: 0; background: #fff; }
+/* 🎛 Windows that open from the phone and the switchboard wear the board's navy case: the same deck, an orange
+   rule under the title, soft-key pills and the orange of the board's own line for what is picked */
+.modal-back.deck { background: rgba(4, 10, 24, .62); backdrop-filter: blur(3px); }
+.deck .modal { --deck: #0e1f42; background: var(--deck); color: #cbd5e1; border: 1px solid #22386a; border-radius: 20px; box-shadow: 0 30px 80px -20px rgba(0, 0, 0, .7); }
+.deck .modal-head, .deck .modal-foot { background: var(--deck); border-color: #22386a; }
+.deck .modal-head { border-bottom: 2px solid var(--orange); padding: 18px 22px; }
+.deck .modal-head h3 { color: #fff; letter-spacing: .2px; }
+.deck .modal-body { padding: 18px 22px; }
+.deck .modal-foot { padding: 14px 22px; }
+.deck h4 { color: #e2e8f0; font-size: 12.5px; letter-spacing: .6px; text-transform: uppercase; }
+.deck b, .deck strong { color: #e2e8f0; }
+.deck .muted, .deck .empty { color: #94a3b8; }
+.deck label, .deck .f, .deck label.f { color: #cbd5e1; }
+.deck .meter { background: #0a1530; border: 1px solid #22386a; }
+.deck .input { background: #0a1530; border-color: #22386a; color: #e2e8f0; }
+.deck .input:focus { border-color: var(--orange); }
+.deck .pill-tabs { background: #0a1530; border: 1px solid #22386a; }
+.deck .pill-tabs button { color: #94a3b8; }
+.deck .pill-tabs button:hover { color: #e2e8f0; }
+.deck .pill-tabs button.on { background: rgba(249, 115, 22, .16); color: #fdba74; box-shadow: inset 0 0 0 1px var(--orange); }
+.deck .pick-list { background: #0a1530; border-color: #22386a; }
+.deck .pick:hover { background: rgba(255, 255, 255, .05); }
+.deck .pick.on { background: rgba(249, 115, 22, .14); box-shadow: inset 0 0 0 1px rgba(249, 115, 22, .55); }
+.deck input[type=checkbox] { accent-color: var(--orange); }
+.deck .btn { background: rgba(255, 255, 255, .04); border-color: #22386a; color: #cbd5e1; }
+.deck .btn:hover { background: rgba(255, 255, 255, .09); border-color: #34507f; }
+.deck .btn-ghost { background: transparent; border-color: transparent; }
+.deck .btn-primary { background: var(--orange); border-color: var(--orange); color: #fff; box-shadow: 0 6px 18px -6px rgba(249, 115, 22, .7); }
+.deck .btn-primary:hover { background: #ea580c; border-color: #ea580c; }
+.deck .btn-green { background: var(--green); border-color: var(--green); color: #fff; }
+.deck .btn-red { background: var(--red); border-color: var(--red); color: #fff; }
+.deck .card { background: rgba(255, 255, 255, .04); border-color: #22386a; color: #cbd5e1; box-shadow: none; }
+.deck .note-box, .deck .warn-box { background: rgba(249, 115, 22, .1); border-color: rgba(249, 115, 22, .45); color: #fde2c8; }
+.deck table td, .deck table th { border-color: #22386a; color: #cbd5e1; }
 
 /* ---------- sign-in ---------- */
 .login { max-width: 900px; margin: 40px auto; }

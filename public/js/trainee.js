@@ -336,7 +336,7 @@
     };
     const f = App.cfg.firm;
     const firm = only === 'merge' ? '' : `<h4 style="margin:14px 0 6px">📇 Firm extensions</h4>${f.directory.map((d) => `<div class="dir-row"><span class="ext">${esc(d.ext)}</span><div style="flex:1"><b>${esc(d.name)}</b><div class="small muted">${esc(d.role)}</div></div>${live ? `${p.mode === 'ai' ? '' : `<button class="btn btn-sm" data-tx="warm" data-ext="${esc(d.ext)}" title="Announce the caller to ${esc(d.name)} before you hand them over">🗣 Warm</button>`}<button class="btn btn-sm" data-tx="cold" data-ext="${esc(d.ext)}" title="Send the caller straight through">↪ ${p.mode === 'ai' ? 'Transfer' : 'Cold'}</button>` : `<button class="btn btn-sm" data-tx="look" data-ext="${esc(d.ext)}">↪ Transfer</button>`}</div>`).join('')}`;
-    const m = App.modal({ title: only === 'merge' ? '👥 Merge another trainee into the call' : '↪ Transfer the call',
+    const m = App.modal({ deck: true, title: only === 'merge' ? '👥 Merge another trainee into the call' : '↪ Transfer the call',
       body: `<p class="small muted">${only === 'merge' ? 'Their phone rings like any call. Once they answer, everyone hears everyone: the caller, you and them.' : '<b>🗣 Warm</b>: the caller holds while you tell the other person who is calling and why, then you hand them over (or 👥 merge all three). <b>↪ Cold</b>: the caller holds while it rings and goes straight through. Tell the caller before you transfer them.'}</p>
         ${why ? `<div class="note-box small">${esc(why)}</div>` : ''}
         <h4 style="margin:10px 0 6px">👥 Trainee lines</h4>${mates.map((x) => `<div class="dir-row"><span class="ext mono">${esc(x.ext || '')}</span><div style="flex:1"><b>${esc(x.name)}</b><div class="small muted">${esc(x.batch || '')} · ${x.call ? 'on a call' : x.status === 'available' ? 'available' : 'away'}</div></div>${tBtns(x)}</div>`).join('') || '<div class="empty small">No other trainee is online right now.</div>'}
@@ -687,7 +687,7 @@
   }
   // A trainee's extension dialed on a call: how to hand the caller to them.
   function txChoose(peer) {
-    const m = App.modal({ title: `↪ ${esc(peer.name)} · ext ${esc(peer.ext || '')}`, body: `<p class="small muted">How should the caller reach ${esc(peer.name)}?</p>
+    const m = App.modal({ deck: true, title: `↪ ${esc(peer.name)} · ext ${esc(peer.ext || '')}`, body: `<p class="small muted">How should the caller reach ${esc(peer.name)}?</p>
       <div class="row"><button class="btn btn-green" data-tx="warm">🗣 Warm: talk to them first</button><button class="btn" data-tx="cold">↪ Cold: send the caller through</button><button class="btn" data-tx="merge">👥 Merge them into the call</button></div>` });
     m.el.addEventListener('click', (e) => { const b = e.target.closest('[data-tx]'); if (!b) return; m.close(); txTrainee(peer, b.dataset.tx); });
   }
