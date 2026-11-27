@@ -48,12 +48,13 @@
 
   /* The screen: its name, its tabs, and the open tab's page under them. The tabs are links, so the
      address says which tab is open (#/admin/graded) and the browser's Back button works. */
-  function screen(route, head, tabs, key) {
+  /* bare: 🛡 Admin's tabs are on the top bar (its 🛡 Admin ▾ menu, App.header), so its page opens with nothing over it */
+  function screen(route, head, tabs, key, bare) {
     const tab = tabs.find((t) => t.k === key) || tabs[0];
     const lit = tab.under || tab.k;
     U.$('#app').innerHTML = `<div class="screen">
-      <div class="screen-head"><h1>${head}</h1></div>
-      <div class="screen-tabs" role="tablist">${tabs.filter((t) => t.label).map((t) => `<a role="tab" href="#/${route}/${t.k}" class="${t.k === lit ? 'on' : ''}" aria-selected="${t.k === lit}">${t.label}</a>`).join('')}</div>
+      ${bare ? '' : `<div class="screen-head"><h1>${head}</h1></div>
+      <div class="screen-tabs" role="tablist">${tabs.filter((t) => t.label).map((t) => `<a role="tab" href="#/${route}/${t.k}" class="${t.k === lit ? 'on' : ''}" aria-selected="${t.k === lit}">${t.label}</a>`).join('')}</div>`}
       <div id="appHost"><div class="empty">Loading…</div></div></div>`;
     App.route.sub = tab.view;
     return App.views[tab.view].render();
@@ -65,8 +66,10 @@
 
   App.register('admin', {
     trainer: true,
-    render(arg) { return screen('admin', '🛡 Admin', adminTabs(), arg); }
+    render(arg) { return screen('admin', '🛡 Admin', adminTabs(), arg, true); }
   });
+
+  App.adminTabs = adminTabs;   // the top bar's 🛡 Admin ▾ menu lists them
 
   // Re-open the screen that is showing, after something changed what its page shows.
   App.rescreen = () => { if (App.views[App.route.name]) App.views[App.route.name].render(App.route.arg); };

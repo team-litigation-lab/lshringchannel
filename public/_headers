@@ -15,3 +15,11 @@
 /manifest.webmanifest
   Content-Type: application/manifest+json
   Cache-Control: no-cache
+
+# The page's CSS and scripts are checked with the site on every visit (a quick 304 when unchanged), so a
+# release shows at once rather than after the browser's own cache lets go of the old files.
+/css/*
+  Cache-Control: no-cache
+
+/js/*
+  Cache-Control: no-cache
