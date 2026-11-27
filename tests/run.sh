@@ -4,7 +4,7 @@
 # Set CHROME_PATH to use a Chrome you already have, SHOTS=<folder> to keep the screenshots,
 # LIVE_ONLY=1 to run only the live-call test, ONLY=<test file> to run just that one (e.g. ONLY=e2e-portal.js).
 # Also runs 💬 Automated Messaging (msg-unit.mjs, e2e-msg.js), the Blueprint test (blueprint.cjs), and the
-# LSH Training Portal sign-in (portal-unit.mjs, e2e-portal.js;
+# LSH Training Portal sign-in (portal-unit.mjs, session-unit.mjs, e2e-portal.js;
 # mock-gemini.js stands in for the Portal's /api/verify-ticket).
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -30,6 +30,7 @@ for i in $(seq 1 60); do curl -sf "http://127.0.0.1:$PORT/" > /dev/null && break
 export BASE="http://127.0.0.1:$PORT" OUT="${SHOTS:-$STATE}" PERSIST="$STATE/data"
 if [ -n "${ONLY:-}" ]; then node "$ONLY"; exit 0; fi
 node --no-warnings portal-unit.mjs
+node --no-warnings session-unit.mjs
 node --no-warnings msg-unit.mjs
 node --no-warnings cms-unit.mjs
 node --no-warnings gemini-unit.mjs

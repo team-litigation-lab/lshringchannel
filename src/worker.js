@@ -24,7 +24,7 @@
  */
 import { Switchboard } from './switchboard.js';
 import { Grader, GRADE_AUDIO } from './grader.js';
-import { makeToken, readToken, readTokenString, safeEqual, traineeId, secretOf } from './auth.js';
+import { makeToken, readToken, readTokenString, renewToken, SESSION_HEADER, safeEqual, traineeId, secretOf } from './auth.js';
 import { FIRM, CASES, TRACKS, NOTE_FORMS, LINES, LEVELS, CMS_URL, AI_VOICES, PROGRAM_TABS, traineeView, openCall } from './scenarios.js';
 import { hasAI, keyNames, generate, parseJson, liveToken } from './gemini.js';
 import { callerPrompt, liveSetup } from './prompts.js';
@@ -113,8 +113,20 @@ async function gradeThread(env, sb, id) {
   }
 }
 
+// The sign-in lasts until 8 hours with no activity (src/auth.js): a signed-in request's answer carries a fresh token.
 export default {
   async fetch(request, env) {
+    const s = {};
+    const res = await handle(request, env, s);
+    if (s.renew && res.status !== 101) {
+      try { res.headers.set(SESSION_HEADER, s.renew); }
+      catch (e) { const r = new Response(res.body, res); r.headers.set(SESSION_HEADER, s.renew); return r; }
+    }
+    return res;
+  }
+};
+
+async function handle(request, env, s) {
     const url = new URL(request.url);
     const path = url.pathname;
     try {
@@ -143,7 +155,7 @@ export default {
         await new Promise((r) => setTimeout(r, 400));   // slows down guessing
         if (!safeEqual(String(passphrase || ''), env.ADMIN_PASSPHRASE)) return json({ error: 'Incorrect passphrase' }, 401);
         const who = String(name || '').trim().replace(/\s+/g, ' ').slice(0, 40) || 'Trainer';
-        return json({ token: await makeToken(env, 'a', who, 12), role: 'a', id: who, name: who });
+        return json({ token: await makeToken(env, 'a', who), role: 'a', id: who, name: who });
       }
       // 🏠 LSH CommX opens from the LSH Training Portal: its short-lived ticket signs a trainee in as a trainee and
       // an administrator in as a trainer (src/portal.js). There's no sign-in form; /api/auth/admin is only the fallback.
@@ -159,12 +171,12 @@ export default {
         }
         if (v.system) return json({ error: 'That ticket isn\'t for a person.', code: 'system' }, 403);
         if (!(await board(env).claimTicket(v.sig, v.exp))) return json({ error: 'This link from the LSH Training Portal was already used. Open LSH CommX from the Portal again.', code: 'used' }, 401);
-        if (v.admin) { const who = v.name || 'Trainer'; return json({ token: await makeToken(env, 'a', who, 12), role: 'a', id: who, name: who, portal: true }); }
+        if (v.admin) { const who = v.name || 'Trainer'; return json({ token: await makeToken(env, 'a', who), role: 'a', id: who, name: who, portal: true }); }
         const n = `${v.first} ${v.last}`.replace(/\s+/g, ' ').slice(0, 60), b = v.batch.replace(/\s+/g, ' ').slice(0, 30);
         const id = traineeId(n, b);
         const res = await board(env).traineePortalSignIn(id, n, b);
         if (res.error) return json({ error: res.error }, res.status || 400);
-        return json({ token: await makeToken(env, 't', id, 24 * 30), role: 't', id, name: res.trainee.name, batch: res.trainee.batch, portal: true });
+        return json({ token: await makeToken(env, 't', id), role: 't', id, name: res.trainee.name, batch: res.trainee.batch, portal: true });
       }
 
       const tok = await readToken(env, request);
@@ -177,6 +189,7 @@ export default {
         if (!t || t.archived) return json({ error: 'Sign-in required' }, 401);
         me = { role: 't', id: t.id, name: t.name, batch: t.batch };
       }
+      s.renew = await renewToken(env, tok);   // still signed in (an archived trainee never gets here): 8 more hours
       const body = path === '/api/recording/put' ? null : await request.json().catch(() => ({}));
 
       if (path === '/api/me') return json(me);
@@ -478,5 +491,4 @@ export default {
       console.error(e && e.stack ? e.stack : e);
       return json({ error: 'Something went wrong on the server.' }, 500);
     }
-  }
-};
+}

@@ -17,7 +17,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   const mk = async () => { const c = await browser.newContext({ permissions: ['microphone'], viewport: { width: 1360, height: 900 } }); const p = await c.newPage(); p.on('pageerror', (e) => console.log('PAGE ERROR', e.message)); return p; };
 
   // A trainee opens LSH CommX from the Portal's LSH Academy Index: straight onto their phone, the ticket gone from the address
-  const te = await mk();
+  let te = await mk();
   const link = Portal.trainee(B, 'Riley Santos', 'B100626');
   await te.goto(link);
   await te.waitForSelector('#device .lcd');
@@ -26,6 +26,30 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   if (/ticket=/.test(me.url) || !/#\/phone$/.test(me.url)) throw new Error('The address after sign-in: ' + me.url);
   await te.waitForFunction(() => /ext 7\d{3}/.test(document.querySelector('#device .dev-head').textContent));
   ok('From the Portal, a trainee lands on their phone (with a desk extension), signed in as their Portal name and batch; the ticket leaves the address');
+
+  // Closing the tab doesn't sign anyone out: the sign-in lasts until 8 hours with no activity (src/auth.js), and a
+  // signed-in request is answered with a fresh 8-hour token that the page keeps (public/js/api.js)
+  const exp0 = await te.evaluate(() => Number(String(API.token).split('.')[2]));
+  if (Math.abs(exp0 - Date.now() - 8 * 3600000) > 120000) throw new Error(`A new sign-in lasts ${((exp0 - Date.now()) / 3600000).toFixed(2)} h, not 8`);
+  // a token 7 hours into its 8 (signed here with the test's secret, tests/run.sh): the answer carries a fresh 8-hour one
+  const { makeToken } = await import('../src/auth.js');
+  const tid = await te.evaluate(() => API.me.id);
+  const aged = await makeToken({ ADMIN_PASSPHRASE: 'test-pass' }, 't', tid, 1);
+  const r1 = await fetch(B + '/api/me', { method: 'POST', headers: { Authorization: 'Bearer ' + aged } });
+  const fresh = r1.headers.get('X-Session-Token');
+  if (r1.status !== 200 || !fresh || Math.abs(Number(fresh.split('.')[2]) - Date.now() - 8 * 3600000) > 120000) throw new Error(`A signed-in request 7 hours in wasn't given 8 more hours (${r1.status}, ${fresh})`);
+  const forged = aged.split('.'); forged[2] = String(Date.now() + 8 * 3600000);
+  if ((await fetch(B + '/api/me', { method: 'POST', headers: { Authorization: 'Bearer ' + forged.join('.') } })).status !== 401) throw new Error('A token with its expiry pushed out by hand was accepted');
+  const expired = await makeToken({ ADMIN_PASSPHRASE: 'test-pass' }, 't', tid, -1);   // last used 9 hours ago
+  if ((await fetch(B + '/api/me', { method: 'POST', headers: { Authorization: 'Bearer ' + expired } })).status !== 401) throw new Error('A sign-in idle past 8 hours was still accepted');
+  const reopened = await te.context().newPage();
+  await te.close();
+  await reopened.goto(B + '/');
+  await reopened.waitForSelector('#device .lcd');
+  const again = await reopened.evaluate(() => ({ name: App.me && App.me.name, url: location.href }));
+  if (again.name !== 'Riley Santos') throw new Error('After closing the tab: ' + JSON.stringify(again));
+  ok('Closing the tab doesn\'t sign a trainee out: opened again, LSH CommX is on their phone, signed in for 8 hours from their last activity');
+  te = reopened;
 
   // Each ticket works once: the same link from history or another browser is no use
   const copy = await mk();

@@ -49,7 +49,7 @@ There's **no sign-in form**: everyone comes in from the Portal, signed in there.
 
 LSH CommX installs as an app from Chrome or Edge: its own window with no browser bars, its own icon, and an entry in the Start menu, Dock or taskbar. It's still the same site underneath, so updates arrive by themselves.
 - **⬇ Install** in the top bar (or on the "Open LSH CommX from the LSH Training Portal" page), or the browser menu (⋮) → **Install LSH CommX** (Edge: **Apps → Install this site as an app**).
-- **Opening it** goes straight in while the sign-in lasts (30 days for trainees, 12 hours for trainers). After that, **Go to the LSH Training Portal** opens the Portal in the app window, and opening LSH CommX there comes back signed in.
+- **Opening it** goes straight in while the sign-in lasts: until 8 hours with no activity, for trainees and trainers alike (closing the tab or the browser doesn't sign anyone out; an open page keeps it going, `src/auth.js`, `public/js/api.js`). Log out, or a trainer archiving the trainee, still ends it at once. After that, **Go to the LSH Training Portal** opens the Portal in the app window, and opening LSH CommX there comes back signed in.
 - The files: `public/manifest.webmanifest`, `public/sw.js` (no offline caching, since calls need the network; just a "you're offline" page) and `public/icons/`.
 
 ## 🧭 The screens: what the top bar opens
