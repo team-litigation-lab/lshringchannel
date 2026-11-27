@@ -11,6 +11,7 @@
   const { esc } = U;
 
   const App = window.App = {
+    volume: VoIP.volume(),   // 🔉 the call volume slider, kept on this computer (VoIP.setVolume)
     cfg: null, me: null, board: null, views: {}, route: { name: '', arg: '', sub: '' }, leave: null,
     callLink: { track: '', line: '', program: '', graded: false },   // what a Call Sim link from the Portal asked for
     msgLink: { thread: '', program: '', graded: false, used: false },   // … and what a messaging link asked for (💬 Automated Messaging)

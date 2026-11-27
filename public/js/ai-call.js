@@ -168,10 +168,13 @@
     if (call.voiceOut) return call.voiceOut;
     const ctx = call.ctx, comp = ctx.createDynamicsCompressor(), gain = ctx.createGain();
     comp.threshold.value = -24; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.005; comp.release.value = 0.2;
-    gain.gain.value = 1.8;
+    gain.gain.value = 1.8 * vol();   // 🔉 the phone's volume slider
     comp.connect(gain); gain.connect(ctx.destination);
+    call.voiceGain = gain;
     return (call.voiceOut = comp);
   }
+  const vol = () => (window.App && App.volume != null ? App.volume : 1);
+  function setVol(v) { if (C && C.voiceGain) C.voiceGain.gain.value = 1.8 * v; }
   function flush(call) { call.playing.forEach((s) => { try { s.stop(); } catch (e) {} }); call.playing = []; call.playAt = 0; }
 
   /* ---------- text mode ---------- */
@@ -260,5 +263,5 @@
   }
 
   window.addEventListener('pagehide', () => { if (C) stop(true); });
-  window.AiCall = { start, stop, say, mute, hold, transfer, voiceSupported, active: () => !!C, mode: () => (C ? C.mode : null), busy: () => !!(C && C.busy) };
+  window.AiCall = { start, stop, say, mute, hold, transfer, voiceSupported, volume: setVol, active: () => !!C, mode: () => (C ? C.mode : null), busy: () => !!(C && C.busy) };
 })();

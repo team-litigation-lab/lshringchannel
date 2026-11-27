@@ -510,5 +510,29 @@
   });
   document.addEventListener('DOMContentLoaded', () => Speaker.register(document.getElementById('remoteAudio')));
 
-  window.VoIP = { Board, Mic, RtcCall, Recorder, Mixer, ice, toWav8k, uploadForGrading, meter, Speaker, iceInfo: () => iceCache };
+  /* ▶ Start the call audio. A browser won't play sound on a page nobody has clicked yet (after a reload in the middle of a
+     call, say), and a refused play() used to be swallowed, leaving the call silent. Now the element waits for the next
+     click or key anywhere on the page, and a note says so. */
+  const blocked = new Set();
+  function retryBlocked() {
+    if (!blocked.size) return;
+    [...blocked].forEach((a) => { blocked.delete(a); if (a.srcObject || a.src) a.play().catch(() => {}); });
+    try { if (window.Sounds) Sounds.unlock(); } catch (e) {}
+  }
+  ['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, retryBlocked, { capture: true, passive: true }));
+  function playAudio(a) {
+    if (!a) return;
+    const p = a.play();
+    if (p && p.catch) p.catch((e) => {
+      if (!e || e.name !== 'NotAllowedError') return;
+      const first = !blocked.size; blocked.add(a);
+      if (first && window.U && U.toast) U.toast('🔇 The browser is holding the sound: click anywhere on the page to hear the call.', 'error');
+    });
+  }
+  // 🔉 The call volume, kept on this computer (0–1).
+  const VOL_KEY = 'mcv_volume';
+  function volume() { try { const v = parseFloat(localStorage.getItem(VOL_KEY)); return isFinite(v) ? Math.max(0, Math.min(1, v)) : 1; } catch (e) { return 1; } }
+  function setVolume(v) { try { localStorage.setItem(VOL_KEY, String(v)); } catch (e) {} }
+
+  window.VoIP = { Board, Mic, RtcCall, Recorder, Mixer, ice, toWav8k, uploadForGrading, meter, Speaker, playAudio, volume, setVolume, iceInfo: () => iceCache };
 })();
