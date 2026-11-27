@@ -48,7 +48,8 @@
         ${tr ? `<select class="input" id="fBatch" style="width:auto"><option value="">All batches</option></select>
           <select class="input" id="fTrainee" style="width:auto"><option value="">All trainees</option></select>
           <select class="input" id="fMode" style="width:auto"><option value="">Live and practice</option><option value="live" ${F.mode === 'live' ? 'selected' : ''}>Live calls</option><option value="ai" ${F.mode === 'ai' ? 'selected' : ''}>AI practice</option></select>
-          <label class="check small"><input type="checkbox" id="fNeeds" ${F.needsReview ? 'checked' : ''}> Needs review</label>` : ''}</div>
+          <label class="check small"><input type="checkbox" id="fNeeds" ${F.needsReview ? 'checked' : ''}> Needs review</label>
+          <button class="btn btn-sm btn-danger-soft" data-act="clearbatch" ${F.batch ? '' : 'disabled'} title="${F.batch ? `Delete every call log (and its recording) of ${esc(F.batch)}` : 'Pick a batch first: clears that batch\'s call logs only'}">🧹 Clear this batch's call logs</button>` : ''}</div>
         <div class="table-wrap" id="callList"><div class="empty">Loading…</div></div></div>`;
       if (tr) {
         try {
@@ -63,6 +64,7 @@
           if (e.target.id === 'fMode') { F.mode = e.target.value; load(); }
           if (e.target.id === 'fNeeds') { F.needsReview = e.target.checked; load(); }
         };
+        app.onclick = (e) => { if (e.target.closest('[data-act="clearbatch"]')) clearBatch(); };
       }
       load();
       async function load() {
@@ -83,6 +85,22 @@
       }
     }
   });
+
+  /* 🧹 Clear the call logs of the batch the filter shows (trainers): that batch's calls and their recordings,
+     and no other batch's. It asks first, naming the batch and how many calls go. */
+  async function clearBatch() {
+    const batch = F.batch;
+    if (!batch) return U.toast('Pick a batch in the batch filter first.');
+    let n;
+    try { n = (await API.post('/api/calls/clear-batch', { batch, preview: true })).count; } catch (e) { return U.toast(e.message, 'error'); }
+    if (!n) return U.toast(`${batch} has no call logs to clear.`);
+    if (!confirm(`Clear ${batch}'s call logs?\n\nThis deletes ${n} call${n === 1 ? '' : 's'} of batch ${batch} — the logs, the scorecards and the recordings — for good. Other batches are not touched. Calls still on the line are kept.`)) return;
+    try {
+      const r = await API.post('/api/calls/clear-batch', { batch });
+      U.toast(`🧹 Cleared ${r.count} call log${r.count === 1 ? '' : 's'} of ${batch}.`, 'ok');
+      App.views.calls.render();
+    } catch (e) { U.toast(e.message, 'error'); }
+  }
 
   /* ---------------- a call: review and scorecard ---------------- */
   App.register('call', {
@@ -366,17 +384,17 @@
         const cls = c.score != null && pm != null ? (c.score >= pm ? 'pass' : 'fail') : '';
         return `<td class="gcell ${cls}" data-open="${esc(c.id)}"><b>${c.score != null ? c.score + '%' : '–'}</b> <span title="${c.status === 'reviewed' ? 'Reviewed and sent' : c.status === 'released' ? 'AI grade released' : c.status === 'ai' ? 'AI grade, not approved yet' : 'Not graded yet'}">${icon}</span>${l.attempts > 1 ? `<div class="tiny muted">${l.attempts} attempts</div>` : ''}</td>`;
       };
-      app.innerHTML = `<div class="card"><div class="card-head"><h2>📋 Graded mock calls</h2><span class="spacer"></span>
+      app.innerHTML = `<div class="card elite-card"><div class="card-head"><h2>📋 Graded mock calls</h2><span class="spacer"></span>
           <select class="input" id="gBatch" style="width:auto"><option value="">All batches</option>${batches.map((b) => `<option ${b === G.batch ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>
           <button class="btn btn-orange" id="gCsv" ${calls.length ? '' : 'disabled'}>⬇ Export CSV</button></div>
         <p class="small muted">Each trainee's latest graded Reception, Calendar and Intake mock call, graded on the program's Mock Calls Metrics (the weighted average as a percentage). ✅ reviewed and sent · 🤖 the AI's grade, waiting for your approval · 🤖✅ AI grade released · ⏳ not graded yet.${pm != null ? ` Pass mark: ${pm}%.` : ' Set a pass mark in ⚙️ Setup to see pass / below.'} Click a score to open the call.</p>
-        <div class="table-wrap"><table class="list graded"><thead><tr><th>Trainee</th><th>Batch</th>${tracks.map(([, t]) => `<th>${t.icon} ${esc(t.label)}</th>`).join('')}<th>Average</th></tr></thead><tbody>
+        <div class="table-wrap"><table class="list graded elite"><thead><tr><th>Trainee</th><th>Batch</th>${tracks.map(([, t]) => `<th>${t.icon} ${esc(t.label)}</th>`).join('')}<th>Average</th></tr></thead><tbody>
           ${[...people.values()].sort((a, b) => a.batch.localeCompare(b.batch) || a.name.localeCompare(b.name)).map((p) => {
             const sc = tracks.map(([k]) => p.lines[k] && p.lines[k].latest.score).filter((x) => x != null);
             return `<tr><td><b>${esc(p.name)}</b></td><td>${esc(p.batch)}</td>${tracks.map(([k]) => cell(p.lines[k])).join('')}<td><b>${sc.length ? Math.round(sc.reduce((a, b) => a + b, 0) / sc.length) + '%' : '–'}</b></td></tr>`;
           }).join('') || `<tr><td colspan="${tracks.length + 3}" class="empty">No graded mock calls yet. On the 🎛 Console, tick <b>📋 Graded mock call</b> before you ring.</td></tr>`}
         </tbody></table></div></div>
-        ${calls.length ? `<div class="card"><h3>Every graded call</h3><div class="table-wrap"><table class="list"><thead><tr><th>When</th><th>Trainee</th><th>Line</th><th>Call</th><th>Weighted average</th><th>Status</th></tr></thead><tbody>
+        ${calls.length ? `<div class="card elite-card"><div class="card-head"><h3>Every graded call</h3></div><div class="table-wrap"><table class="list elite"><thead><tr><th>When</th><th>Trainee</th><th>Line</th><th>Call</th><th>Weighted average</th><th>Status</th></tr></thead><tbody>
           ${calls.map((c) => `<tr class="click" data-open="${esc(c.id)}"><td>${U.when(c.createdAt)}</td><td><b>${esc(c.traineeName)}</b> <span class="tiny muted">${esc(c.batch)}</span></td><td>${App.trackBadge(c.track)}</td><td>${esc(c.title)}</td>
             <td>${c.avg != null ? `<b class="mono">${c.avg}</b> / 5 · ${c.score}%` : '–'}</td><td>${c.status === 'reviewed' ? '<span class="badge green">Reviewed</span>' : c.status === 'released' ? '<span class="badge green">AI grade released</span>' : c.status === 'ai' ? '<span class="badge amber">🤖 AI graded: approve</span>' : c.status === 'failed' ? '<span class="badge red">AI couldn\'t grade</span>' : '<span class="badge blue">Grading…</span>'}</td></tr>`).join('')}
         </tbody></table></div></div>` : ''}`;
@@ -624,24 +642,16 @@
       app.innerHTML = '<div class="card"><div class="empty">Checking…</div></div>';
       let r;
       try { r = await API.post('/api/stats'); } catch (e) { app.innerHTML = `<div class="card err-box">${esc(e.message)}</div>`; return; }
-      const st = r.stats, su = r.setup;
-      const item = (ok, title, text) => `<div class="gm"><span class="mk">${ok ? '✅' : '⚠️'}</span><div><b>${title}</b><div class="small muted">${text}</div></div></div>`;
+      const st = r.stats;   // (the ⚙️ Setup checklist card is gone: the tiles, the grading settings and the computer test stay)
       app.innerHTML = `<div class="stats" style="margin-top:0">
           <div class="stat"><div class="v">${st.online}</div><div class="k">Trainees online</div></div>
           <div class="stat"><div class="v">${st.liveNow}</div><div class="k">Live calls now</div></div>
           <div class="stat"><div class="v">${st.calls}</div><div class="k">Calls taken</div></div>
           <div class="stat ${st.toReview ? 'bad' : ''}"><div class="v">${st.toReview}</div><div class="k">Live calls to review</div></div>
           <div class="stat"><div class="v">${st.trainees}</div><div class="k">Trainees</div></div></div>
-        <div class="grid2" style="margin-top:16px"><div class="card"><h2>⚙️ Setup</h2>
-          ${item(true, 'Trainer sign-in', 'ADMIN_PASSPHRASE is set.')}
-          ${item(su.turn, 'TURN relay (Cloudflare Realtime)', su.turn ? 'Calls connect even on networks that block direct audio.' : `Not set${su.turnError ? ' (' + esc(su.turnError) + ')' : ''}: most calls still connect, but some trainees on strict home routers, mobile data or office networks won't get audio. Add TURN_KEY_ID and TURN_KEY_API_TOKEN (see the README).`)}
-          ${item(su.recordings, 'Recordings', su.recordings ? `Kept ${su.recordingDays} days in LSH_KV, then deleted automatically.` : 'The LSH_KV binding is missing: calls aren\'t recorded.')}
-          ${item(su.ai, 'AI practice callers and AI scoring', su.ai ? `${su.aiKeys} Gemini key${su.aiKeys > 1 ? 's' : ''} in the pool.` : 'No GEMINI_API_KEY5 … secrets: live calls work, practice and AI drafts are off.')}
-          ${item(su.courseResults, 'Graded calls count in the trainee\'s course', su.courseResults ? 'Every graded call is sent to the LSH Training Portal (/api/call-results), which keeps it on the trainee\'s account and in their course.' : 'No AI_GATEWAY_SECRET here: graded calls stay on LSH CommX and don\'t reach the trainee\'s course. Add the Portal\'s AI_GATEWAY_SECRET (see the README).')}
-          ${item(true, 'Sign-in', `From the LSH Training Portal (<a href="${esc(su.portal || '')}" target="_blank" rel="noopener">🎓 LSH Academy Index</a>): its tickets ${su.portalSecret ? 'are checked here with PORTAL_SSO_SECRET' : 'are checked by the Portal (no PORTAL_SSO_SECRET here)'}. No sign-in form; the trainer passphrase is only the fallback.`)}
-        </div>
+        <div class="grid2" style="margin-top:16px">
         <div class="card" id="gradeSet" style="grid-column:1 / -1"></div>
-        <div class="card"><h2>🧪 Test this computer</h2>
+        <div class="card" style="grid-column:1 / -1"><h2>🧪 Test this computer</h2>
           <p class="small muted">Checks the microphone, the headset and the speaker, and which ways this network can carry a call: direct (host), through the router (srflx) or through the TURN relay (relay). Trainees can run the mic check from their phone.</p>
           <div class="row"><button class="btn" id="tMic">🎧 Audio check</button><button class="btn" id="tNet">🌐 Network test</button></div><div id="netOut" class="small" style="margin-top:12px"></div></div></div>`;
       drawGradeSettings();

@@ -274,6 +274,20 @@ export default {
         return json({ ok: true });
       }
 
+      // 🧹 Clear one batch's call logs, with their recordings (trainers). { preview: true } only counts them.
+      if (path === '/api/calls/clear-batch') {
+        if (!admin) return json({ error: 'Not allowed' }, 403);
+        const batch = String(body.batch || '').trim();
+        if (!batch) return json({ error: 'Pick a batch first.' }, 400);
+        const { ids } = await sb.clearBatchCalls(batch, !!body.preview);
+        if (!body.preview && env.LSH_KV) {
+          for (let i = 0; i < ids.length; i += 25) {
+            await Promise.all(ids.slice(i, i + 25).flatMap((id) => [env.LSH_KV.delete(REC + id), env.LSH_KV.delete(GRADE_AUDIO + id)]));
+          }
+        }
+        return json({ ok: true, batch, count: ids.length, preview: !!body.preview });
+      }
+
       /* ---------- recordings ---------- */
       if (path === '/api/recording/put') {
         if (!env.LSH_KV) return json({ error: 'Recordings need the LSH_KV binding.' }, 501);
