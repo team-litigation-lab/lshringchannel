@@ -452,7 +452,7 @@ async function handle(request, env, s) {
       }
       /* Ending a thread scores it, the way a practice call is scored when it ends: the Client Messaging
          Metrics, the thread's own checklist, and the firm's texting policy. A thread the trainee only
-         practised with is scored for them alone; a graded one also counts in their course. */
+         practiced with is scored for them alone; a graded one also counts in their course. */
       if (path === '/api/msg/end') {
         const id = String(body.id || '');
         const ended = await sb.endMsgThread(id, me, String(body.why || ''));
