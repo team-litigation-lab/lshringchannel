@@ -76,14 +76,14 @@
     slides: [
       { icon: '🏠', title: 'Opening the console', points: [
           'Open ☎ LSH CommX from the LSH Training Portal (🎓 LSH Academy Index or Master Control): you arrive on the console, under your Portal name.',
-          'Your top bar has four buttons: 🎛 Console, 🗂 Call Logs & Scenario Picker, 🛡 Admin and 🏠 Main Portal. 🛡 Admin holds Call Logs, 📊 Trainee Monitoring, 📋 Graded Calls, 🤖 AI calls, 🎧 Try practice and ⚙️ Setup.',
+          'Your top bar has three buttons: 🎛 Console, 🛡 Admin and 🏠 Main Portal. 🛡 Admin holds Call Logs, 📊 Trainee Monitoring, 📋 Graded Calls, 🎭 Scenario Picker, 💬 Messaging, 🤖 AI calls and ⚙️ Setup.',
           'Trainees open it from the Portal too: no sign-in form, no PINs. The trainer passphrase is only for when the Portal is down.'],
         where: 'The LSH Training Portal · the top bar.',
-        tip: 'Open 🛡 Admin → ⚙️ Setup once before your first session to check the relay, recordings and AI keys.' },
+        tip: 'Open 🛡 Admin → ⚙️ Setup once before your first session to run the audio check and the network test.' },
       { icon: '☎', title: 'The dialer and the Switchboard', points: [
           'The Console\'s main screen is ☎ the dialer and nothing else, with everything a call is placed with on its own keys.',
           '☎ Switchboard folds the board out beside the dialer: every trainee online, by batch, with their extension; ✋ shows who asked for a call. Click a trainee to put their extension on the dialer.',
-          '🎭 Call to play opens the Scenario Picker on the next screen; the call you pick comes back on the dialer\'s own screen.',
+          '🎭 Call to play opens the Scenario Picker (🛡 Admin) in a tab of its own; the call you pick comes back on the dialer\'s own screen.',
           'Dial the trainee\'s extension, pick the line, and ring — with no call picked you play an open call, any caller you like.',
           'The soft keys: 📋 Graded, Record and Hide ID. Then 📞 rings the trainee.'],
         where: '🎛 Console → the dialer · ☎ Switchboard · 🎭 Call to play.',
@@ -116,19 +116,19 @@
         where: 'After the call, on the Console · 🛡 Admin → 📋 Graded Calls.',
         tip: 'Play the recording before you approve a grade.' },
       { icon: '👥', title: 'Call Logs and Trainee Monitoring', points: [
-          '🗂 Call Logs: every call, its recording and its scorecard — on 🗂 Call Logs & Scenario Picker, and again under 🛡 Admin.',
+          '🗂 Call Logs: every call, its recording and its scorecard, filtered by batch and trainee. 🧹 Clear this batch\'s call logs empties one batch\'s logs.',
           '📊 Trainee Monitoring (Utilization): live calls taken, the time each trainee spent on the line, the calls that rang out, the holds and transfers they used, the live average (reviewed calls) and their own practice calls, kept apart. ⬇ Export CSV takes the table away.',
           'Each trainee\'s desk extension (the number you dial), and 🗂 Calls for their calls.'],
-        where: 'Top bar → 🗂 Call Logs & Scenario Picker · 🛡 Admin → 📊 Trainee Monitoring.',
+        where: '🛡 Admin → 🗂 Call Logs · 📊 Trainee Monitoring.',
         tip: 'Compare live and practice averages before you rank the batch.' },
       { icon: '📚', title: 'The Scenario Picker', points: [
           '🎭 The Scenario Picker lists every call, by line and level, on the firm\'s case files. ☎ Play on the Console puts one on the dialer for your next call.',
           '⧉ Copy a built-in call to change it, or ＋ Write a new call: the caller, the case, the script, the goals.',
           'The calls follow the Training Portal\'s Foundational call pack, plus calls written for live practice.'],
-        where: 'Top bar → 🗂 Call Logs & Scenario Picker → 🎭 Scenario Picker.',
+        where: '🛡 Admin → 🎭 Scenario Picker.',
         tip: 'Write a call for anything the batch keeps getting wrong.' },
       { icon: '⚙️', title: 'Setup, AI practice and this Blueprint', points: [
-          '⚙️ Setup: the TURN relay, recordings, AI keys and the access code, a mic check, a network test, and the grading settings.',
+          '⚙️ Setup: today\'s numbers, the grading settings, a mic check and a network test.',
           '🎧 Try practice: take a practice call with the AI caller yourself, as a trainee would.',
           '🧭 Blueprint: the Trainee blueprint is the deck to share on day one; ⬇ Download PDF gives either as a handout.'],
         where: '🛡 Admin → ⚙️ Setup · 🎧 Try practice · 🧭 Blueprint.',

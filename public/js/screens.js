@@ -1,13 +1,17 @@
 /* =========================================================
    The screens the top bar opens besides the Console
 
-   🗂 Call Logs & Scenario Picker   the screen the Console directs to: the
-                                    call log, the calls to play, and the
-                                    💬 Client Messaging and 💬 Automated
-                                    Messaging threads
+   🗂 Call Logs & Scenario Picker   (trainees) the screen the Console directs
+                                    to: the call log, the calls to practice,
+                                    and the 💬 Client Messaging and 💬
+                                    Automated Messaging threads
    🛡 Admin (trainers)              Call Logs · Trainee Monitoring
-                                    (Utilization) · Graded Calls · 🤖 AI
-                                    calls · 🎧 Try practice · ⚙️ Setup
+                                    (Utilization) · Graded Calls · 🎭 Scenario
+                                    Picker · 💬 Client Messaging · 🤖 Automated
+                                    Messaging · 🤖 AI calls · 🎧 Try practice ·
+                                    ⚙️ Setup. A trainer has no Call Logs &
+                                    Scenario Picker screen: its tabs are here
+                                    (App.go sends #/logs/… to #/admin/…).
 
    Each is a strip of tabs over one page. The tab's own page renders into
    #appHost inside the screen (App.host()), so every page still works on
@@ -34,6 +38,9 @@
     { k: 'calls', label: '🗂 Call Logs', view: 'calls' },
     { k: 'monitoring', label: '📊 Trainee Monitoring', view: 'monitoring' },
     { k: 'graded', label: '📋 Graded Calls', view: 'graded' },
+    { k: 'scenarios', label: '🎭 Scenario Picker', view: 'scenarios' },
+    { k: 'clientmessaging', label: '💬 Client Messaging', view: 'clientmessaging' },
+    { k: 'messaging', label: '🤖 Automated Messaging', view: 'messaging' },
     { k: 'aicalls', label: '🤖 AI calls', view: 'aicalls' },
     { k: 'setup', label: '⚙️ Setup', view: 'setup' },
     { k: 'practice', view: 'practice', under: 'aicalls' }

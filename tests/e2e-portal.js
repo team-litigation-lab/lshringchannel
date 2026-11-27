@@ -58,11 +58,12 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.waitForSelector('#roster');
   const t = await tr.evaluate(() => ({ role: App.me.role, name: App.me.name, hash: location.hash }));
   if (t.role !== 'a' || t.name !== 'Coach Ana' || t.hash !== '#/console') throw new Error('The trainer from the Portal: ' + JSON.stringify(t));
-  // 🏠 Main Portal is a button on the top bar, last of the four (Console · Call Logs & Scenario Picker · Admin · Main Portal).
+  // 🏠 Main Portal is a button on the top bar, last of the three (Console · Admin · Main Portal). A trainer's Call Logs &
+  // Scenario Picker tabs are 🛡 Admin's, so there is no second button that opens the same pages.
   const bar = await tr.evaluate(() => [...document.querySelectorAll('#nav a')].map((a) => ({ href: a.getAttribute('href'), text: a.textContent.trim() })));
-  if (bar.length !== 4 || bar[0].href !== '#/console' || bar[1].href !== '#/logs' || bar[2].href !== '#/admin') throw new Error('The trainer\'s top bar: ' + JSON.stringify(bar));
-  if (bar[3].href !== PORTAL_HOME || !/Main Portal/.test(bar[3].text)) throw new Error('🏠 Main Portal should be the last button on the bar, to the Portal: ' + JSON.stringify(bar[3]));
-  ok('From the Portal, an administrator lands on the Console as Coach Ana (no passphrase), with four buttons on the bar — 🎛 Console, 🗂 Call Logs & Scenario Picker, 🛡 Admin and 🏠 Main Portal, which goes back to the Portal');
+  if (bar.length !== 3 || bar[0].href !== '#/console' || bar[1].href !== '#/admin') throw new Error('The trainer\'s top bar: ' + JSON.stringify(bar));
+  if (bar[2].href !== PORTAL_HOME || !/Main Portal/.test(bar[2].text)) throw new Error('🏠 Main Portal should be the last button on the bar, to the Portal: ' + JSON.stringify(bar[2]));
+  ok('From the Portal, an administrator lands on the Console as Coach Ana (no passphrase), with three buttons on the bar — 🎛 Console, 🛡 Admin and 🏠 Main Portal, which goes back to the Portal');
 
   // The trainee is on the switchboard, with their extension, and in 👥 Trainees
   await te.goto(Portal.trainee(B, 'Riley Santos', 'B100626'));
@@ -72,7 +73,7 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.waitForFunction(() => /Riley Santos/.test(document.querySelector('#app').textContent) && /Portal/.test(document.querySelector('#app').textContent) && !/PIN/.test(document.querySelector('#app').textContent));
   // 🛡 Admin's tabs, in the order the platform spec sets: Call Logs, Trainee Monitoring, Graded Calls, then the trainer's own tools.
   const tabs = await tr.evaluate(() => [...document.querySelectorAll('.screen-tabs a')].map((a) => a.getAttribute('href')));
-  const want = ['#/admin/calls', '#/admin/monitoring', '#/admin/graded', '#/admin/aicalls', '#/admin/setup'];
+  const want = ['#/admin/calls', '#/admin/monitoring', '#/admin/graded', '#/admin/scenarios', '#/admin/clientmessaging', '#/admin/messaging', '#/admin/aicalls', '#/admin/setup'];
   if (tabs.join() !== want.join()) throw new Error('🛡 Admin\'s tabs: ' + JSON.stringify(tabs));
   if (!(await tr.$('.screen-tabs a.on[href="#/admin/monitoring"]'))) throw new Error('📊 Trainee Monitoring should be the open tab');
   // 🎧 Try practice is a button on 🤖 AI calls, not a tab beside it, and it lights that tab up.
@@ -80,7 +81,13 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
   await tr.waitForSelector('.screen-tabs a.on');
   const lit = await tr.evaluate(() => [...document.querySelectorAll('.screen-tabs a')].map((a) => a.getAttribute('href')).concat((document.querySelector('.screen-tabs a.on') || {}).getAttribute('href')));
   if (lit.join() !== want.concat('#/admin/aicalls').join()) throw new Error('🎧 Try practice should be a button on 🤖 AI calls, lighting that tab: ' + JSON.stringify(lit));
-  ok('The trainee is on the trainer\'s switchboard with their extension, and in 🛡 Admin → 📊 Trainee Monitoring, whose tabs are Call Logs · Trainee Monitoring · Graded Calls · AI calls · Setup — with 🎧 Try practice a button on 🤖 AI calls rather than a tab of its own (no PINs anywhere)');
+  ok('The trainee is on the trainer\'s switchboard with their extension, and in 🛡 Admin → 📊 Trainee Monitoring, whose tabs are Call Logs · Trainee Monitoring · Graded Calls · Scenario Picker · Client Messaging · Automated Messaging · AI calls · Setup — with 🎧 Try practice a button on 🤖 AI calls rather than a tab of its own (no PINs anywhere)');
+
+  // A trainer's old Call Logs & Scenario Picker address opens the same tab under 🛡 Admin.
+  await tr.goto(B + '/#/logs/scenarios');
+  await tr.waitForSelector('.screen-tabs a.on[href="#/admin/scenarios"]');
+  if ((await tr.evaluate(() => location.hash)) !== '#/admin/scenarios' || !(await tr.$('#nav a.on[href="#/admin"]'))) throw new Error('#/logs/scenarios should open 🛡 Admin → 🎭 Scenario Picker for a trainer');
+  ok('A trainer\'s #/logs/scenarios opens 🛡 Admin → 🎭 Scenario Picker: one home for those tabs');
 
   // The Portal being down: the trainers' passphrase still opens the console (?admin=1 from an older Portal opens it too)
   const fb = await mk();

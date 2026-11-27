@@ -11,10 +11,11 @@
 html, body { margin: 0; }
 html { background: var(--paper); }
 body { font-family: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif; background: transparent; color: var(--ink); font-size: 15px; line-height: 1.45; min-height: 100vh; }
-/* the call-floor photo behind the whole app: fixed, and under a paper wash so cards and text stay readable */
+/* the call-floor photo behind the whole app: fixed, and under a paper wash so cards and text stay readable. The wash is a little
+   lighter than it was (.88–.94), so the photo shows through for colour contrast; the cards stay solid. */
 body::before {
   content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background: linear-gradient(rgba(244, 246, 251, .88), rgba(244, 246, 251, .94)), url('../call-center-bg.webp') center / cover no-repeat fixed;
+  background: linear-gradient(rgba(244, 246, 251, .70), rgba(244, 246, 251, .78)), url('../call-center-bg.webp') center / cover no-repeat fixed;
 }
 @media (max-width: 760px) { body::before { background-attachment: scroll, scroll; } }
 a { color: var(--blue); }
@@ -69,7 +70,7 @@ p { margin: 0 0 .7em; }
 .who button { background: transparent; border: 1px solid rgba(255, 255, 255, .25); color: #e2e8f0; border-radius: 8px; padding: 5px 10px; cursor: pointer; }
 .who .hdr-btn { border: 1px solid rgba(255, 255, 255, .25); color: #e2e8f0; border-radius: 8px; padding: 4px 9px; text-decoration: none; line-height: 1.3; }
 .who .hdr-btn:hover { background: rgba(255, 255, 255, .08); }
-.who button.hdr-install { background: var(--orange); border-color: var(--orange); color: #0f172a; font-weight: 700; }
+.who button.hdr-install { background: linear-gradient(180deg, #fde7b0, #f5c451, #e0a43a); border-color: #e0a43a; color: #1E2340; font-weight: 800; }
 .login form.card.pick { box-shadow: 0 0 0 3px rgba(249, 115, 22, .35); border-color: var(--orange); }
 .netbar { background: var(--amber-soft); color: #7c2d12; text-align: center; padding: 6px; font-size: 13px; font-weight: 600; }
 .oncall-bar { position: sticky; top: 58px; z-index: 29; background: var(--green); color: #fff; padding: 8px 20px; display: flex; gap: 12px; align-items: center; font-weight: 600; }
@@ -109,8 +110,11 @@ main:has(#phoneGrid), main:has(#consoleGrid), main:has(.practice-grid) { max-wid
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn-primary { background: var(--navy); border-color: var(--navy); color: #fff; }
 .btn-primary:hover { background: var(--navy-mid); border-color: var(--navy-mid); }
-.btn-orange { background: var(--orange); border-color: var(--orange); color: #fff; }
-.btn-orange:hover { background: #ea580c; border-color: #ea580c; }
+/* The action button: the LSH gold (every orange button on the LSH apps is gold now), with navy text. */
+.btn-orange { background: linear-gradient(180deg, #fde7b0, #f5c451, #e0a43a); border-color: #e0a43a; color: #1E2340; font-weight: 800; }
+.btn-orange:hover { background: linear-gradient(180deg, #fdebbd, #f7cc66, #e5ad4a); border-color: #c98f2c; color: #1E2340; }
+.btn-danger-soft { border-color: #fecaca; color: #991b1b; }
+.btn-danger-soft:hover:not(:disabled) { background: #fef2f2; border-color: #f87171; }
 .btn-green { background: var(--green); border-color: var(--green); color: #fff; }
 .btn-green:hover { background: #15803d; }
 .btn-red { background: var(--red); border-color: var(--red); color: #fff; }
@@ -312,25 +316,36 @@ table.list tr.click:hover td { background: #f8fafc; }
 .screen-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
 .screen-head h1 { margin: 0; font-size: 22px; }
 .screen-tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 2px solid var(--line); padding-bottom: 0; margin-bottom: 18px; }
-.screen-tabs a { text-decoration: none; color: var(--muted); font-weight: 700; font-size: 14px; padding: 9px 14px; border: 2px solid transparent; border-bottom: 0; border-radius: 10px 10px 0 0; margin-bottom: -2px; white-space: nowrap; }
+.screen-tabs a { text-decoration: none; color: #334155; font-weight: 700; font-size: 14px; padding: 9px 14px; border: 2px solid transparent; border-bottom: 0; border-radius: 10px 10px 0 0; margin-bottom: -2px; white-space: nowrap; }
 .screen-tabs a:hover { color: var(--navy); background: #f1f5f9; }
 .screen-tabs a.on { color: var(--navy); background: #fff; border-color: var(--line); border-bottom: 2px solid #fff; }
 @media (max-width: 560px) { .screen-tabs { border-bottom: 0; } .screen-tabs a { border: 1px solid var(--line); border-radius: 9px; margin-bottom: 0; padding: 8px 10px; font-size: 13px; } .screen-tabs a.on { border-color: var(--orange); background: var(--orange-soft); } }
 
 /* ---------- practice picker, scenario cards ---------- */
 .scen-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-/* 🎭 the practice calls, a screen at a time (Page 1, Page 2 … when a line has more than fit): each card is one compact row, the call's title and
-   a 📞 button, with its level as the card's left edge (green Beginner, blue Intermediate, red Advanced). Its level, program, case
-   and facts are in the card's tooltip. The page uses the window's full width. */
-.scen-grid.practice-grid { grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); grid-auto-rows: 1fr; gap: 10px 12px; }
-.practice-grid > .scen { min-height: 0; flex-direction: row; align-items: center; gap: 8px; padding: 7px 8px 7px 11px; border-left: 4px solid #cbd5e1; border-radius: 9px; }
-.practice-grid > .scen.lv-Starter, .practice-grid > .scen.lv-Beginner { border-left-color: #16a34a; }
-.practice-grid > .scen.lv-Intermediate { border-left-color: #2563eb; }
-.practice-grid > .scen.lv-Advanced { border-left-color: #dc2626; }
-.practice-grid > .scen .meta, .practice-grid > .scen p { display: none; }
-.practice-grid > .scen h4 { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.25; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.practice-grid > .scen .btn { flex: none; width: 26px; height: 26px; min-width: 0; padding: 0; display: inline-grid; place-items: center; font-size: 12px; line-height: 1; border-radius: 7px; }
-.practice-grid > .scen > div:last-child { flex: none; }
+/* 🎭 the practice calls, a screen at a time (Page 1, Page 2 … when a line has more than fit), in the elite LSH look: a navy card
+   (#1E2340 → #2D3762) with the call's title in bold white, its level as a chip and as the card's left edge (green Beginner, blue
+   Intermediate, red Advanced), and a gold 📞 button. Cards are at least 250px wide, so a laptop shows 4–5 a row and a phone one.
+   The facts are in the card's tooltip. The page uses the window's full width. */
+.scen-grid.practice-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); grid-auto-rows: 1fr; gap: 14px 16px; }
+.practice-grid > .scen { min-height: 96px; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto 1fr; column-gap: 12px; row-gap: 8px; align-items: center;
+  padding: 12px 14px 12px 16px; border: 1px solid #3a4677; border-left: 6px solid #64748b; border-radius: 14px;
+  background: linear-gradient(135deg, #1E2340 0%, #2D3762 100%); box-shadow: 0 2px 4px rgba(15, 23, 42, .12), 0 8px 22px rgba(30, 35, 64, .18); }
+.practice-grid > .scen:hover { border-color: #f5c451; box-shadow: 0 0 0 2px rgba(245, 196, 81, .45), 0 10px 26px rgba(30, 35, 64, .3); transform: translateY(-1px); }
+.practice-grid > .scen.lv-Starter, .practice-grid > .scen.lv-Beginner { border-left-color: #22c55e; }
+.practice-grid > .scen.lv-Intermediate { border-left-color: #3b82f6; }
+.practice-grid > .scen.lv-Advanced { border-left-color: #ef4444; }
+.practice-grid > .scen p { display: none; }
+.practice-grid > .scen .meta { grid-column: 1; grid-row: 1; flex-wrap: nowrap; overflow: hidden; gap: 5px; }
+.practice-grid > .scen .meta .badge { background: rgba(255, 255, 255, .1); color: #e2e8f0; border: 1px solid rgba(255, 255, 255, .16); font-size: 11.5px; padding: 1px 8px; }
+.practice-grid > .scen .meta .badge.lvl-Starter, .practice-grid > .scen .meta .badge.lvl-Beginner { background: rgba(34, 197, 94, .18); color: #86efac; border-color: rgba(34, 197, 94, .5); }
+.practice-grid > .scen .meta .badge.lvl-Intermediate { background: rgba(59, 130, 246, .2); color: #93c5fd; border-color: rgba(59, 130, 246, .55); }
+.practice-grid > .scen .meta .badge.lvl-Advanced { background: rgba(239, 68, 68, .2); color: #fca5a5; border-color: rgba(239, 68, 68, .55); }
+.practice-grid > .scen h4 { grid-column: 1; grid-row: 2; align-self: start; min-width: 0; color: #fff; font-size: 16px; font-weight: 800; line-height: 1.3; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.practice-grid > .scen > div:last-child { grid-column: 2; grid-row: 1 / span 2; }
+.practice-grid > .scen .btn { width: 46px; height: 46px; min-width: 0; padding: 0; display: inline-grid; place-items: center; font-size: 19px; line-height: 1; border-radius: 12px;
+  background: linear-gradient(180deg, #fde7b0, #f5c451, #e0a43a); border: 1px solid #e0a43a; color: #1E2340; box-shadow: 0 2px 8px rgba(224, 164, 58, .35); }
+.practice-grid > .scen .btn:hover { filter: brightness(1.06); }
 .practice-grid > .scen .take-tx { display: none; }
 .practice-intro { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; }
 @media (min-width: 761px) { main:has(.practice-grid) { padding: 12px 24px 16px; } main:has(.practice-grid) > .card { padding-top: 14px; padding-bottom: 14px; } }
@@ -648,6 +663,22 @@ table.sheet.edit .dots button { width: 28px; }
 table.sheet.edit .dots button.na { width: auto; }
 @media (max-width: 700px) { table.sheet.edit th.scorecol { width: auto; } table.sheet.edit .dots { flex-wrap: wrap; } }
 .dots button.na { width: auto; padding: 0 6px; font-size: 11px; font-weight: 600; }
+/* 📋 Graded Calls in the elite LSH look, across the whole window (both sides): a navy band head with the gold title, a navy header
+   row in gold, zebra rows, and the scores bold. */
+main:has(.elite-card) { max-width: none; padding-left: 48px; padding-right: 48px; }
+@media (max-width: 760px) { main:has(.elite-card) { padding-left: 12px; padding-right: 12px; } }
+.card.elite-card { padding: 0; overflow: hidden; border: 1px solid #2D3762; }
+.elite-card > .card-head { margin: 0; padding: 16px 22px; background: linear-gradient(135deg, #1E2340 0%, #2D3762 100%); border-bottom: 3px solid #f5c451; }
+.elite-card > .card-head h2, .elite-card > .card-head h3 { color: #f5c451; font-weight: 800; }
+.elite-card > p, .elite-card > .table-wrap { margin: 0; padding: 12px 22px; }
+.elite-card > .table-wrap { padding-top: 0; padding-bottom: 20px; }
+table.list.elite { font-size: 15px; border-radius: 10px; overflow: hidden; }
+table.list.elite th { background: #1E2340; color: #f5c451; font-weight: 800; font-size: 12.5px; letter-spacing: .6px; padding: 12px 14px; border-bottom: 2px solid #e0a43a; }
+table.list.elite td { padding: 12px 14px; color: #1E2340; }
+table.list.elite tbody tr:nth-child(even) td { background: #f3f5fb; }
+table.list.elite tbody tr:hover td, table.list.elite td.gcell:hover { background: #fff6df; }
+table.list.elite td b { font-weight: 800; font-size: 16px; }
+table.list.elite td:first-child b { font-size: 15px; }
 table.graded td.gcell { cursor: pointer; }
 table.graded td.gcell:hover { background: #f8fafc; }
 table.graded td.gcell.pass b { color: var(--green); }

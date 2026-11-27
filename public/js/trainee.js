@@ -1125,7 +1125,7 @@
   /* 🎭 The Scenario Picker's practice calls (a tab of 🗂 Call Logs & Scenario Picker for a trainee,
      🎧 Try practice under 🛡 Admin for a trainer). A trainee's practice call then runs on ☎ their
      Console, the one phone they take every call on; a trainer's runs here. */
-  // 🎭 A line's practice calls, a screen at a time: the cards keep a readable size (no narrower than 190px, two-line titles), and as
+  // 🎭 A line's practice calls, a screen at a time: the cards keep a readable size (no narrower than 250px, bold two-line titles, the elite navy card), and as
   // many as fit between the grid's top and the window's bottom make a page; when there are more, Page 1, Page 2 … buttons
   // (and ‹ ›) move between them. Phones keep the whole list, scrolling.
   function fitPractice() {
@@ -1134,7 +1134,7 @@
     cards.forEach((c) => { c.hidden = false; }); g.style.gridTemplateColumns = ''; pager.innerHTML = '';
     if (innerWidth <= 760 || !cards.length) return;
     const cs = getComputedStyle(g), rgap = parseFloat(cs.rowGap) || 0, cgap = parseFloat(cs.columnGap) || 0, gap = rgap, w = g.clientWidth, rowH = cards[0].getBoundingClientRect().height + rgap;
-    const cols = Math.max(1, Math.floor((w + cgap) / (190 + cgap)));
+    const cols = Math.max(1, Math.floor((w + cgap) / (250 + cgap)));
     const rows = Math.max(2, Math.floor((innerHeight - g.getBoundingClientRect().top - 44 - 40 + gap) / rowH));   // 40: the pager's own row
     const per = cols * rows, pages = Math.ceil(cards.length / per);
     g.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;

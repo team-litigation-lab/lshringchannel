@@ -118,10 +118,12 @@
     App.go();
   };
 
-  /* 🧭 The top bar. Four buttons for a trainer, two for a trainee, and one screen behind each:
+  /* 🧭 The top bar. Three buttons for a trainer, two for a trainee, and one screen behind each:
        ☎ Console                        the dialer, and nothing else on the main screen
-       🗂 Call Logs & Scenario Picker   the next screen: the call log, and the calls to play
-       🛡 Admin (trainers)              Call Logs · Trainee Monitoring · Graded Calls · 🤖 AI calls · 🎧 Try practice · ⚙️ Setup
+       🗂 Call Logs & Scenario Picker   (trainees) the next screen: the call log, and the calls to practice
+       🛡 Admin (trainers)              Call Logs · Trainee Monitoring · Graded Calls · 🎭 Scenario Picker · 💬 Client Messaging ·
+                                        🤖 Automated Messaging · 🤖 AI calls · 🎧 Try practice · ⚙️ Setup — a trainer's
+                                        Call Logs & Scenario Picker tabs live here, so the bar has no second button for them
        🏠 Main Portal (trainers)        back to the LSH Training Portal
      Every other page is a tab of one of those screens, so the bar never grows: `App.screenOf` says
      which button a page lights up, and `App.ALIAS` sends an old address to the screen that holds it. */
@@ -129,15 +131,13 @@
   const LOGS_LABEL = '🗂 Call Logs<span class="long"> &amp; Scenario Picker</span>';
   App.navItems = function () {
     return App.trainer()
-      ? [['console', '🎛 Console'], ['logs', LOGS_LABEL], ['admin', '🛡 Admin']]
+      ? [['console', '🎛 Console'], ['admin', '🛡 Admin']]
       : [['phone', '☎ Console'], ['logs', LOGS_LABEL]];
   };
-  // The pages 🛡 Admin holds (trainers): a page not listed here belongs to the Call Logs screen.
-  const ADMIN_PAGES = ['admin', 'monitoring', 'graded', 'aicalls', 'practice', 'setup'];
+  // A trainer's every page besides the Console is under 🛡 Admin; a trainee's is on the Call Logs screen.
   App.screenOf = function (name) {
     if (name === 'console' || name === 'phone') return App.trainer() ? 'console' : 'phone';
-    if (App.trainer() && ADMIN_PAGES.includes(name)) return 'admin';
-    return 'logs';
+    return App.trainer() ? 'admin' : 'logs';
   };
   // One home per page: an old address (or a link from inside a page) opens the screen that now holds it.
   App.ALIAS = { calls: 'logs/calls', scenarios: 'logs/scenarios', messaging: 'logs/messaging', clientmessaging: 'logs/clientmessaging', graded: 'admin/graded', trainees: 'admin/monitoring', monitoring: 'admin/monitoring', aicalls: 'admin/aicalls', setup: 'admin/setup' };
@@ -203,6 +203,8 @@
     if (App.isClassView) name = 'class';
     // An old address opens the screen that now holds the page (#/graded → #/admin/graded).
     if (!App.isClassView && !arg && App.ALIAS[name]) { history.replaceState(null, '', '#/' + App.ALIAS[name]); [name, arg] = App.ALIAS[name].split('/'); }
+    // A trainer's Call Logs & Scenario Picker tabs are 🛡 Admin's (#/logs/scenarios → #/admin/scenarios).
+    if (!App.isClassView && name === 'logs' && App.trainer()) { name = 'admin'; history.replaceState(null, '', '#/admin/' + (arg || 'calls')); }
     if (!App.views[name] || (App.views[name].trainer && !App.trainer()) || (App.views[name].trainee && App.trainer())) { name = def; arg = ''; if (location.hash !== '#/' + def) { history.replaceState(null, '', '#/' + def); } }
     if (App.leave) { try { App.leave(); } catch (e) {} App.leave = null; }
     App.route = { name, arg: arg ? decodeURIComponent(arg) : '', sub: '' };

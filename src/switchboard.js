@@ -951,6 +951,17 @@ export class Switchboard extends DurableObject {
   }
   getCall(id) { return this.row(id); }
   deleteCall(id) { this.sql.exec('DELETE FROM calls WHERE id = ?', id); return true; }
+  /* 🧹 Clear one batch's call logs (🛡 Admin → Call Logs): every call record of that batch, and no other
+     batch's. A call still ringing or on the line is left alone. With `preview` it only counts them.
+     Returns the ids, so the Worker can delete their recordings from KV too. */
+  clearBatchCalls(batch, preview) {
+    const b = String(batch || '').trim().slice(0, 80);
+    if (!b) return { ids: [] };
+    const where = `batch = ? AND (status IS NULL OR status NOT IN ('ringing', 'connecting', 'live'))`;
+    const ids = this.sql.exec(`SELECT id FROM calls WHERE ${where}`, b).toArray().map((r) => r.id);
+    if (!preview && ids.length) this.sql.exec(`DELETE FROM calls WHERE ${where}`, b);
+    return { ids };
+  }
 
   // A practice call with the AI caller (the trainee's browser runs the call).
   async startAiCall(who, scenarioId, voice, program, graded) {

@@ -1150,10 +1150,10 @@
   function openPicker() {
     try {
       if (C.pickWin && !C.pickWin.closed) { C.pickWin.focus(); return; }
-      C.pickWin = window.open(location.pathname + '#/logs/scenarios', 'lshscenarios');
+      C.pickWin = window.open(location.pathname + '#/admin/scenarios', 'lshscenarios');
       if (C.pickWin) { C.pickWin.focus(); return; }
     } catch (e) {}
-    U.toast('The browser blocked the new tab: allow pop-ups for this site, or open 🗂 Call Logs & Scenario Picker on the top bar.', 'error');
+    U.toast('The browser blocked the new tab: allow pop-ups for this site, or open 🛡 Admin → 🎭 Scenario Picker on the top bar.', 'error');
   }
 
   /* ---------- 📺 the Class view (a tab to present in Google Meet) ----------
