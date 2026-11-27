@@ -152,6 +152,28 @@
     U.toast(v === 'calendar' ? '📅 Calendaring: the trainee\'s Google Calendar Sim shows beside your dialer on a call.' : '☎ Reception · Intake: the trainee\'s LSH CaseWorX shows beside your dialer when they open it.');
     if (window.Console && typeof Console.modeChanged === 'function') Console.modeChanged();
   };
+  /* 🛡 Admin ▾ on the top bar: its pages (Call Logs, Trainee Monitoring, Graded Calls, …) drop down from the bar, so
+     no page carries a strip of tabs and the Console is the console alone. The menu floats over the page (fixed, under
+     the button), as the bar's nav scrolls sideways and would clip it. */
+  function adminMenu(on) {
+    const tabs = App.adminTabs().filter((t) => t.label);
+    const cur = on ? App.adminTabs().find((t) => t.k === (App.route.arg || 'calls')) : null;
+    const lit = cur ? (cur.under || cur.k) : '';
+    const curTab = tabs.find((t) => t.k === lit);
+    return `<button type="button" class="nav-menu-btn ${on ? 'on' : ''}" onclick="App.toggleAdminMenu(event)" aria-haspopup="true" aria-expanded="false">🛡 Admin${curTab ? ` <span class="nav-cur">· ${curTab.label}</span>` : ''} ▾</button>`
+      + `<div class="nav-pop hidden" id="adminPop" role="menu">${tabs.map((t) => `<a role="menuitem" href="#/admin/${t.k}" class="${t.k === lit ? 'on' : ''}">${t.label}</a>`).join('')}</div>`;
+  }
+  App.toggleAdminMenu = function (ev) {
+    if (ev) ev.stopPropagation();
+    const pop = document.getElementById('adminPop'), btn = document.querySelector('.nav-menu-btn'); if (!pop || !btn) return;
+    const open = pop.classList.toggle('hidden') === false;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) { const r = btn.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8)) + 'px'; pop.style.top = (r.bottom + 8) + 'px'; }
+  };
+  const closeAdminMenu = () => { const pop = document.getElementById('adminPop'); if (pop && !pop.classList.contains('hidden')) { pop.classList.add('hidden'); const b = document.querySelector('.nav-menu-btn'); if (b) b.setAttribute('aria-expanded', 'false'); } };
+  document.addEventListener('click', (e) => { if (!e.target.closest('.nav-menu-btn')) closeAdminMenu(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAdminMenu(); });
+  window.addEventListener('resize', closeAdminMenu);
   App.header = function () {
     const nav = document.getElementById('nav'), who = document.getElementById('who');
     if (!App.me) { nav.innerHTML = ''; who.innerHTML = ''; return; }
@@ -160,7 +182,7 @@
       ? `<a href="${esc(App.cfg.portal)}" title="The LSH Training Portal: its 🎓 LSH Academy Index">🏠 Main Portal</a>` : '';
     const mode = App.trainer() ? `<label class="hdr-mode" title="What shows beside your dialer while you play the caller">Mode <select onchange="App.setMockMode(this.value)" aria-label="Mock call mode">
         <option value="cms"${App.mockMode() === 'cms' ? ' selected' : ''}>☎ Reception · Intake (🗂 LSH CaseWorX)</option><option value="calendar"${App.mockMode() === 'calendar' ? ' selected' : ''}>📅 Calendaring (Calendar Sim)</option></select></label>` : '';
-    nav.innerHTML = App.navItems().map(([k, l]) => `<a href="#/${k}" class="${here === k ? 'on' : ''}">${l}${k === 'logs' && App.unread ? '<span class="dot"></span>' : ''}</a>`).join('') + mode + portal;
+    nav.innerHTML = App.navItems().map(([k, l]) => k === 'admin' && App.adminTabs ? adminMenu(here === k) : `<a href="#/${k}" class="${here === k ? 'on' : ''}">${l}${k === 'logs' && App.unread ? '<span class="dot"></span>' : ''}</a>`).join('') + mode + portal;
     const install = App.installPrompt && !App.installed() ? '<button type="button" class="hdr-install" onclick="App.install()" title="Install LSH CommX as an app: its own window and icon">⬇ Install</button>' : '';
     who.innerHTML = `${install}<span class="who-wrap"><button type="button" class="chip who-btn" onclick="App.toggleOnline(event)" aria-haspopup="true" aria-expanded="false" title="Who is online now"><span class="who-me">${App.trainer() ? '🎓 Trainer' : '🎧 Trainee'} · ${esc(App.me.name)}${App.me.batch ? ' · ' + esc(App.me.batch) : ''}</span><span class="who-n" id="whoN">${App.onlineCount()}</span> ▾</button><div class="who-pop hidden" id="whoPop" role="dialog" aria-label="Who is online"></div></span><button type="button" title="Signed in as ${esc(App.me.name)}" onclick="App.logout()">Log out</button>`;
   };

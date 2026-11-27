@@ -15,7 +15,7 @@ const playCall = async (pg, sid) => {
   // the call picked over there reaches the dialer on its own.
   const was = await pg.evaluate(() => location.hash);
   const [picker] = await Promise.all([pg.context().waitForEvent('page'), pg.click('#roster [data-act="playpick"]')]);
-  await picker.waitForSelector('.screen-tabs a.on');
+  await picker.waitForSelector('.screen-tabs a.on, #adminPop a.on', { state: 'attached' });
   const track = await picker.evaluate((id) => (App.scen[id] || {}).track, sid);
   await picker.click(`#stk [data-track="${track}"]`);
   await picker.click(`[data-pick="${sid}"]`);
@@ -492,7 +492,7 @@ const playCall = async (pg, sid) => {
   // 📋 Graded calls: the report and its CSV
   await tr.goto(B + '/#/admin/graded');
   await tr.waitForSelector('table.graded td.gcell');
-  if (!(await tr.$('.screen-tabs a.on'))) throw new Error('📋 Graded Calls should be a tab of 🛡 Admin');
+  if (!(await tr.$('#adminPop a.on[href="#/admin/graded"]')) || (await tr.$('.screen-tabs'))) throw new Error('📋 Graded Calls should be on 🛡 Admin ▾ in the top bar, with no tab strip on the page');
   const gRow = await tr.textContent('table.graded tbody tr');
   if (!/Jamie Cruz/.test(gRow) || !/\d+%/.test(gRow)) throw new Error('Graded report row: ' + gRow);
   const [csv] = await Promise.all([tr.waitForEvent('download'), tr.click('#gCsv')]);

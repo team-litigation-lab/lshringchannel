@@ -45,6 +45,16 @@ p { margin: 0 0 .7em; }
 .nav a { color: #cbd5e1; text-decoration: none; padding: 7px 12px; border-radius: 9px; font-weight: 600; font-size: 14px; white-space: nowrap; position: relative; }
 .nav a:hover { background: rgba(255, 255, 255, .07); color: #fff; }
 .nav a.on { background: rgba(249, 115, 22, .16); color: #fff; box-shadow: inset 0 -2px 0 var(--orange); }
+.nav-menu-btn { background: transparent; border: 0; color: #cbd5e1; padding: 7px 12px; border-radius: 9px; font: inherit; font-weight: 600; font-size: 14px; white-space: nowrap; cursor: pointer; }
+.nav-menu-btn:hover { background: rgba(255, 255, 255, .07); color: #fff; }
+.nav-menu-btn.on { background: rgba(249, 115, 22, .16); color: #fff; box-shadow: inset 0 -2px 0 var(--orange); }
+.nav-menu-btn .nav-cur { color: #fdba74; }
+/* 🛡 Admin ▾: the admin pages, dropped from the top bar over the page in the board's navy */
+.nav-pop { position: fixed; z-index: 60; min-width: 240px; padding: 6px; border-radius: 14px; background: #0e1f42; border: 1px solid #22386a; border-top: 2px solid var(--orange); box-shadow: 0 24px 50px -12px rgba(0, 0, 0, .65); display: flex; flex-direction: column; }
+.nav-pop.hidden { display: none; }
+.nav-pop a { color: #cbd5e1; text-decoration: none; padding: 9px 12px; border-radius: 9px; font-weight: 600; font-size: 14px; white-space: nowrap; }
+.nav-pop a:hover { background: rgba(255, 255, 255, .07); color: #fff; }
+.nav-pop a.on { background: rgba(249, 115, 22, .16); color: #fdba74; }
 .nav .dot { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--orange); }
 /* the bar stays on one row: under 1400 px the long button shortens to 🗂 Call Logs */
 @media (max-width: 1400px) { .nav a .long { display: none; } }

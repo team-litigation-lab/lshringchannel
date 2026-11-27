@@ -10,10 +10,10 @@ const ok = (msg) => console.log(`✅ ${++step}. ${msg}`);
 /* 🎭 A trainee picks a practice call on the Scenario Picker, a tab of 🗂 Call Logs & Scenario Picker;
    the call then runs on ☎ their Console, the one phone they take every call on. A trainer picks the
    call the Console will play on the same screen, and tries one on 🛡 Admin → 🤖 AI calls. */
-const toPicker = async (pg) => { await pg.goto(B + '/#/logs/scenarios'); await pg.waitForSelector('.screen-tabs a.on'); };
+const toPicker = async (pg) => { await pg.goto(B + '/#/logs/scenarios'); await pg.waitForSelector('.screen-tabs a.on, #adminPop a.on', { state: 'attached' }); };
 const playCall = async (pg, sid) => {
   await pg.goto(B + '/#/logs/scenarios');
-  await pg.waitForSelector('.screen-tabs a.on');
+  await pg.waitForSelector('.screen-tabs a.on, #adminPop a.on', { state: 'attached' });
   const track = await pg.evaluate((id) => (App.scen[id] || {}).track, sid);
   await pg.click(`#stk [data-track="${track}"]`);
   await pg.click(`[data-pick="${sid}"]`);
