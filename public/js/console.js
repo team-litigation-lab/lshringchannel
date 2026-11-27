@@ -299,8 +299,8 @@
       onRemote: (s) => {
         l.remote = s;
         const a = legAudio(l);
-        a.srcObject = s; a.volume = App.volume == null ? 1 : App.volume; a.muted = C.classOn() || !!l.consult;
-        a.play().catch(() => {});
+        a.srcObject = s; a.volume = App.volume; a.muted = C.classOn() || !!l.consult;
+        VoIP.playAudio(a);
         if (t.rec) t.rec.add(s);
         l.status = 'live';
         confSync(); renderConf(); renderDialer();
@@ -342,7 +342,7 @@
     (t.legs || []).forEach((l) => { if (l.audio) l.audio.muted = quiet; });
     if (on && !t.holdMusic) {
       const h = Sounds.holdStream(), a = document.createElement('audio');
-      a.autoplay = true; a.srcObject = h.stream; document.body.appendChild(a); VoIP.Speaker.register(a); a.play().catch(() => {});
+      a.autoplay = true; a.srcObject = h.stream; document.body.appendChild(a); VoIP.Speaker.register(a); VoIP.playAudio(a);
       t.holdMusic = { h, a };
     } else if (!on && t.holdMusic) {
       const { h, a } = t.holdMusic; t.holdMusic = null;
@@ -536,7 +536,7 @@
     t.rtc = new VoIP.RtcCall({
       board: App.board, callId: t.callId, offerer: true, iceServers: servers, stream, gen,
       onRemote: (s) => {
-        const a = remote(); a.srcObject = s; a.volume = App.volume == null ? 1 : App.volume; a.play().catch(() => {});
+        const a = remote(); a.srcObject = s; a.volume = App.volume; VoIP.playAudio(a);
         C.syncAudio();
         if (t.record) { if (!t.rec) { try { t.rec = new VoIP.Recorder([stream, s]); } catch (e) { console.warn(e); } } else t.rec.add(s); }
         confSync();
@@ -637,7 +637,7 @@
   function renderRoster() {
     const side = U.$('#sideL'); if (!side) return;
     if (!U.$('#roster', side)) {
-      side.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
+      side.innerHTML = `<div class="side-brand"><img src="lsh-logo-light.svg?v=2026.11.27-2" alt="Legal Support Help" width="646" height="397">
         <div class="sb-sub">LSH CommX · Switchboard</div></div><div class="card roster" id="roster"></div>`;
     }
     const el = U.$('#roster', side); if (!el) return;
@@ -1058,7 +1058,7 @@
       <div class="lcd ${status === 'idle' ? 'idle' : status}"><div class="lcd-top"><span>${esc(App.cfg.firm.name || 'LSH Training Law Group')}</span><span data-clock></span></div>
         <div class="lcd-main">${main}</div><div class="lcd-badges">${dialBadges(t)}</div><div class="lcd-cid">${cid}</div></div>
       ${keys}
-      <div class="dev-foot"><span title="Call volume">🔉</span><input type="range" min="0" max="1" step="0.05" value="${App.volume == null ? 1 : App.volume}" data-act="volume" aria-label="Call volume"><button type="button" class="dev-link" data-act="miccheck">🎧 Audio check</button></div>`;
+      <div class="dev-foot"><span title="Call volume">🔉</span><input type="range" min="0" max="1" step="0.05" value="${App.volume}" data-act="volume" aria-label="Call volume"><button type="button" class="dev-link" data-act="miccheck">🎧 Audio check</button></div>`;
     App.tick();
   }
 
@@ -1338,7 +1338,7 @@
   }
   function onInput(e) {
     if (e.target.dataset && e.target.dataset.act === 'volume') {
-      App.volume = Number(e.target.value);
+      App.volume = Number(e.target.value); VoIP.setVolume(App.volume);
       remote().volume = App.volume;
       ((App.t && App.t.legs) || []).forEach((l) => { if (l.audio) l.audio.volume = App.volume; });
     }

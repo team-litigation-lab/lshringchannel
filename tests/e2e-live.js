@@ -149,12 +149,18 @@ const playCall = async (pg, sid) => {
   await sleep(3000);
   const inb = async (p, path) => p.evaluate(async (path) => {
     const pc = path === 'p' ? App.p.rtc.pc : App.t.rtc.pc;
-    const st = await pc.getStats(); let bytes = 0, level = 0, pair = '';
-    st.forEach((s) => { if (s.type === 'inbound-rtp' && s.kind === 'audio') { bytes = s.bytesReceived; level = s.audioLevel || 0; } if (s.type === 'candidate-pair' && s.nominated) pair = s.state; });
+    // the fake microphone beeps with silence between: listen for 2 seconds and keep the loudest moment
+    let bytes = 0, level = 0, pair = '';
+    for (let i = 0; i < 20; i++) {
+      const st = await pc.getStats();
+      st.forEach((s) => { if (s.type === 'inbound-rtp' && s.kind === 'audio') { bytes = s.bytesReceived; level = Math.max(level, s.audioLevel || 0); } if (s.type === 'candidate-pair' && s.nominated) pair = s.state; });
+      await new Promise((r) => setTimeout(r, 100));
+    }
     return { bytes, level, pair };
   }, path);
   const a1 = await inb(te, 'p'), a2 = await inb(tr, 't');
   if (!(a1.bytes > 2000 && a2.bytes > 2000)) throw new Error('No audio: ' + JSON.stringify({ a1, a2 }));
+  if (!(a1.level > 0.05 && a2.level > 0.05)) throw new Error('Audio arrives but is (nearly) silent: ' + JSON.stringify({ a1, a2 }));
   ok(`Audio both ways: trainee received ${a1.bytes} B (level ${a1.level.toFixed(3)}), trainer received ${a2.bytes} B (level ${a2.level.toFixed(3)})`);
 
   // 🔊 Speaker on a call: the trainee's phone and the trainer's dialer, and the call keeps playing
@@ -170,6 +176,23 @@ const playCall = async (pg, sid) => {
   await te.waitForFunction(() => !/SPEAKER/.test(document.querySelector('#device .lcd-badges').textContent));
   await tr.waitForFunction(() => !/SPEAKER/.test(document.querySelector('#dialer .lcd-badges').textContent));
   ok('🔊 Speaker on the call (trainee phone and trainer dialer): shown on both screens, the call keeps playing, and back to the headset');
+
+  // 🔉 The volume slider sets the call's loudness and is kept on this computer; a call the browser won't play yet waits for a click.
+  const setVol = (p, sel, v) => p.$eval(sel + ' [data-act="volume"]', (el, v) => { el.value = String(v); el.dispatchEvent(new Event('input', { bubbles: true })); }, v);
+  await setVol(te, '#device', 0.4); await setVol(tr, '#dialer', 0.6);
+  const vols = await Promise.all([te, tr].map((p) => p.evaluate(() => ({ el: document.getElementById('remoteAudio').volume, kept: localStorage.getItem('mcv_volume'), app: App.volume }))));
+  if (Math.abs(vols[0].el - 0.4) > 0.01 || vols[0].kept !== '0.4' || Math.abs(vols[1].el - 0.6) > 0.01 || vols[1].kept !== '0.6') throw new Error('The volume slider should set the call audio and be kept: ' + JSON.stringify(vols));
+  const rescued = await te.evaluate(async () => {
+    const a = document.createElement('audio'); a.srcObject = document.getElementById('remoteAudio').srcObject; document.body.appendChild(a);
+    let n = 0; const real = a.play.bind(a);
+    a.play = () => (++n === 1 ? Promise.reject(Object.assign(new Error('blocked'), { name: 'NotAllowedError' })) : real());
+    VoIP.playAudio(a); await new Promise((r) => setTimeout(r, 50));
+    document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); await new Promise((r) => setTimeout(r, 300));
+    const out = { tries: n, playing: !a.paused }; a.pause(); a.remove(); return out;
+  });
+  if (rescued.tries !== 2 || !rescued.playing) throw new Error('A call the browser held back should start on the next click: ' + JSON.stringify(rescued));
+  await setVol(te, '#device', 1); await setVol(tr, '#dialer', 1);
+  ok(`🔉 The volume slider sets the call's loudness (trainee ${vols[0].el}, trainer ${vols[1].el}) and is kept on this computer; call audio the browser holds back starts on the next click`);
 
   // 🔎 Case lookup comes first on a live call: search, preview the file, mark the one the call is
   // about, and the trainer sees which file the trainee chose.

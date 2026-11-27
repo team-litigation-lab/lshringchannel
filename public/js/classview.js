@@ -71,7 +71,7 @@
     audioOn = true;
     try { Sounds.unlock(); } catch (e) {}
     outCtx();   // made on the click, so the browser lets it play
-    const a = U.$('#cvAudio'); a.play().catch(() => {});
+    const a = U.$('#cvAudio'); VoIP.playAudio(a);
     op.Console.classAudio = true; op.Console.syncAudio();
     U.$('#cvStart').textContent = '🔊 Class audio on';
     U.$('#cvStart').disabled = true;
@@ -114,7 +114,7 @@
     if (cvOut.stream === stream) return;
     if (cvOut.src) { try { cvOut.src.disconnect(); } catch (e) {} cvOut.src = null; }
     cvOut.stream = stream; cvOut.via = '';
-    if (a && a.srcObject !== stream) { a.srcObject = stream; if (stream) a.play().catch(() => {}); }
+    if (a && a.srcObject !== stream) { a.srcObject = stream; if (stream) VoIP.playAudio(a); }
     if (!stream) return;
     try {
       // The tracks belong to the console's window: wrap them in a stream of this window's own.

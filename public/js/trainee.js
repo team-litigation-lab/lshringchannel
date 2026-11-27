@@ -167,7 +167,7 @@
     if (p.rtc) p.rtc.close();
     p.rtc = new VoIP.RtcCall({
       board: App.board, callId: p.callId, offerer: false, iceServers, stream, gen,
-      onRemote: (s) => { const a = remote(); a.srcObject = s; a.muted = !!p.held; a.volume = App.volume == null ? 1 : App.volume; a.play().catch(() => {}); },
+      onRemote: (s) => { const a = remote(); a.srcObject = s; a.muted = !!p.held; a.volume = App.volume; VoIP.playAudio(a); },
       onState: (st) => {
         if (App.p !== p) return;
         if (st === 'connected' && p.status === 'connecting') { p.status = 'live'; p.slow = false; clearTimeout(p.slowTimer); if (!p.answeredAt) p.answeredAt = Date.now(); renderAll(); }
@@ -377,7 +377,7 @@
         const servers = await VoIP.ice();
         if (App.p !== p || p.status === 'ended') return;
         p.rtc = new VoIP.RtcCall({ board: App.board, callId: p.callId, offerer: true, iceServers: servers, stream, gen: Date.now(),
-          onRemote: (st) => { const a = remote(); a.srcObject = st; a.volume = App.volume == null ? 1 : App.volume; a.play().catch(() => {}); },
+          onRemote: (st) => { const a = remote(); a.srcObject = st; a.volume = App.volume; VoIP.playAudio(a); },
           onState: (st) => { if (App.p !== p) return; if (st === 'connected' && p.status === 'connecting') { p.status = 'live'; renderAll(); } p.netState = st; },
           onQuality: (q) => { if (App.p === p) { p.quality = q; } } });
         p.rtc.start();
@@ -605,7 +605,7 @@
     const desks = App.desks || [];
     const mine = peers.find((x) => x.me);
     const batch = (mine && mine.batch) || (App.me && App.me.batch) || '';
-    el.innerHTML = `<div class="side-brand"><img src="lsh-logo-dark.png" alt="Legal Support Help" width="646" height="397">
+    el.innerHTML = `<div class="side-brand"><img src="lsh-logo-light.svg?v=2026.11.27-2" alt="Legal Support Help" width="646" height="397">
         <div class="sb-sub">LSH CommX · Switchboard</div></div><div class="card roster" id="troster">
       <div class="card-head"><h3>☎ Switchboard</h3><span class="spacer"></span><span class="badge green">${peers.length || 1} online</span>${App.foldKey(FOLD, 'the switchboard')}</div>
       <div class="my-line">
@@ -837,7 +837,7 @@
       ${shownCall ? '' : lineKeys}
       ${pad}
       ${p && p.out ? outKeysHTML(p) : App.keysHTML(shownCall, idleKeys)}
-      <div class="dev-foot"><span title="Call volume">🔉</span><input type="range" min="0" max="1" step="0.05" value="${App.volume == null ? 1 : App.volume}" data-act="volume" aria-label="Call volume">${!App.connected && mode === 'live' ? '<span>Offline</span>' : `<button type="button" class="dev-link" data-act="miccheck">🎧 Audio check</button>`}</div>`;
+      <div class="dev-foot"><span title="Call volume">🔉</span><input type="range" min="0" max="1" step="0.05" value="${App.volume}" data-act="volume" aria-label="Call volume">${!App.connected && mode === 'live' ? '<span>Offline</span>' : `<button type="button" class="dev-link" data-act="miccheck">🎧 Audio check</button>`}</div>`;
   }
   // 🤝 The screen and keys of a practice call you placed (you are the caller).
   function outLcd(p) {
@@ -1089,7 +1089,7 @@
       else if (act === 'notify') askNotify(true);
     });
     root.addEventListener('input', (e) => {
-      if (e.target.dataset && e.target.dataset.act === 'volume') { App.volume = Number(e.target.value); remote().volume = App.volume; return; }
+      if (e.target.dataset && e.target.dataset.act === 'volume') { App.volume = Number(e.target.value); VoIP.setVolume(App.volume); remote().volume = App.volume; if (window.AiCall && AiCall.volume) AiCall.volume(App.volume); return; }
       const k = e.target.dataset && e.target.dataset.k;
       if (k && App.p && !App.p.submitted) { App.p.note[k] = e.target.value; pushNote(); }
     });
