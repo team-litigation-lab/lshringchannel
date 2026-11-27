@@ -9,6 +9,16 @@
   let memToken = store.get(K_TOKEN), memMe = null;
   try { memMe = JSON.parse(store.get(K_ME) || 'null'); } catch (e) { memMe = null; }
 
+  /* 🔓 A sign-in lasts until 8 hours with no activity (src/auth.js). The token is kept in the browser, so closing the tab or
+     the browser doesn't sign anyone out; every answer to a signed-in request carries a fresh 8-hour token (X-Session-Token),
+     and an open page asks for one every few minutes and when it's looked at again. After 8 hours with nothing open,
+     the old token is refused and the page goes back to the sign-in. */
+  const RENEW_HEADER = 'X-Session-Token', RENEW_EVERY_MS = 10 * 60 * 1000;
+  function renewed(res) {
+    const t = res && res.headers && res.headers.get(RENEW_HEADER);
+    if (t && memToken) { memToken = t; store.set(K_TOKEN, t); }
+  }
+
   const API = {
     get token() { return memToken; },
     get me() { return memMe; },
@@ -20,6 +30,7 @@
       try {
         res = await fetch(path, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, memToken ? { Authorization: 'Bearer ' + memToken } : {}), body: JSON.stringify(body || {}) });
       } catch (e) { throw new Error('Can\'t reach the server. Check your internet connection.'); }
+      renewed(res);
       const data = await res.json().catch(() => ({}));
       if (res.status === 401 && memToken && !/^\/api\/auth\//.test(path)) { API.signOut(); location.hash = '#/login'; location.reload(); }
       if (!res.ok) { const e = new Error(data.error || `Error ${res.status}`); e.status = res.status; e.code = data.code; throw e; }
@@ -27,12 +38,14 @@
     },
     async postBlob(path, blob, type, headers) {
       const res = await fetch(path, { method: 'POST', headers: Object.assign({ 'Content-Type': type || blob.type || 'application/octet-stream', Authorization: 'Bearer ' + memToken }, headers || {}), body: blob });
+      renewed(res);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
       return data;
     },
     async getBlob(path, body) {
       const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + memToken }, body: JSON.stringify(body || {}) });
+      renewed(res);
       if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || `Error ${res.status}`); }
       return res.blob();
     }
@@ -66,6 +79,18 @@
     debounce(fn, ms) { let h; return function () { clearTimeout(h); const a = arguments; h = setTimeout(() => fn.apply(this, a), ms); }; },
     initials(name) { return String(name || '').split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 3).toUpperCase(); }
   };
+
+  // An open page keeps its sign-in going (a laptop that slept past 8 hours finds it ended when it wakes); another tab's
+  // fresh token is taken up here too.
+  let lastRenew = Date.now();
+  function keepSignedIn() {
+    if (!memToken || Date.now() - lastRenew < RENEW_EVERY_MS - 1000) return;
+    lastRenew = Date.now();
+    API.post('/api/me').catch(() => {});
+  }
+  setInterval(keepSignedIn, RENEW_EVERY_MS);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) keepSignedIn(); });
+  window.addEventListener('storage', (e) => { if (e.key === K_TOKEN && e.newValue && memToken) memToken = e.newValue; });
 
   window.API = API;
   window.U = U;

@@ -17,7 +17,14 @@ export function safeEqual(a, b) {
   return r === 0;
 }
 
-export async function makeToken(env, role, subject, hours) {
+/* 🔓 How long a sign-in lasts with nobody using it: 8 hours. Closing the tab or the browser doesn't sign anyone out (the
+   token is kept in the browser); every signed-in request is answered with a fresh 8-hour token (X-Session-Token,
+   src/worker.js) and an open LSH CommX page asks for one every few minutes (public/js/api.js), so a sign-in ends only
+   after 8 hours with no activity, on Log out, or when a trainer archives the trainee. */
+export const SESSION_IDLE_HOURS = 8;
+export const SESSION_HEADER = 'X-Session-Token';
+
+export async function makeToken(env, role, subject, hours = SESSION_IDLE_HOURS) {
   const exp = Date.now() + hours * 3600 * 1000;
   const body = `${role}.${encodeURIComponent(subject).replace(/\./g, '%2E')}.${exp}`;   // a "." in a name would split the token
   return `${body}.${await hmac(secretOf(env), body)}`;
@@ -32,7 +39,16 @@ export async function readTokenString(env, t) {
   const good = await hmac(secretOf(env), `${role}.${subj}.${exp}`);
   if (!safeEqual(good, sig)) return null;
   let id; try { id = decodeURIComponent(subj); } catch (e) { return null; }
-  return { role, id };
+  return { role, id, exp: Number(exp) };
+}
+
+/* A fresh 8-hour token for this sign-in, or null when the one it came with already runs that long (renewed at most
+   every few minutes). A token from before the 8-hour rule (30 days, 12 hours) is replaced on its next request. */
+export async function renewToken(env, tok, now = Date.now()) {
+  if (!tok || !tok.exp) return null;
+  const full = SESSION_IDLE_HOURS * 3600 * 1000, left = tok.exp - now;
+  if (left > full - 5 * 60 * 1000 && left <= full + 60 * 1000) return null;
+  return makeToken(env, tok.role, tok.id);
 }
 
 export async function readToken(env, request) {
